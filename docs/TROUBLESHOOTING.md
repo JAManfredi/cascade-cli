@@ -691,11 +691,11 @@ cc doctor
 ### **Community Support**
 
 1. **Search existing issues:**
-   - [GitHub Issues](https://github.com/your-org/cascade-cli/issues)
+   - [GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)
    - Use search terms: error message, symptom keywords
 
 2. **Community discussions:**
-   - [GitHub Discussions](https://github.com/your-org/cascade-cli/discussions)
+   - [GitHub Discussions](https://github.com/JAManfredi/cascade-cli/discussions)
    - Stack Overflow (tag: cascade-cli)
 
 3. **Create new issue:**
@@ -782,4 +782,4 @@ For enterprise users:
 
 ---
 
-*If your issue isn't covered here, please [create an issue](https://github.com/your-org/cascade-cli/issues/new) with detailed information about your problem.* 
+*If your issue isn't covered here, please [create an issue](https://github.com/JAManfredi/cascade-cli/issues/new) with detailed information about your problem.* 

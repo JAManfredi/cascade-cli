@@ -36,7 +36,7 @@ cargo --version
 #### **Build and Install**
 ```bash
 # Clone repository
-git clone https://github.com/your-org/cascade-cli.git
+git clone https://github.com/JAManfredi/cascade-cli.git
 cd cascade-cli
 
 # Build release binary
@@ -64,21 +64,21 @@ cc doctor  # Run health check
 brew install cascade-cli
 
 # Direct download
-curl -L https://github.com/your-org/cascade-cli/releases/latest/download/cc-macos | tar -xz
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos | tar -xz
 sudo mv cc /usr/local/bin/
 ```
 
 #### **Linux**
 ```bash
 # Ubuntu/Debian
-wget https://github.com/your-org/cascade-cli/releases/latest/download/cc-linux.deb
+wget https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux.deb
 sudo dpkg -i cc-linux.deb
 
 # CentOS/RHEL
-sudo yum install https://github.com/your-org/cascade-cli/releases/latest/download/cc-linux.rpm
+sudo yum install https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux.rpm
 
 # Generic binary
-curl -L https://github.com/your-org/cascade-cli/releases/latest/download/cc-linux | tar -xz
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux | tar -xz
 sudo mv cc /usr/local/bin/
 ```
 
@@ -88,7 +88,7 @@ sudo mv cc /usr/local/bin/
 choco install cascade-cli
 
 # Direct download
-Invoke-WebRequest -Uri "https://github.com/your-org/cascade-cli/releases/latest/download/cc-windows.zip" -OutFile "cc.zip"
+Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows.zip" -OutFile "cc.zip"
 Expand-Archive -Path "cc.zip" -DestinationPath "C:\Tools\cascade-cli"
 # Add C:\Tools\cascade-cli to PATH
 ```
@@ -97,7 +97,7 @@ Expand-Archive -Path "cc.zip" -DestinationPath "C:\Tools\cascade-cli"
 
 #### **macOS - Homebrew**
 ```bash
-brew tap your-org/cascade-cli
+brew tap JAManfredi/cascade-cli
 brew install cascade-cli
 ```
 
@@ -220,7 +220,7 @@ alias cc='docker run -v $(pwd):/workspace -w /workspace cascade-cli'
 ### **For Contributors**
 ```bash
 # Clone with development dependencies
-git clone https://github.com/your-org/cascade-cli.git
+git clone https://github.com/JAManfredi/cascade-cli.git
 cd cascade-cli
 
 # Install development tools
@@ -413,7 +413,7 @@ If you encounter installation issues:
 
 1. **Check [Troubleshooting Guide](./TROUBLESHOOTING.md)**
 2. **Run `cc doctor` for diagnostics**
-3. **Search [GitHub Issues](https://github.com/your-org/cascade-cli/issues)**
+3. **Search [GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)**
 4. **Create new issue with system details**
 
 ### **System Information for Bug Reports**

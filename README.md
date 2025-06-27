@@ -37,7 +37,7 @@ Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a power
 #### **From Source (Recommended)**
 ```bash
 # Clone and build
-git clone https://github.com/your-org/cascade-cli.git
+git clone https://github.com/JAManfredi/cascade-cli.git
 cd cascade-cli
 cargo build --release
 
@@ -48,7 +48,7 @@ export PATH="$PWD/target/release:$PATH"
 #### **Pre-built Binaries** *(Coming Soon)*
 ```bash
 # macOS/Linux
-curl -L https://github.com/your-org/cascade-cli/releases/latest/download/cc | sh
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc | sh
 
 # Windows
 # Download from GitHub releases
@@ -286,7 +286,7 @@ We welcome contributions! See our [Contributing Guide](./docs/CONTRIBUTING.md) f
 
 ### **Development Setup**
 ```bash
-git clone https://github.com/your-org/cascade-cli.git
+git clone https://github.com/JAManfredi/cascade-cli.git
 cd cascade-cli
 cargo build
 cargo test

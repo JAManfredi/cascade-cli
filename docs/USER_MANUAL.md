@@ -907,8 +907,8 @@ cc config list
 - **[Installation Guide](./INSTALLATION.md)** - Setup and installation help
 - **[Troubleshooting Guide](./TROUBLESHOOTING.md)** - Common issues and solutions
 - **[Configuration Reference](./CONFIGURATION.md)** - Complete settings guide
-- **[GitHub Issues](https://github.com/your-org/cascade-cli/issues)** - Bug reports and feature requests
-- **[Discussions](https://github.com/your-org/cascade-cli/discussions)** - Community support
+- **[GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)** - Bug reports and feature requests
+- **[Discussions](https://github.com/JAManfredi/cascade-cli/discussions)** - Community support
 
 ---
 

@@ -599,8 +599,8 @@ If you get stuck:
 1. **Check built-in help**: `cc --help` or `cc <command> --help`
 2. **Run diagnostics**: `cc doctor` to identify issues
 3. **Read documentation**: [User Manual](./USER_MANUAL.md) has detailed examples
-4. **Search issues**: [GitHub Issues](https://github.com/your-org/cascade-cli/issues)
-5. **Ask the community**: [GitHub Discussions](https://github.com/your-org/cascade-cli/discussions)
+4. **Search issues**: [GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)
+5. **Ask the community**: [GitHub Discussions](https://github.com/JAManfredi/cascade-cli/discussions)
 
 ---
 
