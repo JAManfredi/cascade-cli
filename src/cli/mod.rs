@@ -89,7 +89,23 @@ pub enum Commands {
 #[derive(Debug, Subcommand)]
 pub enum HooksAction {
     /// Install all Cascade Git hooks
-    Install,
+    Install {
+        /// Skip prerequisite checks (repository type, configuration validation)
+        #[arg(long)]
+        skip_checks: bool,
+        
+        /// Allow installation on main/master branches (not recommended)
+        #[arg(long)]
+        allow_main_branch: bool,
+        
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
+        
+        /// Force installation even if checks fail (not recommended)
+        #[arg(long)]
+        force: bool,
+    },
     
     /// Uninstall all Cascade Git hooks
     Uninstall,
@@ -101,6 +117,14 @@ pub enum HooksAction {
     Add {
         /// Hook name (post-commit, pre-push, commit-msg, prepare-commit-msg)
         hook: String,
+        
+        /// Skip prerequisite checks
+        #[arg(long)]
+        skip_checks: bool,
+        
+        /// Force installation even if checks fail
+        #[arg(long)]
+        force: bool,
     },
     
     /// Remove a specific hook
@@ -244,8 +268,8 @@ impl Cli {
             
             Commands::Hooks { action } => {
                 match action {
-                    HooksAction::Install => {
-                        commands::hooks::install().await
+                    HooksAction::Install { skip_checks, allow_main_branch, yes, force } => {
+                        commands::hooks::install_with_options(skip_checks, allow_main_branch, yes, force).await
                     }
                     HooksAction::Uninstall => {
                         commands::hooks::uninstall().await
@@ -253,8 +277,8 @@ impl Cli {
                     HooksAction::Status => {
                         commands::hooks::status().await
                     }
-                    HooksAction::Add { hook } => {
-                        commands::hooks::install_hook(&hook).await
+                    HooksAction::Add { hook, skip_checks, force } => {
+                        commands::hooks::install_hook_with_options(&hook, skip_checks, force).await
                     }
                     HooksAction::Remove { hook } => {
                         commands::hooks::uninstall_hook(&hook).await

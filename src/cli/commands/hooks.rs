@@ -1,8 +1,48 @@
 use crate::errors::{CascadeError, Result};
+use crate::config::{CascadeConfig, Settings};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
+
+/// Git repository type detection
+#[derive(Debug, Clone, PartialEq)]
+pub enum RepositoryType {
+    Bitbucket,
+    GitHub,
+    GitLab,
+    AzureDevOps,
+    Unknown,
+}
+
+/// Branch type classification
+#[derive(Debug, Clone, PartialEq)]
+pub enum BranchType {
+    Main,      // main, master, develop
+    Feature,   // feature branches
+    Unknown,
+}
+
+/// Installation options for smart hook activation
+#[derive(Debug, Clone)]
+pub struct InstallOptions {
+    pub check_prerequisites: bool,
+    pub feature_branches_only: bool,
+    pub confirm: bool,
+    pub force: bool,
+}
+
+impl Default for InstallOptions {
+    fn default() -> Self {
+        Self {
+            check_prerequisites: true,
+            feature_branches_only: true,
+            confirm: true,
+            force: false,
+        }
+    }
+}
 
 /// Git hooks integration for Cascade CLI
 pub struct HooksManager {
@@ -59,6 +99,23 @@ impl HooksManager {
 
     /// Install all recommended Cascade hooks
     pub fn install_all(&self) -> Result<()> {
+        self.install_with_options(&InstallOptions::default())
+    }
+
+    /// Install hooks with smart validation options
+    pub fn install_with_options(&self, options: &InstallOptions) -> Result<()> {
+        if options.check_prerequisites && !options.force {
+            self.validate_prerequisites()?;
+        }
+
+        if options.feature_branches_only && !options.force {
+            self.validate_branch_suitability()?;
+        }
+
+        if options.confirm && !options.force {
+            self.confirm_installation()?;
+        }
+
         println!("🪝 Installing Cascade Git hooks...");
         
         let hooks = vec![
@@ -383,15 +440,234 @@ $CURRENT_MSG" > "$COMMIT_MSG_FILE"
 fi
 "#)
     }
+
+    /// Detect repository type from remote URLs
+    pub fn detect_repository_type(&self) -> Result<RepositoryType> {
+        let output = Command::new("git")
+            .args(&["remote", "get-url", "origin"])
+            .current_dir(&self.repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to get remote URL: {}", e)))?;
+
+        if !output.status.success() {
+            return Ok(RepositoryType::Unknown);
+        }
+
+        let remote_url = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+
+        if remote_url.contains("github.com") {
+            Ok(RepositoryType::GitHub)
+        } else if remote_url.contains("gitlab.com") || remote_url.contains("gitlab") {
+            Ok(RepositoryType::GitLab)
+        } else if remote_url.contains("dev.azure.com") || remote_url.contains("visualstudio.com") {
+            Ok(RepositoryType::AzureDevOps)
+        } else if remote_url.contains("bitbucket") {
+            Ok(RepositoryType::Bitbucket)
+        } else {
+            Ok(RepositoryType::Unknown)
+        }
+    }
+
+    /// Detect current branch type
+    pub fn detect_branch_type(&self) -> Result<BranchType> {
+        let output = Command::new("git")
+            .args(&["branch", "--show-current"])
+            .current_dir(&self.repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to get current branch: {}", e)))?;
+
+        if !output.status.success() {
+            return Ok(BranchType::Unknown);
+        }
+
+        let branch_name = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+
+        if branch_name == "main" || branch_name == "master" || branch_name == "develop" {
+            Ok(BranchType::Main)
+        } else if !branch_name.is_empty() {
+            Ok(BranchType::Feature)
+        } else {
+            Ok(BranchType::Unknown)
+        }
+    }
+
+    /// Validate prerequisites for hook installation
+    pub fn validate_prerequisites(&self) -> Result<()> {
+        println!("🔍 Checking prerequisites for Cascade hooks...");
+
+        // 1. Check repository type
+        let repo_type = self.detect_repository_type()?;
+        match repo_type {
+            RepositoryType::Bitbucket => {
+                println!("✅ Bitbucket repository detected");
+            }
+            RepositoryType::GitHub => {
+                return Err(CascadeError::config(
+                    "🚫 GitHub repository detected!\n\n\
+                    Cascade CLI is designed for Bitbucket Server repositories.\n\
+                    GitHub has its own stacked diff solutions:\n\
+                    • GitHub CLI: https://cli.github.com/\n\
+                    • git-branchless: https://github.com/arxanas/git-branchless\n\
+                    • Graphite: https://graphite.dev/\n\n\
+                    Use --force to install anyway (not recommended).".to_string()
+                ));
+            }
+            RepositoryType::GitLab => {
+                return Err(CascadeError::config(
+                    "🚫 GitLab repository detected!\n\n\
+                    Cascade CLI is designed for Bitbucket Server repositories.\n\
+                    GitLab has its own merge request workflows.\n\n\
+                    Use --force to install anyway (not recommended).".to_string()
+                ));
+            }
+            RepositoryType::AzureDevOps => {
+                return Err(CascadeError::config(
+                    "🚫 Azure DevOps repository detected!\n\n\
+                    Cascade CLI is designed for Bitbucket Server repositories.\n\
+                    Azure DevOps has its own pull request workflows.\n\n\
+                    Use --force to install anyway (not recommended).".to_string()
+                ));
+            }
+            RepositoryType::Unknown => {
+                println!("⚠️ Unknown repository type - proceeding with caution");
+            }
+        }
+
+        // 2. Check Cascade configuration
+        let config_path = self.repo_path.join(".cascade").join("config.json");
+        if !config_path.exists() {
+            return Err(CascadeError::config(
+                "🚫 Cascade not initialized!\n\n\
+                Please run 'cc init' or 'cc setup' first to configure Cascade CLI.\n\
+                Hooks require proper Bitbucket Server configuration.\n\n\
+                Use --force to install anyway (not recommended).".to_string()
+            ));
+        }
+
+        // 3. Validate Bitbucket configuration
+        let config = Settings::load_from_file(&config_path)?;
+
+        if config.bitbucket.url == "https://bitbucket.example.com" || 
+           config.bitbucket.url.contains("example.com") {
+            return Err(CascadeError::config(
+                "🚫 Invalid Bitbucket configuration!\n\n\
+                Your Bitbucket URL appears to be a placeholder.\n\
+                Please run 'cc setup' to configure a real Bitbucket Server.\n\n\
+                Use --force to install anyway (not recommended).".to_string()
+            ));
+        }
+
+        if config.bitbucket.project == "PROJECT" || config.bitbucket.repo == "repo" {
+            return Err(CascadeError::config(
+                "🚫 Incomplete Bitbucket configuration!\n\n\
+                Your project/repository settings appear to be placeholders.\n\
+                Please run 'cc setup' to complete configuration.\n\n\
+                Use --force to install anyway (not recommended).".to_string()
+            ));
+        }
+
+        println!("✅ Prerequisites validation passed");
+        Ok(())
+    }
+
+    /// Validate branch suitability for hooks
+    pub fn validate_branch_suitability(&self) -> Result<()> {
+        let branch_type = self.detect_branch_type()?;
+        
+        match branch_type {
+            BranchType::Main => {
+                return Err(CascadeError::config(
+                    "🚫 Currently on main/master branch!\n\n\
+                    Cascade hooks are designed for feature branch development.\n\
+                    Working directly on main/master with stacked diffs can:\n\
+                    • Complicate the commit history\n\
+                    • Interfere with team collaboration\n\
+                    • Break CI/CD workflows\n\n\
+                    💡 Recommended workflow:\n\
+                    1. Create a feature branch: git checkout -b feature/my-feature\n\
+                    2. Install hooks: cc hooks install\n\
+                    3. Develop with stacked commits\n\
+                    4. Submit stack: cc stack submit\n\n\
+                    Use --force to install anyway (not recommended).".to_string()
+                ));
+            }
+            BranchType::Feature => {
+                println!("✅ Feature branch detected - suitable for stacked development");
+            }
+            BranchType::Unknown => {
+                println!("⚠️ Unknown branch type - proceeding with caution");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Confirm installation with user
+    pub fn confirm_installation(&self) -> Result<()> {
+        println!("\n📋 Hook Installation Summary:");
+        println!("┌─────────────────────┬─────────────────────────────────┐");
+        println!("│ Hook                │ Description                     │");
+        println!("├─────────────────────┼─────────────────────────────────┤");
+        
+        let hooks = vec![
+            HookType::PostCommit,
+            HookType::PrePush,
+            HookType::CommitMsg,
+            HookType::PrepareCommitMsg,
+        ];
+
+        for hook in &hooks {
+            println!("│ {:19} │ {:31} │", hook.filename(), hook.description());
+        }
+        println!("└─────────────────────┴─────────────────────────────────┘");
+
+        println!("\n🔄 These hooks will automatically:");
+        println!("• Add commits to your active stack");
+        println!("• Validate commit messages");
+        println!("• Prevent force pushes that break stack integrity");
+        println!("• Add stack context to commit messages");
+
+        use std::io::{self, Write};
+        print!("\n❓ Install Cascade hooks? [Y/n]: ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim().to_lowercase();
+
+        if input.is_empty() || input == "y" || input == "yes" {
+            println!("✅ Proceeding with installation");
+            Ok(())
+        } else {
+            Err(CascadeError::config("Installation cancelled by user".to_string()))
+        }
+    }
 }
 
 /// Run hooks management commands
 pub async fn install() -> Result<()> {
+    install_with_options(false, false, false, false).await
+}
+
+pub async fn install_with_options(
+    skip_checks: bool, 
+    allow_main_branch: bool, 
+    yes: bool, 
+    force: bool
+) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
     
     let hooks_manager = HooksManager::new(&current_dir)?;
-    hooks_manager.install_all()
+    
+    let options = InstallOptions {
+        check_prerequisites: !skip_checks,
+        feature_branches_only: !allow_main_branch,
+        confirm: !yes,
+        force,
+    };
+    
+    hooks_manager.install_with_options(&options)
 }
 
 pub async fn uninstall() -> Result<()> {
@@ -411,6 +687,10 @@ pub async fn status() -> Result<()> {
 }
 
 pub async fn install_hook(hook_name: &str) -> Result<()> {
+    install_hook_with_options(hook_name, false, false).await
+}
+
+pub async fn install_hook_with_options(hook_name: &str, skip_checks: bool, force: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
     
@@ -423,6 +703,11 @@ pub async fn install_hook(hook_name: &str) -> Result<()> {
         "prepare-commit-msg" => HookType::PrepareCommitMsg,
         _ => return Err(CascadeError::config(format!("Unknown hook type: {}", hook_name))),
     };
+    
+    // Run basic validation if not skipped
+    if !skip_checks && !force {
+        hooks_manager.validate_prerequisites()?;
+    }
     
     hooks_manager.install_hook(&hook_type)
 }
