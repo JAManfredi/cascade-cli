@@ -112,10 +112,21 @@ cargo build --release
 export PATH="$PWD/target/release:$PATH"
 ```
 
-#### **Pre-built Binaries**
-Pre-built binaries are planned for the next major release. See [UPCOMING.md](UPCOMING.md) for details.
+#### **Pre-built Binaries** *(Recommended)*
 
-For now, build from source using the method above.
+Download the latest release for your platform:
+
+```bash
+# macOS (auto-detect architecture)
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
+sudo mv cc /usr/local/bin/
+
+# Linux (auto-detect architecture)  
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz | tar -xz
+sudo mv cc /usr/local/bin/
+```
+
+See [Installation Guide](./docs/INSTALLATION.md) for platform-specific instructions.
 
 ### **2. Initialize Your Repository**
 ```bash

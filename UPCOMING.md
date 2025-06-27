@@ -20,20 +20,22 @@ This feature has been moved to the main README documentation!
 
 ## 📦 **Distribution & Installation**
 
-### **Pre-built Binaries**
-Currently, Cascade CLI requires building from source. Pre-built binaries are planned for major platforms:
+### **Package Manager Integration** 
+Pre-built binaries are now available! The next step is integration with popular package managers:
 
 ```bash
-# macOS/Linux (Planned)
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc | sh
-
-# Windows (Planned)
-# Download from GitHub releases
+# Planned package manager support
+brew install JAManfredi/tap/cascade-cli    # Homebrew
+choco install cascade-cli                  # Chocolatey  
+sudo snap install cascade-cli              # Snap
+cargo install cascade-cli                  # Cargo registry
 ```
 
-**Status**: 🔄 In Planning
-**Priority**: High  
-**Estimated Release**: Next major version
+**Status**: ✅ **Binaries Available** → 🔄 Package managers planned
+**Priority**: Medium  
+**Estimated Release**: Future version
+
+**Note**: Pre-built binaries for Linux, macOS, and Windows are now available from GitHub Releases!
 
 ## 🤖 **Advanced Conflict Resolution**
 
@@ -137,8 +139,8 @@ Interested in implementing any of these features? Check out our [Contributing Gu
 ## 📅 **Release Planning**
 
 - **Next Patch**: Bug fixes and small improvements
-- **Next Minor**: Pre-built binaries, advanced conflict resolution
-- **Next Major**: Multi-platform support, advanced integrations
+- **Next Minor**: Package manager integration, advanced conflict resolution
+- **Next Major**: Multi-platform support (GitHub/GitLab), advanced integrations
 
 ---
 

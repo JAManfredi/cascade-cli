@@ -56,41 +56,50 @@ cc --version
 cc doctor  # Run health check
 ```
 
-### **Option 2: Pre-built Binaries** *(Coming Soon)*
+### **Option 2: Pre-built Binaries** *(Recommended)*
 
 #### **macOS**
 ```bash
-# Using Homebrew (planned)
-brew install cascade-cli
+# Intel Macs (x64)
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-x64.tar.gz | tar -xz
+sudo mv cc /usr/local/bin/
 
-# Direct download
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos | tar -xz
+# Apple Silicon Macs (ARM64)  
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-arm64.tar.gz | tar -xz
+sudo mv cc /usr/local/bin/
+
+# Auto-detect architecture
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
 sudo mv cc /usr/local/bin/
 ```
 
 #### **Linux**
 ```bash
-# Ubuntu/Debian
-wget https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux.deb
-sudo dpkg -i cc-linux.deb
+# x64 (Intel/AMD)
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-x64.tar.gz | tar -xz
+sudo mv cc /usr/local/bin/
 
-# CentOS/RHEL
-sudo yum install https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux.rpm
+# ARM64
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-arm64.tar.gz | tar -xz  
+sudo mv cc /usr/local/bin/
 
-# Generic binary
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux | tar -xz
+# Auto-detect architecture
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz | tar -xz
 sudo mv cc /usr/local/bin/
 ```
 
 #### **Windows**
 ```powershell
-# Using Chocolatey (planned)
-choco install cascade-cli
+# x64 (Intel/AMD)
+Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows-x64.exe.zip" -OutFile "cc.zip"
+Expand-Archive -Path "cc.zip" -DestinationPath "$env:USERPROFILE\bin\"
 
-# Direct download
-Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows.zip" -OutFile "cc.zip"
-Expand-Archive -Path "cc.zip" -DestinationPath "C:\Tools\cascade-cli"
-# Add C:\Tools\cascade-cli to PATH
+# ARM64  
+Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows-arm64.exe.zip" -OutFile "cc.zip"
+Expand-Archive -Path "cc.zip" -DestinationPath "$env:USERPROFILE\bin\"
+
+# Add to PATH if needed
+$env:PATH += ";$env:USERPROFILE\bin"
 ```
 
 ### **Option 3: Package Managers** *(Planned)*

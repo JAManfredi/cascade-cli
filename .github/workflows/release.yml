@@ -1,0 +1,245 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        default: 'v0.1.0'
+
+env:
+  CARGO_TERM_COLOR: always
+  
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux targets
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: cc-linux-x64
+            can-test: true
+          - target: aarch64-unknown-linux-gnu  
+            os: ubuntu-latest
+            name: cc-linux-arm64
+            can-test: false
+          
+          # macOS targets
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: cc-macos-x64
+            can-test: true
+          - target: aarch64-apple-darwin
+            os: macos-latest  
+            name: cc-macos-arm64
+            can-test: false
+          
+          # Windows targets
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: cc-windows-x64.exe
+            can-test: true
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: cc-windows-arm64.exe
+            can-test: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install cross-compilation tools (Ubuntu)
+      if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ matrix.target }}-
+          ${{ runner.os }}-cargo-
+
+    - name: Configure cross-compilation (Linux ARM64)
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
+        echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+
+    - name: Build release binary
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Run tests (if supported)
+      if: matrix.can-test
+      run: cargo test --target ${{ matrix.target }}
+
+    - name: Create binary package (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cd target/${{ matrix.target }}/release
+        tar czf ../../../${{ matrix.name }}.tar.gz cc
+        cd ../../..
+
+    - name: Create binary package (Windows)  
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd target/${{ matrix.target }}/release
+        7z a ../../../${{ matrix.name }}.zip cc.exe
+        cd ../../..
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.name }}
+        path: |
+          ${{ matrix.name }}.tar.gz
+          ${{ matrix.name }}.zip
+
+  create-release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+        else
+          TAG=${GITHUB_REF#refs/tags/}
+        fi
+        
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        
+        # Get previous tag for changelog
+        PREV_TAG=$(git describe --tags --abbrev=0 $TAG^ 2>/dev/null || echo "")
+        
+        # Generate changelog
+        echo "## 🚀 What's New in $TAG" > release_notes.md
+        echo "" >> release_notes.md
+        
+        if [ -n "$PREV_TAG" ]; then
+          echo "### 📝 Changes since $PREV_TAG:" >> release_notes.md
+          git log --pretty=format:"- %s (%h)" $PREV_TAG..$TAG >> release_notes.md
+        else
+          echo "### 📝 Initial Release Features:" >> release_notes.md
+          echo "- 🔄 **Stacked Diff Workflow** - Chain related commits for better code review" >> release_notes.md
+          echo "- 🤖 **Smart Conflict Resolution** - Auto-resolves 60-80% of common rebase conflicts" >> release_notes.md
+          echo "- 🚀 **Smart Force Push** - Preserves review history during rebases" >> release_notes.md
+          echo "- 🔧 **Bitbucket Integration** - Seamless PR management" >> release_notes.md
+          echo "- 📊 **Terminal UI** - Interactive stack browser and management" >> release_notes.md
+          echo "- 🎨 **Visualizations** - ASCII, Mermaid, Graphviz, PlantUML formats" >> release_notes.md
+          echo "- ⚡ **Git Hooks** - Automated workflow enforcement" >> release_notes.md
+          echo "- 🛠️ **Shell Completions** - Bash, Zsh, Fish, PowerShell support" >> release_notes.md
+        fi
+        
+        echo "" >> release_notes.md
+        echo "## 📦 Installation" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Quick Install (Unix)" >> release_notes.md
+        echo '```bash' >> release_notes.md
+        echo "# Linux (x64)" >> release_notes.md
+        echo "curl -L https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/cc-linux-x64.tar.gz | tar -xz" >> release_notes.md
+        echo "sudo mv cc /usr/local/bin/" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "# macOS (x64)" >> release_notes.md
+        echo "curl -L https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/cc-macos-x64.tar.gz | tar -xz" >> release_notes.md
+        echo "sudo mv cc /usr/local/bin/" >> release_notes.md
+        echo '```' >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Platform-Specific Downloads" >> release_notes.md
+        echo "- **Linux x64**: cc-linux-x64.tar.gz" >> release_notes.md
+        echo "- **Linux ARM64**: cc-linux-arm64.tar.gz" >> release_notes.md
+        echo "- **macOS x64**: cc-macos-x64.tar.gz" >> release_notes.md
+        echo "- **macOS ARM64**: cc-macos-arm64.tar.gz" >> release_notes.md
+        echo "- **Windows x64**: cc-windows-x64.exe.zip" >> release_notes.md
+        echo "- **Windows ARM64**: cc-windows-arm64.exe.zip" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "## 📖 Documentation" >> release_notes.md
+        echo "- [User Manual](https://github.com/JAManfredi/cascade-cli/blob/main/docs/USER_MANUAL.md)" >> release_notes.md
+        echo "- [Installation Guide](https://github.com/JAManfredi/cascade-cli/blob/main/docs/INSTALLATION.md)" >> release_notes.md
+        echo "- [30-Minute Onboarding](https://github.com/JAManfredi/cascade-cli/blob/main/docs/ONBOARDING.md)" >> release_notes.md
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release-assets
+        find artifacts -name "*.tar.gz" -exec cp {} release-assets/ \;
+        find artifacts -name "*.zip" -exec cp {} release-assets/ \;
+        ls -la release-assets/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.release_notes.outputs.tag }}
+        name: "Cascade CLI ${{ steps.release_notes.outputs.tag }}"
+        body_path: release_notes.md
+        files: release-assets/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Test installation of released binaries
+  test-installation:
+    name: Test Installation
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: cc-linux-x64.tar.gz
+          - os: macos-latest
+            target: cc-macos-x64.tar.gz
+          - os: windows-latest
+            target: cc-windows-x64.exe.zip
+
+    steps:
+    - name: Download and test binary (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        TAG=${GITHUB_REF#refs/tags/}
+        curl -L "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" | tar -xz
+        ./cc --version
+        ./cc --help
+
+    - name: Download and test binary (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        $TAG = $env:GITHUB_REF -replace 'refs/tags/', ''
+        Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" -OutFile "cc.zip"
+        Expand-Archive -Path "cc.zip" -DestinationPath "."
+        .\cc.exe --version
+        .\cc.exe --help 
