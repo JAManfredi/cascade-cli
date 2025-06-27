@@ -7,7 +7,8 @@ use crate::bitbucket::pull_request::{
     Repository, Project, PullRequestState
 };
 use uuid::Uuid;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
+use std::collections::HashMap;
 
 /// High-level integration between stacks and Bitbucket
 pub struct BitbucketIntegration {
@@ -176,6 +177,87 @@ impl BitbucketIntegration {
             from_ref,
             to_ref,
         })
+    }
+
+    /// Update pull requests after a rebase using smart force push strategy
+    /// This preserves all review history by updating existing branches instead of creating new ones
+    pub async fn update_prs_after_rebase(&mut self, stack_id: &Uuid, branch_mapping: &HashMap<String, String>) -> Result<Vec<String>> {
+        info!("Updating pull requests after rebase for stack {} using smart force push", stack_id);
+        
+        let stack = self.stack_manager.get_stack(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?
+            .clone();
+
+        let mut updated_branches = Vec::new();
+
+        for entry in &stack.entries {
+            // Check if this entry has an existing PR and was remapped to a new branch
+            if let (Some(pr_id_str), Some(new_branch)) = 
+                (&entry.pull_request_id, branch_mapping.get(&entry.branch)) {
+                
+                if let Ok(pr_id) = pr_id_str.parse::<u64>() {
+                    info!("Found existing PR #{} for entry {}, updating branch {} -> {}", 
+                          pr_id, entry.id, entry.branch, new_branch);
+                    
+                    // Get the existing PR to understand its current state
+                    match self.pr_manager.get_pull_request(pr_id).await {
+                        Ok(existing_pr) => {
+                            // Force push the new branch content to the old branch name
+                            // This preserves the PR while updating its contents
+                            match self.stack_manager.git_repo().force_push_branch(&entry.branch, new_branch) {
+                                Ok(_) => {
+                                    info!("✅ Successfully force-pushed {} to preserve PR #{}", 
+                                          entry.branch, pr_id);
+                                    
+                                    // Add a comment explaining the rebase
+                                    let rebase_comment = format!(
+                                        "🔄 **Automatic rebase completed**\n\n\
+                                        This PR has been automatically rebased to incorporate the latest changes.\n\
+                                        - Original commits: `{}`\n\
+                                        - New base: Latest main branch\n\
+                                        - All review history and comments are preserved\n\n\
+                                        The changes in this PR remain the same - only the base has been updated.",
+                                        &entry.commit_hash[..8]
+                                    );
+                                    
+                                    if let Err(e) = self.pr_manager.add_comment(pr_id, &rebase_comment).await {
+                                        warn!("Failed to add rebase comment to PR #{}: {}", pr_id, e);
+                                    }
+                                    
+                                    updated_branches.push(format!("PR #{}: {} (preserved)", pr_id, entry.branch));
+                                }
+                                Err(e) => {
+                                    error!("Failed to force push {}: {}", entry.branch, e);
+                                    // Fall back to creating a comment about the issue
+                                    let error_comment = format!(
+                                        "⚠️ **Rebase Update Issue**\n\n\
+                                        The automatic rebase completed, but updating this PR failed.\n\
+                                        You may need to manually update this branch.\n\
+                                        Error: {}", e
+                                    );
+                                    
+                                    if let Err(e2) = self.pr_manager.add_comment(pr_id, &error_comment).await {
+                                        warn!("Failed to add error comment to PR #{}: {}", pr_id, e2);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Could not retrieve PR #{}: {}", pr_id, e);
+                        }
+                    }
+                }
+            } else if branch_mapping.contains_key(&entry.branch) {
+                // This entry was remapped but doesn't have a PR yet
+                info!("Entry {} was remapped but has no PR - no action needed", entry.id);
+            }
+        }
+
+        if !updated_branches.is_empty() {
+            info!("Successfully updated {} PRs using smart force push strategy", updated_branches.len());
+        }
+
+        Ok(updated_branches)
     }
 }
 

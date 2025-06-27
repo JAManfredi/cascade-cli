@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 use clap_complete::Shell;
 use crate::errors::Result;
 use commands::stack::StackAction;
+use commands::entry::EntryAction;
 
 #[derive(Parser)]
 #[command(name = "cc")]
@@ -45,6 +46,12 @@ pub enum Commands {
     Stack {
         #[command(subcommand)]
         action: StackAction,
+    },
+
+    /// Entry management and editing
+    Entry {
+        #[command(subcommand)]
+        action: EntryAction,
     },
     
     /// Show repository status
@@ -233,6 +240,9 @@ impl Cli {
             }
             Commands::Stack { action } => {
                 commands::stack::run(action).await
+            }
+            Commands::Entry { action } => {
+                commands::entry::run(action).await
             }
             Commands::Status => {
                 commands::status::run().await

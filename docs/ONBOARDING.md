@@ -395,6 +395,37 @@ cc stack create user-profiles --base user-auth --description "User profile manag
 # Your stack will automatically be rebased when user-auth merges
 ```
 
+### **🔄 Understanding Smart Force Push (Important!)**
+
+When you run `cc stack rebase`, Cascade CLI uses a **smart force push strategy** that preserves all your PR history:
+
+```bash
+# When you rebase...
+cc stack rebase
+
+# What happens behind the scenes:
+# 1. Creates temporary branches: add-auth-v2, add-tests-v2  
+# 2. Force pushes new content to original branches: add-auth, add-tests
+# 3. All existing PRs keep their URLs, comments, and approval history!
+
+# You'll see output like:
+🔄 Rebasing stack: authentication
+   ✅ Force-pushed add-auth-v2 content to add-auth (preserves PR #123)
+   ✅ Force-pushed add-tests-v2 content to add-tests (preserves PR #124)
+```
+
+**Why this matters:**
+- ✅ **Reviewers never lose context** - All comments and discussions preserved
+- ✅ **PR URLs stay stable** - Bookmarks and links keep working  
+- ✅ **Approval history maintained** - No need to re-approve unchanged code
+- ✅ **Industry standard approach** - Same strategy as Graphite, Phabricator, GitHub CLI
+
+**This is safe because:**
+- Cascade CLI validates all operations before executing
+- Versioned branches are kept as backup (`add-auth-v2`)
+- Only affects your feature branches, never main/develop
+- Atomic operations: either all updates succeed or none do
+
 ---
 
 ## 🚀 **Advanced Features Tour**

@@ -5,6 +5,7 @@ use clap::{Subcommand, ValueEnum};
 use std::env;
 use tracing::{info, warn};
 use indicatif::{ProgressBar, ProgressStyle, ProgressIterator};
+use crate::bitbucket::BitbucketIntegration;
 
 /// CLI argument version of RebaseStrategy
 #[derive(ValueEnum, Clone, Debug)]
@@ -69,6 +70,15 @@ pub enum StackAction {
         /// Use specific commit hash instead of HEAD
         #[arg(long)]
         commit: Option<String>,
+        /// Push all unpushed commits since last stack push
+        #[arg(long)]
+        all: bool,
+        /// Push commits since this reference (e.g., HEAD~3)
+        #[arg(long)]
+        since: Option<String>,
+        /// Push multiple specific commits (comma-separated)
+        #[arg(long)]
+        commits: Option<String>,
     },
     
     /// Pop the top commit from the stack
@@ -88,6 +98,12 @@ pub enum StackAction {
         /// Pull request description
         #[arg(long, short)]
         description: Option<String>,
+        /// Submit all unsubmitted entries
+        #[arg(long)]
+        all: bool,
+        /// Submit range of entries (e.g., "1-3" or "2,4,6")
+        #[arg(long)]
+        range: Option<String>,
     },
     
     /// Check status of all pull requests in a stack
@@ -168,14 +184,14 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::Show { name } => {
             show_stack(name).await
         }
-        StackAction::Push { branch, message, commit } => {
-            push_to_stack(branch, message, commit).await
+        StackAction::Push { branch, message, commit, all, since, commits } => {
+            push_to_stack(branch, message, commit, all, since, commits).await
         }
         StackAction::Pop { keep_branch } => {
             pop_from_stack(keep_branch).await
         }
-        StackAction::Submit { entry, title, description } => {
-            submit_entry(entry, title, description).await
+        StackAction::Submit { entry, title, description, all, range } => {
+            submit_entry(entry, title, description, all, range).await
         }
         StackAction::Status { name } => {
             check_stack_status(name).await
@@ -361,42 +377,109 @@ async fn show_stack(name: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn push_to_stack(branch: Option<String>, message: Option<String>, commit: Option<String>) -> Result<()> {
+async fn push_to_stack(branch: Option<String>, message: Option<String>, commit: Option<String>, all: bool, since: Option<String>, commits: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 
     let mut manager = StackManager::new(&current_dir)?;
     let repo = GitRepository::open(&current_dir)?;
 
-    // Get commit hash (HEAD by default)
-    let commit_hash = if let Some(hash) = commit {
-        hash
+    // Determine which commits to push
+    let commits_to_push = if let Some(commits_str) = commits {
+        // Parse comma-separated commit hashes
+        commits_str.split(',')
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<String>>()
+    } else if let Some(since_ref) = since {
+        // Get commits since the specified reference
+        let since_commit = repo.resolve_reference(&since_ref)?;
+        let head_commit = repo.get_head_commit()?;
+        
+        // Get commits between since_ref and HEAD
+        let commits = repo.get_commits_between(&since_commit.id().to_string(), &head_commit.id().to_string())?;
+        commits.into_iter()
+            .map(|c| c.id().to_string())
+            .collect()
+    } else if all {
+        // Get all unpushed commits (commits not in any stack entry)
+        let active_stack = manager.get_active_stack()
+            .ok_or_else(|| CascadeError::config("No active stack. Create a stack first with 'cc stack create'"))?;
+        
+        let mut unpushed = Vec::new();
+        let head_commit = repo.get_head_commit()?;
+        let mut current_commit = head_commit;
+        
+        // Walk back from HEAD until we find a commit that's already in the stack
+        loop {
+            let commit_hash = current_commit.id().to_string();
+            let already_in_stack = active_stack.entries.iter()
+                .any(|entry| entry.commit_hash == commit_hash);
+            
+            if already_in_stack {
+                break;
+            }
+            
+            unpushed.push(commit_hash);
+            
+            // Move to parent commit
+            if let Some(parent) = current_commit.parents().next() {
+                current_commit = parent;
+            } else {
+                break;
+            }
+        }
+        
+        unpushed.reverse(); // Reverse to get chronological order
+        unpushed
+    } else if let Some(hash) = commit {
+        // Single specific commit
+        vec![hash]
     } else {
-        repo.get_head_commit()?.id().to_string()
+        // Default: current HEAD
+        vec![repo.get_head_commit()?.id().to_string()]
     };
 
-    // Get commit message
-    let commit_msg = if let Some(msg) = message {
-        msg
-    } else {
-        let commit_obj = repo.get_commit(&commit_hash)?;
-        commit_obj.message().unwrap_or("").to_string()
-    };
+    if commits_to_push.is_empty() {
+        println!("ℹ️  No commits to push to stack");
+        return Ok(());
+    }
 
-    // Generate branch name if not provided
-    let branch_name = if let Some(branch) = branch {
-        branch
-    } else {
-        let branch_mgr = crate::git::BranchManager::new(repo);
-        branch_mgr.generate_branch_name(&commit_msg)
-    };
+    // Push each commit to the stack
+    let mut pushed_count = 0;
+    for (i, commit_hash) in commits_to_push.iter().enumerate() {
+        let commit_obj = repo.get_commit(commit_hash)?;
+        let commit_msg = commit_obj.message().unwrap_or("").to_string();
+        
+        // Generate branch name (use provided branch for first commit, generate for others)
+        let branch_name = if i == 0 && branch.is_some() {
+            branch.clone().unwrap()
+        } else {
+            // Create a temporary GitRepository for branch name generation
+            let temp_repo = GitRepository::open(&current_dir)?;
+            let branch_mgr = crate::git::BranchManager::new(temp_repo);
+            branch_mgr.generate_branch_name(&commit_msg)
+        };
 
-    let entry_id = manager.push_to_stack(branch_name.clone(), commit_hash.clone(), commit_msg.clone())?;
+        // Use provided message for first commit, original message for others
+        let final_message = if i == 0 && message.is_some() {
+            message.clone().unwrap()
+        } else {
+            commit_msg.clone()
+        };
 
-    info!("✅ Pushed commit to stack");
-    info!("   Commit: {} ({})", &commit_hash[..8], commit_msg.split('\n').next().unwrap_or(""));
-    info!("   Branch: {}", branch_name);
-    info!("   Entry ID: {}", entry_id);
+        let entry_id = manager.push_to_stack(branch_name.clone(), commit_hash.clone(), final_message.clone())?;
+        pushed_count += 1;
+
+        println!("✅ Pushed commit {}/{} to stack", i + 1, commits_to_push.len());
+        println!("   Commit: {} ({})", &commit_hash[..8], commit_msg.split('\n').next().unwrap_or(""));
+        println!("   Branch: {}", branch_name);
+        println!("   Entry ID: {}", entry_id);
+        println!();
+    }
+
+    println!("🎉 Successfully pushed {} commit{} to stack", 
+             pushed_count, 
+             if pushed_count == 1 { "" } else { "s" });
 
     Ok(())
 }
@@ -425,23 +508,11 @@ async fn pop_from_stack(keep_branch: bool) -> Result<()> {
     Ok(())
 }
 
-async fn submit_entry(entry: Option<usize>, title: Option<String>, description: Option<String>) -> Result<()> {
+async fn submit_entry(entry: Option<usize>, title: Option<String>, description: Option<String>, all: bool, range: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 
-    // Create progress bar for the submission process
-    let pb = ProgressBar::new(5);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("📤 {msg} [{bar:40.cyan/blue}] {pos}/{len}")
-            .map_err(|e| CascadeError::config(format!("Progress bar template error: {}", e)))?
-    );
-
-    pb.set_message("Loading configuration");
-    let stack_manager = StackManager::new(&current_dir)?;
-    pb.inc(1);
-    
-    // Load configuration
+    // Load configuration first
     let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
@@ -453,53 +524,145 @@ async fn submit_entry(entry: Option<usize>, title: Option<String>, description: 
         auth: crate::config::AuthConfig::default(),
     };
 
-    pb.set_message("Finding stack entry");
-    pb.inc(1);
-
+    let stack_manager = StackManager::new(&current_dir)?;
+    
     // Get the active stack
     let active_stack = stack_manager.get_active_stack()
         .ok_or_else(|| CascadeError::config("No active stack. Create a stack first with 'cc stack create'"))?;
     let stack_id = active_stack.id;
 
-    // Determine which entry to submit
-    let entry_to_submit = if let Some(entry_num) = entry {
+    // Determine which entries to submit
+    let entries_to_submit = if all {
+        // Submit all unsubmitted entries
+        active_stack.entries.iter()
+            .enumerate()
+            .filter(|(_, entry)| !entry.is_submitted)
+            .map(|(i, entry)| (i + 1, entry.clone())) // Convert to 1-based indexing
+            .collect::<Vec<(usize, _)>>()
+    } else if let Some(range_str) = range {
+        // Parse range (e.g., "1-3" or "2,4,6")
+        let mut entries = Vec::new();
+        
+        if range_str.contains('-') {
+            // Handle range like "1-3"
+            let parts: Vec<&str> = range_str.split('-').collect();
+            if parts.len() != 2 {
+                return Err(CascadeError::config("Invalid range format. Use 'start-end' (e.g., '1-3')"));
+            }
+            
+            let start: usize = parts[0].parse()
+                .map_err(|_| CascadeError::config("Invalid start number in range"))?;
+            let end: usize = parts[1].parse()
+                .map_err(|_| CascadeError::config("Invalid end number in range"))?;
+            
+            if start == 0 || end == 0 || start > active_stack.entries.len() || end > active_stack.entries.len() {
+                return Err(CascadeError::config(format!("Range out of bounds. Stack has {} entries", active_stack.entries.len())));
+            }
+            
+            for i in start..=end {
+                entries.push((i, active_stack.entries[i - 1].clone()));
+            }
+        } else {
+            // Handle comma-separated list like "2,4,6"
+            for entry_str in range_str.split(',') {
+                let entry_num: usize = entry_str.trim().parse()
+                    .map_err(|_| CascadeError::config(format!("Invalid entry number: {}", entry_str)))?;
+                
+                if entry_num == 0 || entry_num > active_stack.entries.len() {
+                    return Err(CascadeError::config(format!("Entry {} out of bounds. Stack has {} entries", entry_num, active_stack.entries.len())));
+                }
+                
+                entries.push((entry_num, active_stack.entries[entry_num - 1].clone()));
+            }
+        }
+        
+        entries
+    } else if let Some(entry_num) = entry {
+        // Single entry specified
         if entry_num == 0 || entry_num > active_stack.entries.len() {
             return Err(CascadeError::config(format!("Invalid entry number: {}. Stack has {} entries", entry_num, active_stack.entries.len())));
         }
-        active_stack.entries[entry_num - 1].clone() // 1-based to 0-based indexing
+        vec![(entry_num, active_stack.entries[entry_num - 1].clone())]
     } else {
         // Default to the top entry (most recent)
-        active_stack.entries.last()
-            .ok_or_else(|| CascadeError::config("Stack is empty. Push some commits first with 'cc stack push'"))?
-            .clone()
+        let top_entry = active_stack.entries.last()
+            .ok_or_else(|| CascadeError::config("Stack is empty. Push some commits first with 'cc stack push'"))?;
+        vec![(active_stack.entries.len(), top_entry.clone())]
     };
+
+    if entries_to_submit.is_empty() {
+        println!("ℹ️  No entries to submit");
+        return Ok(());
+    }
+
+    // Create progress bar for the submission process
+    let total_operations = entries_to_submit.len() + 2; // +2 for setup steps
+    let pb = ProgressBar::new(total_operations as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("📤 {msg} [{bar:40.cyan/blue}] {pos}/{len}")
+            .map_err(|e| CascadeError::config(format!("Progress bar template error: {}", e)))?
+    );
 
     pb.set_message("Connecting to Bitbucket");
     pb.inc(1);
     
-    // Create Bitbucket integration
-    let mut integration = crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+    // Create a new StackManager for the integration (since the original was moved)
+    let integration_stack_manager = StackManager::new(&current_dir)?;
+    let mut integration = BitbucketIntegration::new(integration_stack_manager, cascade_config.clone())?;
     
-    pb.set_message("Creating pull request");
+    pb.set_message("Starting batch submission");
     pb.inc(1);
     
-    // Submit the entry
-    match integration.submit_entry(&stack_id, &entry_to_submit.id, title, description).await {
-        Ok(pr) => {
-            pb.set_message("Finalizing");
-            pb.inc(1);
-            pb.finish_with_message("✅ Pull request created successfully");
-
-            println!("   PR #{}: {}", pr.id, pr.title);
-            if let Some(url) = pr.web_url() {
-                println!("   URL: {}", url);
+    // Submit each entry
+    let mut submitted_count = 0;
+    let mut failed_entries = Vec::new();
+    let total_entries = entries_to_submit.len();
+    
+    for (entry_num, entry_to_submit) in &entries_to_submit {
+        pb.set_message("Submitting entries...");
+        
+        // Use provided title/description only for first entry or single entry submissions
+        let entry_title = if total_entries == 1 { title.clone() } else { None };
+        let entry_description = if total_entries == 1 { description.clone() } else { None };
+        
+        match integration.submit_entry(&stack_id, &entry_to_submit.id, entry_title, entry_description).await {
+            Ok(pr) => {
+                submitted_count += 1;
+                println!("✅ Entry {} - PR #{}: {}", entry_num, pr.id, pr.title);
+                if let Some(url) = pr.web_url() {
+                    println!("   URL: {}", url);
+                }
+                println!("   From: {} -> {}", pr.from_ref.display_id, pr.to_ref.display_id);
+                println!();
             }
-            println!("   From: {} -> {}", pr.from_ref.display_id, pr.to_ref.display_id);
+            Err(e) => {
+                failed_entries.push((*entry_num, e.to_string()));
+                println!("❌ Entry {} failed: {}", entry_num, e);
+            }
         }
-        Err(e) => {
-            pb.abandon_with_message("❌ Failed to create pull request");
-            return Err(CascadeError::config(format!("Failed to create pull request: {}", e)));
+        
+        pb.inc(1);
+    }
+
+    if failed_entries.is_empty() {
+        pb.finish_with_message("✅ All pull requests created successfully");
+        println!("🎉 Successfully submitted {} entr{}", 
+                 submitted_count, 
+                 if submitted_count == 1 { "y" } else { "ies" });
+    } else {
+        pb.abandon_with_message("⚠️  Some submissions failed");
+        println!("📊 Submission Summary:");
+        println!("   ✅ Successful: {}", submitted_count);
+        println!("   ❌ Failed: {}", failed_entries.len());
+        println!();
+        println!("💡 Failed entries:");
+        for (entry_num, error) in failed_entries {
+            println!("   - Entry {}: {}", entry_num, error);
         }
+        println!();
+        println!("💡 You can retry failed entries individually:");
+        println!("   cc stack submit <ENTRY_NUMBER>");
     }
 
     Ok(())
@@ -678,23 +841,39 @@ async fn rebase_stack(interactive: bool, onto: Option<String>, strategy: Option<
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let mut stack_manager = StackManager::new(&current_dir)?;
+    let git_repo = GitRepository::open(&current_dir)?;
     
-    // Get the active stack
-    let active_stack = stack_manager.get_active_stack()
-        .ok_or_else(|| CascadeError::config("No active stack"))?;
-    let stack_id = active_stack.id;
-    let stack_name = active_stack.name.clone();
-
-    info!("🔄 Starting rebase for stack '{}'", stack_name);
-
-    // Load configuration to determine rebase strategy
+    // Load configuration for potential Bitbucket integration
     let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
     
-    // Determine rebase strategy - CLI argument overrides config
+    // Create the main config structure
+    let cascade_config = crate::config::CascadeConfig {
+        bitbucket: Some(settings.bitbucket.clone()),
+        git: settings.git.clone(),
+        auth: crate::config::AuthConfig::default(),
+    };
+
+    // Get active stack
+    let active_stack = stack_manager.get_active_stack()
+        .ok_or_else(|| CascadeError::config("No active stack. Create a stack first with 'cc stack create'"))?;
+    let stack_id = active_stack.id;
+
+    let active_stack = stack_manager.get_stack(&stack_id)
+        .ok_or_else(|| CascadeError::config("Active stack not found"))?
+        .clone();
+
+    if active_stack.entries.is_empty() {
+        println!("ℹ️  Stack is empty. Nothing to rebase.");
+        return Ok(());
+    }
+
+    println!("🔄 Rebasing stack: {}", active_stack.name);
+    println!("   Base: {}", active_stack.base_branch);
+    
+    // Determine rebase strategy
     let rebase_strategy = if let Some(cli_strategy) = strategy {
         match cli_strategy {
             RebaseStrategyArg::BranchVersioning => crate::stack::RebaseStrategy::BranchVersioning,
@@ -757,6 +936,28 @@ async fn rebase_stack(interactive: bool, onto: Option<String>, strategy: Option<
                 for (old, new) in &result.branch_mapping {
                     println!("      {} -> {}", old, new);
                 }
+                
+                // Handle PR updates if enabled
+                if let Some(ref bitbucket_config) = cascade_config.bitbucket {
+                    // Create a new StackManager for the integration (since the original was moved)
+                    let integration_stack_manager = StackManager::new(&current_dir)?;
+                    let mut integration = BitbucketIntegration::new(integration_stack_manager, cascade_config.clone())?;
+                    
+                    match integration.update_prs_after_rebase(&stack_id, &result.branch_mapping).await {
+                        Ok(updated_prs) => {
+                            if !updated_prs.is_empty() {
+                                println!("   🔄 Preserved pull request history:");
+                                for pr_update in updated_prs {
+                                    println!("      ✅ {}", pr_update);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("   ⚠️  Failed to update pull requests: {}", e);
+                            eprintln!("      You may need to manually update PRs in Bitbucket");
+                        }
+                    }
+                }
             }
             
             println!("   ✅ {} commits successfully rebased", result.success_count());
@@ -764,10 +965,17 @@ async fn rebase_stack(interactive: bool, onto: Option<String>, strategy: Option<
             // Show next steps
             if matches!(rebase_strategy, crate::stack::RebaseStrategy::BranchVersioning) {
                 println!("\n📝 Next steps:");
-                println!("   1. Review the new branches created");
-                println!("   2. Test your changes");
-                println!("   3. Submit updated pull requests with 'cc stack submit'");
-                println!("   4. Old branches are preserved for safety");
+                if !result.branch_mapping.is_empty() {
+                    println!("   1. ✅ New versioned branches have been created");
+                    println!("   2. ✅ Pull requests have been updated automatically");
+                    println!("   3. 🔍 Review the updated PRs in Bitbucket");
+                    println!("   4. 🧪 Test your changes on the new branches");
+                    println!("   5. 🗑️  Old branches are preserved for safety (can be deleted later)");
+                } else {
+                    println!("   1. Review the rebased stack");
+                    println!("   2. Test your changes");
+                    println!("   3. Submit new pull requests with 'cc stack submit'");
+                }
             }
         }
         Err(e) => {

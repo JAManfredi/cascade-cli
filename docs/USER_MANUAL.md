@@ -301,7 +301,7 @@ cc stack sync --strategy rebase
 ```
 
 #### **`cc stack rebase`** - Rebase Stack
-Rebase all stack entries on latest base branch.
+Rebase all stack entries on latest base branch using smart force push strategy.
 
 ```bash
 cc stack rebase [OPTIONS]
@@ -313,9 +313,18 @@ cc stack rebase [OPTIONS]
 --abort               # Abort rebase operation
 ```
 
+**Smart Force Push Behavior:**
+When rebasing, Cascade CLI:
+1. Creates temporary versioned branches (`feature-v2`)
+2. Force pushes new content to original branches (`feature`)
+3. **Preserves ALL existing PRs** and review history
+4. Keeps versioned branches as backup for safety
+
+This approach follows industry standards (Graphite, Phabricator, GitHub CLI) and ensures reviewers never lose context, comments, or approval history.
+
 **Examples:**
 ```bash
-# Standard rebase
+# Standard rebase with PR history preservation
 cc stack rebase
 
 # Interactive rebase
@@ -326,6 +335,22 @@ cc stack rebase --continue
 
 # Abort rebase
 cc stack rebase --abort
+```
+
+**What you'll see:**
+```bash
+$ cc stack rebase
+
+🔄 Rebasing stack: authentication
+   📋 Branch mapping:
+      add-auth -> add-auth-v2      # Temporary rebase branches
+      add-tests -> add-tests-v2
+
+   🔄 Preserved pull request history:
+      ✅ Force-pushed add-auth-v2 content to add-auth (preserves PR #123)
+      ✅ Force-pushed add-tests-v2 content to add-tests (preserves PR #124)
+
+   ✅ 2 commits successfully rebased
 ```
 
 ### **📊 Status and Information**
@@ -496,7 +521,7 @@ cc hooks add <HOOK>
 
 # Hook types:
 post-commit            # Auto-add commits to active stack
-pre-push              # Prevent force pushes to shared branches
+pre-push              # Prevent dangerous pushes to protected branches
 commit-msg            # Validate commit message format
 prepare-commit-msg    # Add stack context to commit messages
 ```

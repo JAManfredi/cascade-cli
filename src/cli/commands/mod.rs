@@ -1,5 +1,6 @@
 pub mod config;
 pub mod doctor;
+pub mod entry;
 pub mod init;
 pub mod stack;
 pub mod status;

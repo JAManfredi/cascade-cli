@@ -1,6 +1,7 @@
 use crate::errors::{CascadeError, Result};
 use git2::{Repository, Signature, Oid};
 use std::path::{Path, PathBuf};
+use tracing::info;
 
 /// Repository information
 #[derive(Debug, Clone)]
@@ -159,6 +160,29 @@ impl GitRepository {
             .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{}': {}", name, e)))?;
         
         tracing::info!("Switched to branch '{}'", name);
+        Ok(())
+    }
+
+    /// Checkout a specific commit (detached HEAD)
+    pub fn checkout_commit(&self, commit_hash: &str) -> Result<()> {
+        let oid = Oid::from_str(commit_hash)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        let commit = self.repo.find_commit(oid)
+            .map_err(|e| CascadeError::branch(format!("Could not find commit '{}': {}", commit_hash, e)))?;
+        
+        let tree = commit.tree()
+            .map_err(|e| CascadeError::branch(format!("Could not get tree for commit '{}': {}", commit_hash, e)))?;
+        
+        // Checkout the tree
+        self.repo.checkout_tree(tree.as_object(), None)
+            .map_err(|e| CascadeError::branch(format!("Could not checkout commit '{}': {}", commit_hash, e)))?;
+        
+        // Update HEAD to the commit (detached HEAD)
+        self.repo.set_head_detached(oid)
+            .map_err(|e| CascadeError::branch(format!("Could not update HEAD to commit '{}': {}", commit_hash, e)))?;
+        
+        tracing::info!("Checked out commit '{}' (detached HEAD)", commit_hash);
         Ok(())
     }
     
@@ -558,6 +582,72 @@ impl GitRepository {
         }
         
         Ok(commits)
+    }
+
+    /// Force push one branch's content to another branch name
+    /// This is used to preserve PR history while updating branch contents after rebase
+    pub fn force_push_branch(&self, target_branch: &str, source_branch: &str) -> Result<()> {
+        info!("Force pushing {} content to {} to preserve PR history", source_branch, target_branch);
+        
+        // First, ensure we have the latest changes for the source branch
+        let source_ref = self.repo.find_reference(&format!("refs/heads/{}", source_branch))
+            .map_err(|e| CascadeError::config(format!("Failed to find source branch {}: {}", source_branch, e)))?;
+        let source_commit = source_ref.peel_to_commit()
+            .map_err(|e| CascadeError::config(format!("Failed to get commit for source branch {}: {}", source_branch, e)))?;
+        
+        // Update the target branch to point to the source commit
+        let mut target_ref = self.repo.find_reference(&format!("refs/heads/{}", target_branch))
+            .map_err(|e| CascadeError::config(format!("Failed to find target branch {}: {}", target_branch, e)))?;
+        
+        target_ref.set_target(source_commit.id(), "Force push from rebase")
+            .map_err(|e| CascadeError::config(format!("Failed to update target branch {}: {}", target_branch, e)))?;
+        
+        // Force push to remote
+        let mut remote = self.repo.find_remote("origin")
+            .map_err(|e| CascadeError::config(format!("Failed to find origin remote: {}", e)))?;
+        
+        let refspec = format!("+refs/heads/{}:refs/heads/{}", target_branch, target_branch);
+        
+        // Create callbacks for authentication
+        let mut callbacks = git2::RemoteCallbacks::new();
+        
+        // Try to use existing authentication from git config/credential manager
+        callbacks.credentials(|_url, username_from_url, _allowed_types| {
+            if let Some(username) = username_from_url {
+                // Try SSH key first
+                git2::Cred::ssh_key_from_agent(username)
+            } else {
+                // Try default credential helper
+                git2::Cred::default()
+            }
+        });
+        
+        // Push options for force push
+        let mut push_options = git2::PushOptions::new();
+        push_options.remote_callbacks(callbacks);
+        
+        remote.push(&[&refspec], Some(&mut push_options))
+            .map_err(|e| CascadeError::config(format!("Failed to force push {}: {}", target_branch, e)))?;
+        
+        info!("✅ Successfully force pushed {} to preserve PR history", target_branch);
+        Ok(())
+    }
+
+    /// Resolve a reference (branch name, tag, or commit hash) to a commit
+    pub fn resolve_reference(&self, reference: &str) -> Result<git2::Commit> {
+        // Try to parse as commit hash first
+        if let Ok(oid) = Oid::from_str(reference) {
+            if let Ok(commit) = self.repo.find_commit(oid) {
+                return Ok(commit);
+            }
+        }
+        
+        // Try to resolve as a reference (branch, tag, etc.)
+        let obj = self.repo.revparse_single(reference)
+            .map_err(|e| CascadeError::branch(format!("Could not resolve reference '{}': {}", reference, e)))?;
+        
+        obj.peel_to_commit()
+            .map_err(|e| CascadeError::branch(format!("Reference '{}' does not point to a commit: {}", reference, e)))
     }
 }
 

@@ -759,11 +759,81 @@ For enterprise users:
 
 ### **Common Mistakes to Avoid**
 
-1. **Don't force push to shared branches**
+1. **Don't manually force push to shared branches** (Cascade CLI handles force pushes safely during rebase)
 2. **Don't ignore merge conflicts**  
 3. **Don't work on multiple stacks simultaneously without switching**
 4. **Don't delete .cascade/ directory unless troubleshooting**
 5. **Don't commit sensitive information in configuration**
+
+---
+
+## ⚡ **Smart Force Push Issues**
+
+### **Force Push Failed**
+
+If force push operations fail during rebase:
+
+```bash
+# Error: Force push rejected
+# Solution 1: Check branch protection rules
+git ls-remote --heads origin | grep your-branch
+
+# Solution 2: Verify you have push permissions
+git remote show origin
+
+# Solution 3: Force push manually as fallback
+git checkout original-branch
+git reset --hard versioned-branch
+git push --force-with-lease origin original-branch
+```
+
+### **PR Links Broken After Rebase**
+
+If PRs don't update correctly:
+
+```bash
+# Check if PRs still exist
+cc stack prs --verbose
+
+# Manually update PR if needed  
+cc config set stack.STACK_NAME.pr.INDEX PR_ID
+
+# Re-submit if PR was closed
+cc stack submit INDEX --title "Updated after rebase"
+```
+
+### **Versioned Branches Accumulating**
+
+Clean up temporary rebase branches:
+
+```bash
+# List versioned branches
+git branch | grep -E '.*-v[0-9]+$'
+
+# Clean up old versions (keep latest)
+git branch | grep -E '.*-v[1-9][0-9]*$' | xargs -n 1 git branch -D
+
+# Or use cascade cleanup
+cc stack cleanup --remove-versioned-branches
+```
+
+### **Force Push Safety Concerns**
+
+Understanding when force pushes are safe:
+
+```bash
+# Cascade CLI force pushes are safe because:
+# 1. Only affects your feature branches (never main/develop)
+# 2. Validates existing PRs before pushing
+# 3. Creates backup branches before operations
+# 4. Uses --force-with-lease for additional safety
+
+# Check backup branches exist
+git branch | grep -E '.*-v[0-9]+$'
+
+# Manually verify safety
+git log --oneline origin/your-branch..your-branch-v2
+```
 
 ---
 

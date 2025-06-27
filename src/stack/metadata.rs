@@ -252,6 +252,40 @@ impl StackMetadata {
     }
 }
 
+/// Edit mode state tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditModeState {
+    pub is_active: bool,
+    pub target_entry_id: Option<Uuid>,
+    pub target_stack_id: Option<Uuid>,
+    pub original_commit_hash: String,
+    pub started_at: DateTime<Utc>,
+}
+
+impl EditModeState {
+    /// Create new edit mode state
+    pub fn new(stack_id: Uuid, entry_id: Uuid, commit_hash: String) -> Self {
+        Self {
+            is_active: true,
+            target_entry_id: Some(entry_id),
+            target_stack_id: Some(stack_id),
+            original_commit_hash: commit_hash,
+            started_at: Utc::now(),
+        }
+    }
+
+    /// Clear edit mode state
+    pub fn clear() -> Self {
+        Self {
+            is_active: false,
+            target_entry_id: None,
+            target_stack_id: None,
+            original_commit_hash: String::new(),
+            started_at: Utc::now(),
+        }
+    }
+}
+
 /// Repository-wide stack metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepositoryMetadata {
@@ -263,6 +297,8 @@ pub struct RepositoryMetadata {
     pub active_stack_id: Option<Uuid>,
     /// Default base branch for new stacks
     pub default_base_branch: String,
+    /// Edit mode state
+    pub edit_mode: Option<EditModeState>,
     /// When this metadata was last updated
     pub updated_at: DateTime<Utc>,
 }
@@ -275,6 +311,7 @@ impl RepositoryMetadata {
             commits: HashMap::new(),
             active_stack_id: None,
             default_base_branch,
+            edit_mode: None,
             updated_at: Utc::now(),
         }
     }

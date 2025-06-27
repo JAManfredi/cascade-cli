@@ -13,5 +13,5 @@ pub mod rebase;
 
 pub use stack::{Stack, StackEntry, StackStatus};
 pub use manager::StackManager;
-pub use metadata::{StackMetadata, CommitMetadata};
+pub use metadata::{StackMetadata, CommitMetadata, EditModeState};
 pub use rebase::{RebaseStrategy, RebaseManager, RebaseOptions, RebaseResult};

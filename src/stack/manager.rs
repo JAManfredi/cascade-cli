@@ -294,6 +294,71 @@ impl StackManager {
         &self.metadata
     }
 
+    /// Get the Git repository
+    pub fn git_repo(&self) -> &GitRepository {
+        &self.repo
+    }
+
+    // Edit mode management methods
+
+    /// Check if currently in edit mode
+    pub fn is_in_edit_mode(&self) -> bool {
+        self.metadata.edit_mode.as_ref()
+            .map(|edit_state| edit_state.is_active)
+            .unwrap_or(false)
+    }
+
+    /// Get current edit mode information
+    pub fn get_edit_mode_info(&self) -> Option<&super::metadata::EditModeState> {
+        self.metadata.edit_mode.as_ref()
+    }
+
+    /// Enter edit mode for a specific stack entry
+    pub fn enter_edit_mode(&mut self, stack_id: Uuid, entry_id: Uuid) -> Result<()> {
+        // Get the commit hash first to avoid borrow checker issues
+        let commit_hash = {
+            let stack = self.get_stack(&stack_id)
+                .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
+
+            let entry = stack.get_entry(&entry_id)
+                .ok_or_else(|| CascadeError::config(format!("Entry {} not found in stack", entry_id)))?;
+
+            entry.commit_hash.clone()
+        };
+
+        // If already in edit mode, exit the current one first
+        if self.is_in_edit_mode() {
+            self.exit_edit_mode()?;
+        }
+
+        // Create new edit mode state
+        let edit_state = super::metadata::EditModeState::new(
+            stack_id,
+            entry_id,
+            commit_hash
+        );
+
+        self.metadata.edit_mode = Some(edit_state);
+        self.save_to_disk()?;
+
+        info!("Entered edit mode for entry {} in stack {}", entry_id, stack_id);
+        Ok(())
+    }
+
+    /// Exit edit mode
+    pub fn exit_edit_mode(&mut self) -> Result<()> {
+        if !self.is_in_edit_mode() {
+            return Err(CascadeError::config("Not currently in edit mode"));
+        }
+
+        // Clear edit mode state
+        self.metadata.edit_mode = None;
+        self.save_to_disk()?;
+
+        info!("Exited edit mode");
+        Ok(())
+    }
+
     /// Sync stack with Git repository state
     pub fn sync_stack(&mut self, stack_id: &Uuid) -> Result<()> {
         let stack = self.stacks.get_mut(stack_id)
