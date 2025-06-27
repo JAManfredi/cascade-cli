@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::collections::HashMap;
 use uuid::Uuid;
+use tracing::info;
 
 /// Manages all stack operations and persistence
 pub struct StackManager {
@@ -315,12 +316,52 @@ impl StackManager {
             )));
         }
 
-        // Check if base branch has new commits
+        // Check if base branch exists and has new commits
+        if !self.repo.branch_exists(&stack.base_branch) {
+            return Err(CascadeError::branch(format!(
+                "Base branch '{}' does not exist. Create it or switch to a different base.", 
+                stack.base_branch
+            )));
+        }
+        
         let _base_hash = self.repo.get_branch_head(&stack.base_branch)?;
-        // For now, we'll mark as clean if all commits exist
-        // TODO: Implement proper base branch comparison
+        
+        // Check if any stack entries are missing their commits
+        let mut corrupted_entry = None;
+        for entry in &stack.entries {
+            if !self.repo.commit_exists(&entry.commit_hash)? {
+                corrupted_entry = Some((entry.commit_hash.clone(), entry.branch.clone()));
+                break;
+            }
+        }
+        
+        if let Some((commit_hash, branch)) = corrupted_entry {
+            stack.update_status(StackStatus::Corrupted);
+            return Err(CascadeError::branch(format!(
+                "Commit {} from stack entry '{}' no longer exists", 
+                commit_hash, branch
+            )));
+        }
+        
+        // Compare base branch with the earliest commit in the stack
+        let needs_sync = if let Some(first_entry) = stack.entries.first() {
+            // Get commits between base and first entry
+            match self.repo.get_commits_between(&stack.base_branch, &first_entry.commit_hash) {
+                Ok(commits) => !commits.is_empty(), // If there are commits, we need to sync
+                Err(_) => true, // If we can't compare, assume we need to sync
+            }
+        } else {
+            false // Empty stack is always clean
+        };
 
-        stack.update_status(StackStatus::Clean);
+        // Update stack status based on sync needs
+        if needs_sync {
+            stack.update_status(StackStatus::NeedsSync);
+            info!("Stack '{}' needs sync - new commits on base branch", stack.name);
+        } else {
+            stack.update_status(StackStatus::Clean);
+            info!("Stack '{}' is clean", stack.name);
+        }
 
         // Update metadata
         if let Some(stack_meta) = self.metadata.get_stack_mut(stack_id) {
@@ -343,6 +384,13 @@ impl StackManager {
                 if stack.is_active { Some("active") } else { None }
             ))
             .collect()
+    }
+
+    /// Get all stacks as Stack objects for TUI
+    pub fn get_all_stacks_objects(&self) -> Result<Vec<Stack>> {
+        let mut stacks: Vec<Stack> = self.stacks.values().cloned().collect();
+        stacks.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(stacks)
     }
 
     /// Validate all stacks

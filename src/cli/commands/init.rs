@@ -127,7 +127,7 @@ mod tests {
         env::set_current_dir(original_dir).unwrap();
         
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CascadeError::NotInitialized(_)));
+        assert!(matches!(result.unwrap_err(), CascadeError::Config(_)));
     }
     
     #[tokio::test]
@@ -144,7 +144,7 @@ mod tests {
         // Try to initialize again without force
         let result = run(None, false).await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CascadeError::InvalidOperation(_)));
+        assert!(matches!(result.unwrap_err(), CascadeError::Validation(_)));
         
         // Initialize with force should succeed
         let result = run(None, true).await;

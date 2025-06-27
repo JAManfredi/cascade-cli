@@ -1,54 +1,72 @@
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+/// Cascade Error Types
+#[derive(Debug, thiserror::Error)]
 pub enum CascadeError {
-    #[error("Git operation failed: {0}")]
+    /// Git-related errors
+    #[error("Git error: {0}")]
     Git(#[from] git2::Error),
-    
-    #[error("Bitbucket API error: {status} - {message}")]
-    BitbucketApi { status: u16, message: String },
-    
-    #[error("Stack validation failed: {0}")]
-    StackValidation(String),
-    
+
+    /// Configuration errors
     #[error("Configuration error: {0}")]
     Config(String),
-    
-    #[error("Conflict resolution failed for {file}: {reason}")]
-    ConflictResolution { file: String, reason: String },
-    
-    #[error("Branch operation failed: {0}")]
+
+    /// Branch management errors
+    #[error("Branch error: {0}")]
     Branch(String),
-    
-    #[error("Authentication failed: {0}")]
-    Auth(String),
-    
-    #[error("Repository not initialized: {0}")]
-    NotInitialized(String),
-    
-    #[error("Invalid operation: {0}")]
-    InvalidOperation(String),
-    
+
+    /// Network errors
     #[error("Network error: {0}")]
-    Network(#[from] reqwest::Error),
-    
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
-    
-    #[error("IO error: {0}")]
+    Network(String),
+
+    /// Authentication errors
+    #[error("Authentication error: {0}")]
+    Auth(String),
+
+    /// I/O errors
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// JSON serialization errors
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// HTTP client errors
+    #[error("HTTP error: {0}")]
+    Http(#[from] reqwest::Error),
+
+    /// URL parsing errors
+    #[error("URL error: {0}")]
+    Url(#[from] url::ParseError),
     
-    #[error("Parse error: {0}")]
-    Parse(String),
+    /// Conflict resolution errors
+    #[error("Conflict error: {0}")]
+    Conflict(String),
+    
+    /// Repository corruption errors
+    #[error("Repository corruption: {0}")]
+    Corruption(String),
+    
+    /// Rebase operation errors
+    #[error("Rebase error: {0}")]
+    Rebase(String),
+    
+    /// Missing dependency errors
+    #[error("Missing dependency: {0}")]
+    MissingDependency(String),
+    
+    /// API rate limit errors
+    #[error("Rate limit exceeded: {0}")]
+    RateLimit(String),
+    
+    /// Validation errors
+    #[error("Validation error: {0}")]
+    Validation(String),
 }
 
 impl CascadeError {
     pub fn config<S: Into<String>>(msg: S) -> Self {
         CascadeError::Config(msg.into())
-    }
-    
-    pub fn stack_validation<S: Into<String>>(msg: S) -> Self {
-        CascadeError::StackValidation(msg.into())
     }
     
     pub fn branch<S: Into<String>>(msg: S) -> Self {
@@ -59,27 +77,28 @@ impl CascadeError {
         CascadeError::Auth(msg.into())
     }
     
+    pub fn parse<S: Into<String>>(msg: S) -> Self {
+        CascadeError::Validation(msg.into())
+    }
+    
     pub fn not_initialized<S: Into<String>>(msg: S) -> Self {
-        CascadeError::NotInitialized(msg.into())
+        CascadeError::config(msg.into())
     }
     
     pub fn invalid_operation<S: Into<String>>(msg: S) -> Self {
-        CascadeError::InvalidOperation(msg.into())
-    }
-    
-    pub fn parse<S: Into<String>>(msg: S) -> Self {
-        CascadeError::Parse(msg.into())
+        CascadeError::Validation(msg.into())
     }
     
     pub fn conflict_resolution<S: Into<String>>(file: S, reason: S) -> Self {
-        CascadeError::ConflictResolution {
-            file: file.into(),
-            reason: reason.into(),
-        }
+        CascadeError::Conflict(format!("{}: {}", file.into(), reason.into()))
     }
     
     pub fn bitbucket_api(status: u16, message: String) -> Self {
-        CascadeError::BitbucketApi { status, message }
+        CascadeError::Conflict(format!("Bitbucket API error: {} - {}", status, message))
+    }
+
+    pub fn bitbucket<S: Into<String>>(msg: S) -> Self {
+        CascadeError::Conflict(msg.into())
     }
 }
 

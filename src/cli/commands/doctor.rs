@@ -139,7 +139,7 @@ async fn check_configuration() -> Result<u32> {
     // Check Bitbucket configuration completeness
     println!("\n📡 Bitbucket configuration:");
     
-    if settings.bitbucket.server_url.as_ref().map_or(true, |s| s.is_empty()) {
+    if settings.bitbucket.url.is_empty() {
         println!("  ⚠️  Bitbucket server URL not configured");
         println!("     Solution: cc config set bitbucket.url https://your-bitbucket-server.com");
         warnings += 1;
@@ -147,7 +147,7 @@ async fn check_configuration() -> Result<u32> {
         println!("  ✅ Bitbucket server URL configured");
     }
     
-    if settings.bitbucket.project_key.as_ref().map_or(true, |s| s.is_empty()) {
+    if settings.bitbucket.project.is_empty() {
         println!("  ⚠️  Bitbucket project key not configured");
         println!("     Solution: cc config set bitbucket.project YOUR_PROJECT_KEY");
         warnings += 1;
@@ -155,7 +155,7 @@ async fn check_configuration() -> Result<u32> {
         println!("  ✅ Bitbucket project key configured");
     }
     
-    if settings.bitbucket.repo_slug.as_ref().map_or(true, |s| s.is_empty()) {
+    if settings.bitbucket.repo.is_empty() {
         println!("  ⚠️  Bitbucket repository slug not configured");
         println!("     Solution: cc config set bitbucket.repo your-repo-name");
         warnings += 1;
@@ -163,7 +163,7 @@ async fn check_configuration() -> Result<u32> {
         println!("  ✅ Bitbucket repository slug configured");
     }
     
-    if settings.bitbucket.auth_token.as_ref().map_or(true, |s| s.is_empty()) {
+    if settings.bitbucket.token.as_ref().map_or(true, |s| s.is_empty()) {
         println!("  ⚠️  Bitbucket authentication token not configured");
         println!("     Solution: cc config set bitbucket.token your-personal-access-token");
         warnings += 1;

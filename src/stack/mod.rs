@@ -9,7 +9,9 @@
 pub mod stack;
 pub mod manager;
 pub mod metadata;
+pub mod rebase;
 
 pub use stack::{Stack, StackEntry, StackStatus};
 pub use manager::StackManager;
 pub use metadata::{StackMetadata, CommitMetadata};
+pub use rebase::{RebaseStrategy, RebaseManager, RebaseOptions, RebaseResult};

@@ -103,43 +103,28 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
     
     let mut config_complete = true;
     
-    if let Some(url) = &settings.bitbucket.server_url {
-        if !url.is_empty() {
-            println!("  Server URL: ✅ {}", url);
-        } else {
-            println!("  Server URL: ❌ Not configured");
-            config_complete = false;
-        }
+    if !settings.bitbucket.url.is_empty() {
+        println!("  Server URL: ✅ {}", settings.bitbucket.url);
     } else {
         println!("  Server URL: ❌ Not configured");
         config_complete = false;
     }
     
-    if let Some(project) = &settings.bitbucket.project_key {
-        if !project.is_empty() {
-            println!("  Project Key: ✅ {}", project);
-        } else {
-            println!("  Project Key: ❌ Not configured");
-            config_complete = false;
-        }
+    if !settings.bitbucket.project.is_empty() {
+        println!("  Project Key: ✅ {}", settings.bitbucket.project);
     } else {
         println!("  Project Key: ❌ Not configured");
         config_complete = false;
     }
     
-    if let Some(repo) = &settings.bitbucket.repo_slug {
-        if !repo.is_empty() {
-            println!("  Repository: ✅ {}", repo);
-        } else {
-            println!("  Repository: ❌ Not configured");
-            config_complete = false;
-        }
+    if !settings.bitbucket.repo.is_empty() {
+        println!("  Repository: ✅ {}", settings.bitbucket.repo);
     } else {
         println!("  Repository: ❌ Not configured");
         config_complete = false;
     }
     
-    if let Some(token) = &settings.bitbucket.auth_token {
+    if let Some(token) = &settings.bitbucket.token {
         if !token.is_empty() {
             println!("  Auth Token: ✅ Configured");
         } else {
@@ -161,9 +146,36 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
         println!("  Run 'cc doctor' for configuration recommendations");
     }
     
-    // Show stack information (placeholder for Phase 2)
+    // Show stack information
     println!("\n📚 Stacks:");
-    println!("  Active stacks: 0 (Stack management coming in Phase 2)");
+    
+    match crate::stack::StackManager::new(repo_path) {
+        Ok(manager) => {
+            let stacks = manager.get_all_stacks();
+            let active_stack = manager.get_active_stack();
+            
+            if stacks.is_empty() {
+                println!("  No stacks created yet");
+                println!("  Run 'cc stack create \"Stack Name\"' to create your first stack");
+            } else {
+                println!("  Total stacks: {}", stacks.len());
+                if let Some(active) = active_stack {
+                    println!("  Active stack: {} ({} entries)", active.name, active.entries.len());
+                    
+                    // Show quick summary of active stack
+                    let submitted = active.entries.iter().filter(|e| e.is_submitted).count();
+                    if submitted > 0 {
+                        println!("  Submitted entries: {}/{}", submitted, active.entries.len());
+                    }
+                } else {
+                    println!("  No active stack (use 'cc stack switch' to activate one)");
+                }
+            }
+        }
+        Err(_) => {
+            println!("  Unable to load stack information");
+        }
+    }
     
     Ok(())
 }

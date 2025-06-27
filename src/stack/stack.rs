@@ -43,6 +43,10 @@ pub enum StackStatus {
     Conflicted,
     /// Stack is being rebased
     Rebasing,
+    /// Stack needs sync due to new commits on base branch
+    NeedsSync,
+    /// Stack has corrupted or missing commits
+    Corrupted,
 }
 
 /// Represents a complete stack of commits

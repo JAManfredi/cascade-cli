@@ -2,20 +2,29 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::fs;
 use crate::errors::{CascadeError, Result};
+use crate::config::auth::AuthConfig;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CascadeConfig {
+    pub bitbucket: Option<BitbucketConfig>,
+    pub git: GitConfig,
+    pub auth: AuthConfig,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub bitbucket: BitbucketConfig,
     pub git: GitConfig,
-    pub cascade: CascadeConfig,
+    pub cascade: CascadeSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BitbucketConfig {
-    pub server_url: Option<String>,
-    pub project_key: Option<String>,
-    pub repo_slug: Option<String>,
-    pub auth_token: Option<String>,
+    pub url: String,
+    pub project: String,
+    pub repo: String,
+    pub username: Option<String>,
+    pub token: Option<String>,
     pub default_reviewers: Vec<String>,
 }
 
@@ -29,12 +38,39 @@ pub struct GitConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CascadeConfig {
+pub struct CascadeSettings {
     pub api_port: u16,
     pub auto_cleanup: bool,
     pub default_sync_strategy: String,
     pub max_stack_size: usize,
     pub enable_notifications: bool,
+    /// Rebase-specific settings
+    pub rebase: RebaseSettings,
+}
+
+/// Settings specific to rebase operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RebaseSettings {
+    /// Whether to auto-resolve simple conflicts
+    pub auto_resolve_conflicts: bool,
+    /// Maximum number of retry attempts for rebase operations
+    pub max_retry_attempts: usize,
+    /// Whether to preserve merge commits during rebase
+    pub preserve_merges: bool,
+    /// Default branch versioning suffix pattern
+    pub version_suffix_pattern: String,
+    /// Whether to backup branches before rebasing
+    pub backup_before_rebase: bool,
+}
+
+impl Default for CascadeConfig {
+    fn default() -> Self {
+        Self {
+            bitbucket: None,
+            git: GitConfig::default(),
+            auth: AuthConfig::default(),
+        }
+    }
 }
 
 impl Default for Settings {
@@ -42,7 +78,7 @@ impl Default for Settings {
         Self {
             bitbucket: BitbucketConfig::default(),
             git: GitConfig::default(),
-            cascade: CascadeConfig::default(),
+            cascade: CascadeSettings::default(),
         }
     }
 }
@@ -50,10 +86,11 @@ impl Default for Settings {
 impl Default for BitbucketConfig {
     fn default() -> Self {
         Self {
-            server_url: None,
-            project_key: None,
-            repo_slug: None,
-            auth_token: None,
+            url: "https://bitbucket.example.com".to_string(),
+            project: "PROJECT".to_string(),
+            repo: "repo".to_string(),
+            username: None,
+            token: None,
             default_reviewers: Vec::new(),
         }
     }
@@ -71,7 +108,7 @@ impl Default for GitConfig {
     }
 }
 
-impl Default for CascadeConfig {
+impl Default for CascadeSettings {
     fn default() -> Self {
         Self {
             api_port: 8080,
@@ -79,6 +116,19 @@ impl Default for CascadeConfig {
             default_sync_strategy: "branch-versioning".to_string(),
             max_stack_size: 20,
             enable_notifications: true,
+            rebase: RebaseSettings::default(),
+        }
+    }
+}
+
+impl Default for RebaseSettings {
+    fn default() -> Self {
+        Self {
+            auto_resolve_conflicts: true,
+            max_retry_attempts: 3,
+            preserve_merges: true,
+            version_suffix_pattern: "v{}".to_string(),
+            backup_before_rebase: true,
         }
     }
 }
@@ -88,7 +138,7 @@ impl Settings {
     pub fn default_for_repo(bitbucket_url: Option<String>) -> Self {
         let mut settings = Self::default();
         if let Some(url) = bitbucket_url {
-            settings.bitbucket.server_url = Some(url);
+            settings.bitbucket.url = url;
         }
         settings
     }
@@ -127,10 +177,10 @@ impl Settings {
         }
         
         match (parts[0], parts[1]) {
-            ("bitbucket", "url") => self.bitbucket.server_url = Some(value.to_string()),
-            ("bitbucket", "project") => self.bitbucket.project_key = Some(value.to_string()),
-            ("bitbucket", "repo") => self.bitbucket.repo_slug = Some(value.to_string()),
-            ("bitbucket", "token") => self.bitbucket.auth_token = Some(value.to_string()),
+            ("bitbucket", "url") => self.bitbucket.url = value.to_string(),
+            ("bitbucket", "project") => self.bitbucket.project = value.to_string(),
+            ("bitbucket", "repo") => self.bitbucket.repo = value.to_string(),
+            ("bitbucket", "token") => self.bitbucket.token = Some(value.to_string()),
             ("git", "default_branch") => self.git.default_branch = value.to_string(),
             ("git", "author_name") => self.git.author_name = Some(value.to_string()),
             ("git", "author_email") => self.git.author_email = Some(value.to_string()),
@@ -161,6 +211,25 @@ impl Settings {
                 self.cascade.enable_notifications = value.parse()
                     .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
             },
+            ("rebase", "auto_resolve_conflicts") => {
+                self.cascade.rebase.auto_resolve_conflicts = value.parse()
+                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
+            },
+            ("rebase", "max_retry_attempts") => {
+                self.cascade.rebase.max_retry_attempts = value.parse()
+                    .map_err(|_| CascadeError::config(format!("Invalid number: {}", value)))?;
+            },
+            ("rebase", "preserve_merges") => {
+                self.cascade.rebase.preserve_merges = value.parse()
+                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
+            },
+            ("rebase", "version_suffix_pattern") => {
+                self.cascade.rebase.version_suffix_pattern = value.to_string();
+            },
+            ("rebase", "backup_before_rebase") => {
+                self.cascade.rebase.backup_before_rebase = value.parse()
+                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
+            },
             _ => return Err(CascadeError::config(format!("Unknown config key: {}", key))),
         }
         
@@ -175,10 +244,10 @@ impl Settings {
         }
         
         let value = match (parts[0], parts[1]) {
-            ("bitbucket", "url") => self.bitbucket.server_url.as_deref().unwrap_or(""),
-            ("bitbucket", "project") => self.bitbucket.project_key.as_deref().unwrap_or(""),
-            ("bitbucket", "repo") => self.bitbucket.repo_slug.as_deref().unwrap_or(""),
-            ("bitbucket", "token") => self.bitbucket.auth_token.as_deref().unwrap_or(""),
+            ("bitbucket", "url") => &self.bitbucket.url,
+            ("bitbucket", "project") => &self.bitbucket.project,
+            ("bitbucket", "repo") => &self.bitbucket.repo,
+            ("bitbucket", "token") => self.bitbucket.token.as_deref().unwrap_or(""),
             ("git", "default_branch") => &self.git.default_branch,
             ("git", "author_name") => self.git.author_name.as_deref().unwrap_or(""),
             ("git", "author_email") => self.git.author_email.as_deref().unwrap_or(""),
@@ -189,6 +258,11 @@ impl Settings {
             ("cascade", "default_sync_strategy") => &self.cascade.default_sync_strategy,
             ("cascade", "max_stack_size") => return Ok(self.cascade.max_stack_size.to_string()),
             ("cascade", "enable_notifications") => return Ok(self.cascade.enable_notifications.to_string()),
+            ("rebase", "auto_resolve_conflicts") => return Ok(self.cascade.rebase.auto_resolve_conflicts.to_string()),
+            ("rebase", "max_retry_attempts") => return Ok(self.cascade.rebase.max_retry_attempts.to_string()),
+            ("rebase", "preserve_merges") => return Ok(self.cascade.rebase.preserve_merges.to_string()),
+            ("rebase", "version_suffix_pattern") => &self.cascade.rebase.version_suffix_pattern,
+            ("rebase", "backup_before_rebase") => return Ok(self.cascade.rebase.backup_before_rebase.to_string()),
             _ => return Err(CascadeError::config(format!("Unknown config key: {}", key))),
         };
         
@@ -198,8 +272,8 @@ impl Settings {
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         // Validate Bitbucket configuration if provided
-        if let Some(url) = &self.bitbucket.server_url {
-            if !url.starts_with("http://") && !url.starts_with("https://") {
+        if !self.bitbucket.url.is_empty() {
+            if !self.bitbucket.url.starts_with("http://") && !self.bitbucket.url.starts_with("https://") {
                 return Err(CascadeError::config("Bitbucket URL must start with http:// or https://"));
             }
         }

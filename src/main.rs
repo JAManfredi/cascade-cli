@@ -1,8 +1,8 @@
 use clap::Parser;
-use cascade_cli::cli::App;
+use cascade_cli::cli::Cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let app = App::parse();
-    app.run().await.map_err(|e| anyhow::Error::new(e))
+    let cli = Cli::parse();
+    cli.run().await.map_err(|e| anyhow::Error::new(e))
 }

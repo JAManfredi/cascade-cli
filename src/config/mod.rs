@@ -1,7 +1,7 @@
 pub mod settings;
 pub mod auth;
 
-pub use settings::{Settings, BitbucketConfig, GitConfig, CascadeConfig};
+pub use settings::{Settings, BitbucketConfig, GitConfig, CascadeConfig, CascadeSettings};
 pub use auth::{AuthManager, AuthConfig};
 
 use crate::errors::{CascadeError, Result};

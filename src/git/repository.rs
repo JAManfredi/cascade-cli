@@ -244,7 +244,6 @@ impl GitRepository {
     pub fn get_head_commit(&self) -> Result<git2::Commit> {
         let head = self.repo.head()
             .map_err(|e| CascadeError::branch(format!("Could not get HEAD: {}", e)))?;
-        
         head.peel_to_commit()
             .map_err(|e| CascadeError::branch(format!("Could not get HEAD commit: {}", e)))
     }
@@ -291,6 +290,274 @@ impl GitRepository {
         
         index.write_tree()
             .map_err(|e| CascadeError::Git(e))
+    }
+
+    /// Get repository status
+    pub fn get_status(&self) -> Result<git2::Statuses> {
+        self.repo.statuses(None)
+            .map_err(|e| CascadeError::Git(e))
+    }
+
+    /// Get remote URL for a given remote name
+    pub fn get_remote_url(&self, name: &str) -> Result<String> {
+        let remote = self.repo.find_remote(name)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        let url = remote.url()
+            .ok_or_else(|| CascadeError::Git(git2::Error::from_str("Remote URL is not valid UTF-8")))?;
+        
+        Ok(url.to_string())
+    }
+
+    /// Cherry-pick a commit onto the current branch
+    pub fn cherry_pick(&self, commit_hash: &str) -> Result<String> {
+        tracing::debug!("Cherry-picking commit {}", commit_hash);
+        
+        let oid = Oid::from_str(commit_hash)
+            .map_err(|e| CascadeError::Git(e))?;
+        let commit = self.repo.find_commit(oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Get the commit's tree
+        let commit_tree = commit.tree()
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Get parent tree for merge base
+        let parent_commit = if commit.parent_count() > 0 {
+            commit.parent(0).map_err(|e| CascadeError::Git(e))?
+        } else {
+            // Root commit - use empty tree
+            let empty_tree_oid = self.repo.treebuilder(None)?.write()?;
+            let empty_tree = self.repo.find_tree(empty_tree_oid)?;
+            let sig = self.get_signature()?;
+            return self.repo.commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                commit.message().unwrap_or("Cherry-picked commit"),
+                &empty_tree,
+                &[],
+            ).map(|oid| oid.to_string())
+            .map_err(|e| CascadeError::Git(e));
+        };
+        
+        let parent_tree = parent_commit.tree()
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Get current HEAD tree for 3-way merge
+        let head_commit = self.get_head_commit()?;
+        let head_tree = head_commit.tree()
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Perform 3-way merge
+        let mut index = self.repo.merge_trees(&parent_tree, &head_tree, &commit_tree, None)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Check for conflicts
+        if index.has_conflicts() {
+            return Err(CascadeError::branch(format!(
+                "Cherry-pick of {} has conflicts that need manual resolution", 
+                commit_hash
+            )));
+        }
+        
+        // Write merged tree
+        let merged_tree_oid = index.write_tree_to(&self.repo)
+            .map_err(|e| CascadeError::Git(e))?;
+        let merged_tree = self.repo.find_tree(merged_tree_oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Create new commit
+        let signature = self.get_signature()?;
+        let message = format!("Cherry-pick: {}", commit.message().unwrap_or(""));
+        
+        let new_commit_oid = self.repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            &message,
+            &merged_tree,
+            &[&head_commit],
+        ).map_err(|e| CascadeError::Git(e))?;
+        
+        tracing::info!("Cherry-picked {} -> {}", commit_hash, new_commit_oid);
+        Ok(new_commit_oid.to_string())
+    }
+
+    /// Check for merge conflicts in the index
+    pub fn has_conflicts(&self) -> Result<bool> {
+        let index = self.repo.index()
+            .map_err(|e| CascadeError::Git(e))?;
+        Ok(index.has_conflicts())
+    }
+
+    /// Get list of conflicted files
+    pub fn get_conflicted_files(&self) -> Result<Vec<String>> {
+        let index = self.repo.index()
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        let mut conflicts = Vec::new();
+        
+        // Iterate through index conflicts
+        let conflict_iter = index.conflicts()
+            .map_err(|e| CascadeError::Git(e))?;
+            
+        for conflict in conflict_iter {
+            let conflict = conflict.map_err(|e| CascadeError::Git(e))?;
+            if let Some(our) = conflict.our {
+                if let Some(path) = std::str::from_utf8(&our.path).ok() {
+                    conflicts.push(path.to_string());
+                }
+            } else if let Some(their) = conflict.their {
+                if let Some(path) = std::str::from_utf8(&their.path).ok() {
+                    conflicts.push(path.to_string());
+                }
+            }
+        }
+        
+        Ok(conflicts)
+    }
+
+    /// Fetch from remote origin
+    pub fn fetch(&self) -> Result<()> {
+        tracing::info!("Fetching from origin");
+        
+        let mut remote = self.repo.find_remote("origin")
+            .map_err(|e| CascadeError::branch(format!("No remote 'origin' found: {}", e)))?;
+        
+        // Fetch with default refspec
+        remote.fetch::<&str>(&[], None, None)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        tracing::debug!("Fetch completed successfully");
+        Ok(())
+    }
+
+    /// Pull changes from remote (fetch + merge)
+    pub fn pull(&self, branch: &str) -> Result<()> {
+        tracing::info!("Pulling branch: {}", branch);
+        
+        // First fetch
+        self.fetch()?;
+        
+        // Get remote tracking branch
+        let remote_branch_name = format!("origin/{}", branch);
+        let remote_oid = self.repo.refname_to_id(&format!("refs/remotes/{}", remote_branch_name))
+            .map_err(|e| CascadeError::branch(format!("Remote branch {} not found: {}", remote_branch_name, e)))?;
+        
+        let remote_commit = self.repo.find_commit(remote_oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // Get current HEAD
+        let head_commit = self.get_head_commit()?;
+        
+        // Check if we need to merge
+        if head_commit.id() == remote_commit.id() {
+            tracing::debug!("Already up to date");
+            return Ok(());
+        }
+        
+        // Perform merge
+        let head_tree = head_commit.tree().map_err(|e| CascadeError::Git(e))?;
+        let remote_tree = remote_commit.tree().map_err(|e| CascadeError::Git(e))?;
+        
+        // Find merge base
+        let merge_base_oid = self.repo.merge_base(head_commit.id(), remote_commit.id())
+            .map_err(|e| CascadeError::Git(e))?;
+        let merge_base_commit = self.repo.find_commit(merge_base_oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        let merge_base_tree = merge_base_commit.tree()
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        // 3-way merge
+        let mut index = self.repo.merge_trees(&merge_base_tree, &head_tree, &remote_tree, None)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        if index.has_conflicts() {
+            return Err(CascadeError::branch(format!(
+                "Pull has conflicts that need manual resolution"
+            )));
+        }
+        
+        // Write merged tree and create merge commit
+        let merged_tree_oid = index.write_tree_to(&self.repo)
+            .map_err(|e| CascadeError::Git(e))?;
+        let merged_tree = self.repo.find_tree(merged_tree_oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        let signature = self.get_signature()?;
+        let message = format!("Merge branch '{}' from origin", branch);
+        
+        self.repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            &message,
+            &merged_tree,
+            &[&head_commit, &remote_commit],
+        ).map_err(|e| CascadeError::Git(e))?;
+        
+        tracing::info!("Pull completed successfully");
+        Ok(())
+    }
+
+    /// Push current branch to remote
+    pub fn push(&self, branch: &str) -> Result<()> {
+        tracing::info!("Pushing branch: {}", branch);
+        
+        let mut remote = self.repo.find_remote("origin")
+            .map_err(|e| CascadeError::branch(format!("No remote 'origin' found: {}", e)))?;
+        
+        let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
+        
+        remote.push(&[&refspec], None)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        tracing::info!("Push completed successfully");
+        Ok(())
+    }
+
+    /// Delete a local branch
+    pub fn delete_branch(&self, name: &str) -> Result<()> {
+        tracing::info!("Deleting branch: {}", name);
+        
+        let mut branch = self.repo.find_branch(name, git2::BranchType::Local)
+            .map_err(|e| CascadeError::branch(format!("Could not find branch '{}': {}", name, e)))?;
+        
+        branch.delete()
+            .map_err(|e| CascadeError::branch(format!("Could not delete branch '{}': {}", name, e)))?;
+        
+        tracing::info!("Deleted branch '{}'", name);
+        Ok(())
+    }
+
+    /// Get commits between two references
+    pub fn get_commits_between(&self, from: &str, to: &str) -> Result<Vec<git2::Commit>> {
+        let from_oid = self.repo.refname_to_id(&format!("refs/heads/{}", from))
+            .or_else(|_| Oid::from_str(from))
+            .map_err(|e| CascadeError::branch(format!("Invalid from reference '{}': {}", from, e)))?;
+        
+        let to_oid = self.repo.refname_to_id(&format!("refs/heads/{}", to))
+            .or_else(|_| Oid::from_str(to))
+            .map_err(|e| CascadeError::branch(format!("Invalid to reference '{}': {}", to, e)))?;
+        
+        let mut revwalk = self.repo.revwalk()
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        revwalk.push(to_oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        revwalk.hide(from_oid)
+            .map_err(|e| CascadeError::Git(e))?;
+        
+        let mut commits = Vec::new();
+        for oid in revwalk {
+            let oid = oid.map_err(|e| CascadeError::Git(e))?;
+            let commit = self.repo.find_commit(oid)
+                .map_err(|e| CascadeError::Git(e))?;
+            commits.push(commit);
+        }
+        
+        Ok(commits)
     }
 }
 
