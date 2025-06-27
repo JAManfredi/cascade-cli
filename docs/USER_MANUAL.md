@@ -197,15 +197,57 @@ cc stack delete feature-x --keep-branches
 ### **📤 Stack Operations**
 
 #### **`cc stack push`** - Add Commit to Stack
-Add the current commit to the active stack.
+Add the current commit (HEAD) to the active stack.
 
 ```bash
 cc stack push [OPTIONS]
 
 # Options:
---message <MSG>          # Override commit message for PR
---no-pr                  # Don't create PR automatically
+--branch <NAME>         # Custom branch name for this commit
+--message <MSG>         # Commit message (if creating new commit)
+--commit <HASH>         # Use specific commit instead of HEAD
+--all                   # Push all unpushed commits since last stack push
+--since <REF>           # Push commits since reference (e.g., HEAD~3)
+--commits <HASHES>      # Push specific commits (comma-separated)
+--squash <N>            # 🎉 Squash last N commits into 1 clean commit
+--squash-since <REF>    # 🎉 Squash all commits since reference
 ```
+
+**Squash Workflow Examples:**
+```bash
+# Make incremental commits during development
+git commit -m "WIP: start feature"
+git commit -m "WIP: add core logic"
+git commit -m "WIP: fix bugs"
+git commit -m "Final: complete feature with tests"
+
+# 🔍 See unpushed commits and get squash suggestions
+cc stack show
+# 🚧 Unpushed commits (4): use 'cc stack push --squash 4' to squash them
+#    1. WIP: start feature (abc123)
+#    2. WIP: add core logic (def456)
+#    3. WIP: fix bugs (ghi789)
+#    4. Final: complete feature with tests (jkl012)
+# 💡 Squash options:
+#    cc stack push --squash 4           # Squash all unpushed commits
+#    cc stack push --squash 3           # Squash last 3 commits only
+
+# 🎉 Smart squash automatically detects "Final:" commits and creates intelligent messages
+cc stack push --squash 4
+# ✅ Smart message: Complete feature with tests (automatically extracted from "Final:" commit)
+
+# Alternative patterns that smart squash recognizes:
+git commit -m "WIP: authentication work"
+git commit -m "Add user authentication with OAuth"  # Uses this descriptive message
+cc stack push --squash 2  # Result: "Add user authentication with OAuth"
+
+git commit -m "fix typo"
+git commit -m "fix bug"  
+git commit -m "refactor cleanup"
+cc stack push --squash 3  # Result: "Refactor cleanup" (uses last commit)
+```
+
+**Branch Naming:** Generated from final squashed commit message using Cascade CLI's branch naming rules.
 
 **Examples:**
 ```bash

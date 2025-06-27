@@ -137,22 +137,33 @@ cc init --bitbucket-url https://bitbucket.company.com
 # Create a new stack
 cc stack create feature-auth --base develop --description "User authentication system"
 
-# Make multiple commits
-git add . && git commit -m "Add login endpoint"
-git add . && git commit -m "Add password validation"
-git add . && git commit -m "Add user sessions"
+# Make multiple incremental commits (for your own tracking)
+git add . && git commit -m "WIP: start authentication"
+git add . && git commit -m "WIP: add login logic"
+git add . && git commit -m "WIP: fix validation bugs"
+git add . && git commit -m "Final: complete auth with tests"
 
-# 🎉 NEW: BATCH PUSH - Add all 3 commits at once!
-cc stack push --all
+# 🎉 NEW: SQUASH + PUSH - Combine incremental commits into clean commit!
+cc stack push --squash 4  # Squashes last 4 commits into 1
 
-# 🎉 NEW: BATCH SUBMIT - Submit all entries as separate PRs!
+# OR: Make some commits normally, then squash later ones
+git commit -m "Add core authentication logic"
+cc stack push  # Push first clean commit
+
+git commit -m "WIP: start tests"
+git commit -m "WIP: more tests"  
+git commit -m "Final: comprehensive test suite"
+
+# 🎉 SQUASH UNPUSHED - Only squash the last 3 commits
+cc stack push --squash 3  # Squashes and pushes as second stack entry
+
+# 🎉 BATCH SUBMIT - Submit all entries as separate PRs!
 cc stack submit --all
 
-# Alternative batch options:
-cc stack push --since HEAD~3                    # Push last 3 commits
-cc stack push --commits abc123,def456,ghi789    # Push specific commits
+# Alternative options:
+cc stack push --all                             # Push all unpushed commits separately
+cc stack push --squash-since HEAD~5             # Squash all commits since HEAD~5
 cc stack submit --range 1-3                     # Submit entries 1 through 3
-cc stack submit --range 2,4,6                   # Submit entries 2, 4, and 6
 ```
 
 ### **4. Experience the Magic**
@@ -407,43 +418,212 @@ cc stack show
 # Entry 2: [ghi789] Add user endpoints     (PR #122)
 ```
 
+### **Scenario 7: Emergency Hotfix While Stack is Under Review**
+
+Your stack is under review, but you need to create an urgent hotfix:
+
+```bash
+# Save current work
+git stash
+
+# Switch to hotfix workflow
+cc stack create hotfix-security --base main --description "Critical security patch"
+git checkout main
+git pull origin main
+
+# Make hotfix commit
+git add . && git commit -m "Fix critical authentication bypass"
+cc stack push
+cc stack submit --title "URGENT: Security Fix" --reviewers "security-team"
+
+# Get back to your feature work
+cc stack switch feature-auth
+git stash pop
+```
+
+### **🔧 Scenario 8: Incremental Development with Clean Commits (NEW!)**
+
+Make frequent backup commits during development, then create clean commits for review:
+
+```bash
+# Scenario 8a: Clean up before first push
+cc stack create feature-payments --base main
+git commit -m "WIP: start payment integration"
+git commit -m "WIP: add stripe API calls" 
+git commit -m "WIP: handle edge cases"
+git commit -m "Final: Complete payment system with validation"
+
+# 🔍 SEE what you've built (shows unpushed commits count!)
+cc stack show
+# 🚧 Unpushed commits (4): use 'cc stack push --squash 4' to squash them
+#    1. WIP: start payment integration (abc12345)
+#    2. WIP: add stripe API calls (def67890) 
+#    3. WIP: handle edge cases (ghi11223)
+#    4. Final: Complete payment system with validation (jkl44556)
+# 💡 Squash options:
+#    cc stack push --squash 4           # Squash all unpushed commits
+#    cc stack push --squash 3           # Squash last 3 commits only
+
+# 🎉 SMART SQUASH: Automatically detects "Final:" commit and uses it!
+cc stack push --squash 4
+# ✅ Smart message: Complete payment system with validation
+# ✅ Created squashed commit: jkl99887 (Complete payment system with validation)
+
+# Scenario 8b: Squash only recent incremental commits
+cc stack push  # Push first clean commit
+
+git commit -m "WIP: start refactoring tests"
+git commit -m "WIP: add more test cases"
+git commit -m "Add comprehensive payment tests"
+
+cc stack show  # See 3 unpushed commits
+cc stack push --squash 3  # Smart squash uses the last descriptive commit
+```
+
+**Why this is powerful:**
+- ✅ **Frequent commits** for backup and progress tracking
+- ✅ **Clean history** for reviewers (no "WIP" commits in PRs)
+- ✅ **Flexible squashing** - squash everything or just recent commits
+- ✅ **Atomic reviews** - each PR has a single, logical change
+
 ---
 
 ## 📖 **Command Reference**
 
 ### **Stack Management**
 ```bash
-cc stack create <name>           # Create new stack
-cc stack list                    # Show all stacks  
-cc stack switch <name>           # Activate stack
-cc stack push                    # Add current commit to stack
-cc stack push --all              # 🎉 Add all unpushed commits at once
-cc stack push --since HEAD~3     # 🎉 Add last 3 commits  
-cc stack push --commits a,b,c    # 🎉 Add specific commits
-cc stack pop                     # Remove top entry from stack
-cc stack show                    # Display stack details
-cc stack delete <name>           # Remove stack
+# Create and manage stacks
+cc stack create <name>                       # Create new stack (uses default base branch)
+cc stack create <name> --base <branch>       # Create stack with specific base branch
+cc stack create <name> -b <branch>           # Short form
+cc stack create <name> --description <desc>  # Add description
+cc stack create <name> -d <desc>             # Short form
+
+# List stacks
+cc stack list                                # Show basic stack list
+cc stack list --verbose                      # Show detailed information
+cc stack list -v                             # Short form
+cc stack list --active                       # Show only active stack
+cc stack list --format <format>              # Custom output format
+
+# Switch and view stacks
+cc stack switch <name>                       # Activate stack
+cc stack show                                # Show active stack details
+cc stack show <name>                         # Show specific stack details
+cc stack delete <name>                       # Remove stack
+cc stack delete <name> --force               # Force deletion without confirmation
+cc stack validate                            # Validate active stack
+cc stack validate <name>                     # Validate specific stack
 ```
 
-### **Pull Request Workflow** 
+### **Adding Commits to Stack**
 ```bash
-cc stack submit [entry]          # Create PR for entry
-cc stack submit --all            # 🎉 Submit all unsubmitted entries
-cc stack submit --range 1-3      # 🎉 Submit entries 1 through 3
-cc stack submit --range 2,4,6    # 🎉 Submit specific entries
-cc stack status                  # Show PR status
-cc stack prs                     # List all PRs
-cc stack sync                    # Sync with remote changes
-cc stack rebase                  # Rebase stack on latest base
+# Basic push operations
+cc stack push                               # Add current commit (HEAD) to stack
+cc stack push --branch <name>               # Custom branch name for this commit
+cc stack push -b <name>                     # Short form
+cc stack push --message <msg>               # Custom commit message
+cc stack push -m <msg>                      # Short form  
+cc stack push --commit <hash>               # Push specific commit instead of HEAD
+
+# Batch operations
+cc stack push --all                         # 🎉 Push all unpushed commits separately
+cc stack push --since HEAD~3                # 🎉 Push commits since reference
+cc stack push --commits hash1,hash2,hash3   # 🎉 Push specific commits
+
+# Smart squash operations
+cc stack push --squash 4                    # 🎉 Squash last 4 commits into 1 clean commit
+cc stack push --squash-since HEAD~5         # 🎉 Squash all commits since reference
+
+# Remove from stack
+cc stack pop                                # Remove top entry from stack
+cc stack pop --keep-branch                  # Keep the branch when popping
+```
+
+### **Pull Request Workflow**
+```bash
+# Submit for review
+cc stack submit                             # Submit top entry (creates PR)
+cc stack submit 2                           # Submit specific entry number
+cc stack submit --title <title>             # Custom PR title
+cc stack submit -t <title>                  # Short form
+cc stack submit --description <desc>        # Custom PR description
+cc stack submit -d <desc>                   # Short form
+
+# Batch submission
+cc stack submit --all                       # 🎉 Submit all unsubmitted entries
+cc stack submit --range 1-3                 # 🎉 Submit entries 1 through 3
+cc stack submit --range 2,4,6               # 🎉 Submit specific entries
+
+# Status and management
+cc stack status                             # Show active stack PR status
+cc stack status <name>                      # Show specific stack PR status
+cc stack prs                                # List all repository PRs
+cc stack prs --state open                   # Filter by state (open/merged/declined)
+cc stack prs --verbose                      # Show detailed PR information
+cc stack prs -v                             # Short form
+```
+
+### **Sync and Rebase Operations**
+```bash
+# Sync with remote
+cc stack sync                               # Sync active stack with remote
+cc stack sync --force                       # Force sync even with conflicts
+
+# Rebase operations
+cc stack rebase                             # Rebase stack on latest base branch
+cc stack rebase --interactive               # Interactive rebase mode
+cc stack rebase -i                          # Short form
+cc stack rebase --onto <branch>             # Rebase onto different target branch
+cc stack rebase --strategy cherry-pick      # Use specific rebase strategy
+cc stack rebase --strategy three-way-merge  # Alternative strategies available
+
+# Rebase conflict resolution
+cc stack continue-rebase                    # Continue after resolving conflicts
+cc stack abort-rebase                       # Abort rebase operation
+cc stack rebase-status                      # Show rebase status and guidance
 ```
 
 ### **Advanced Tools**
 ```bash
-cc tui                           # Launch interactive TUI
-cc viz stack                     # ASCII stack diagram
-cc viz deps --format mermaid     # Dependency graph
-cc hooks install                 # Install Git hooks
-cc setup                         # Interactive configuration
+# Interactive interfaces
+cc tui                                      # Launch terminal user interface
+
+# Visualization and diagramming
+cc viz stack                                # ASCII stack diagram for active stack
+cc viz stack <name>                         # ASCII diagram for specific stack
+cc viz deps                                 # Show dependency relationships
+cc viz deps --format mermaid                # Export as Mermaid diagram
+cc viz deps --format dot                    # Export as Graphviz DOT
+cc viz deps --format plantuml               # Export as PlantUML
+cc viz deps --output <file>                 # Save to file
+
+# Git hooks integration
+cc hooks install                            # Install all Git hooks
+cc hooks uninstall                          # Remove all Git hooks
+cc hooks status                             # Show hook installation status
+
+# Individual hook management
+cc hooks add post-commit                    # Install specific hook
+cc hooks add pre-push                       # Install push protection  
+cc hooks add commit-msg                     # Install commit message validation
+cc hooks add prepare-commit-msg             # Install commit message enhancement
+cc hooks remove post-commit                 # Remove specific hook
+cc hooks remove pre-push                    # Remove push protection
+cc hooks remove commit-msg                  # Remove message validation
+cc hooks remove prepare-commit-msg          # Remove message enhancement
+
+# Configuration and setup
+cc setup                                    # Interactive configuration wizard
+cc completions install                      # Install shell completions
+cc completions status                       # Check completion status
+cc completions generate bash                # Generate completions for bash
+cc completions generate zsh                 # Generate completions for zsh
+cc completions generate fish                # Generate completions for fish
+
+# System information
+cc version                                  # Show version information
+cc doctor                                   # Run system diagnostics
 ```
 
 ---
@@ -463,17 +643,43 @@ cc config set bitbucket.token "your-personal-access-token"
 ```
 
 ### **Git Hooks (Optional)**
+
+Cascade CLI provides 4 Git hooks that automate common stacked diff workflows:
+
+| Hook Name | Purpose | When It Runs |
+|-----------|---------|--------------|
+| `post-commit` | Auto-add new commits to active stack | After every `git commit` |
+| `pre-push` | Prevent force pushes, validate stack state | Before `git push` |
+| `commit-msg` | Validate commit message format | During `git commit` |
+| `prepare-commit-msg` | Add stack context to commit messages | Before commit message editor |
+
 ```bash
 # Install all hooks for automated workflow
 cc hooks install
 
-# Check status
+# Remove all hooks 
+cc hooks uninstall
+
+# Check installation status
 cc hooks status
 
 # Individual hook management
-cc hooks add post-commit
-cc hooks remove pre-push
+cc hooks add post-commit        # Enable auto-stack management
+cc hooks add pre-push           # Enable push validation
+cc hooks add commit-msg         # Enable message validation
+cc hooks add prepare-commit-msg # Enable message enhancement
+
+cc hooks remove post-commit     # Disable auto-stack (manual control)
+cc hooks remove pre-push        # Disable push validation
+cc hooks remove commit-msg      # Disable message validation  
+cc hooks remove prepare-commit-msg # Disable message enhancement
 ```
+
+**💡 Selective Installation Tips:**
+- **For full automation**: Install all hooks with `cc hooks install`
+- **For manual control**: Remove `post-commit` hook, keep others for safety
+- **For WIP workflows**: Temporarily remove `post-commit` during experimentation
+- **For team safety**: Always keep `pre-push` to prevent stack corruption
 
 ---
 

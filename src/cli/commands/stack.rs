@@ -79,6 +79,12 @@ pub enum StackAction {
         /// Push multiple specific commits (comma-separated)
         #[arg(long)]
         commits: Option<String>,
+        /// Squash last N commits into one before pushing
+        #[arg(long)]
+        squash: Option<usize>,
+        /// Squash all commits since this reference (e.g., HEAD~5)
+        #[arg(long)]
+        squash_since: Option<String>,
     },
     
     /// Pop the top commit from the stack
@@ -184,8 +190,8 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::Show { name } => {
             show_stack(name).await
         }
-        StackAction::Push { branch, message, commit, all, since, commits } => {
-            push_to_stack(branch, message, commit, all, since, commits).await
+        StackAction::Push { branch, message, commit, all, since, commits, squash, squash_since } => {
+            push_to_stack(branch, message, commit, all, since, commits, squash, squash_since).await
         }
         StackAction::Pop { keep_branch } => {
             pop_from_stack(keep_branch).await
@@ -374,15 +380,56 @@ async fn show_stack(name: Option<String>) -> Result<()> {
         println!("\n📝 No entries yet. Use 'cc stack push' to add commits.");
     }
 
+    // Show unpushed commits
+    let repo = GitRepository::open(&current_dir)?;
+    let unpushed_commits = get_unpushed_commits(&repo, &stack)?;
+    
+    if !unpushed_commits.is_empty() {
+        println!("\n🚧 Unpushed commits ({}): use 'cc stack push --squash {}' to squash them", 
+                 unpushed_commits.len(), unpushed_commits.len());
+        
+        for (i, commit_hash) in unpushed_commits.iter().enumerate().take(5) {
+            let commit = repo.get_commit(commit_hash)?;
+            let message = commit.message().unwrap_or("No message").lines().next().unwrap_or("");
+            println!("   {}. {} ({})", 
+                     i + 1, 
+                     &message[..message.len().min(60)],
+                     &commit_hash[..8]
+            );
+        }
+        
+        if unpushed_commits.len() > 5 {
+            println!("   ... and {} more commits", unpushed_commits.len() - 5);
+        }
+        
+        println!("\n💡 Squash options:");
+        println!("   cc stack push --squash {}           # Squash all unpushed commits", unpushed_commits.len());
+        println!("   cc stack push --squash 3            # Squash last 3 commits only");
+        println!("   cc stack push --all                 # Push all separately (no squash)");
+    }
+
     Ok(())
 }
 
-async fn push_to_stack(branch: Option<String>, message: Option<String>, commit: Option<String>, all: bool, since: Option<String>, commits: Option<String>) -> Result<()> {
+async fn push_to_stack(branch: Option<String>, message: Option<String>, commit: Option<String>, all: bool, since: Option<String>, commits: Option<String>, squash: Option<usize>, squash_since: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 
     let mut manager = StackManager::new(&current_dir)?;
     let repo = GitRepository::open(&current_dir)?;
+
+    // Handle squash operations first
+    if let Some(squash_count) = squash {
+        println!("🔄 Squashing last {} commits...", squash_count);
+        squash_commits(&repo, squash_count, None).await?;
+        println!("✅ Squashed {} commits into one", squash_count);
+    } else if let Some(since_ref) = squash_since {
+        println!("🔄 Squashing commits since {}...", since_ref);
+        let since_commit = repo.resolve_reference(&since_ref)?;
+        let commits_count = count_commits_since(&repo, &since_commit.id().to_string())?;
+        squash_commits(&repo, commits_count, Some(since_ref.clone())).await?;
+        println!("✅ Squashed {} commits since {} into one", commits_count, since_ref);
+    }
 
     // Determine which commits to push
     let commits_to_push = if let Some(commits_str) = commits {
@@ -1177,6 +1224,209 @@ async fn validate_stack(name: Option<String>) -> Result<()> {
             }
         }
     }
+}
+
+/// Get commits that are not yet in any stack entry
+fn get_unpushed_commits(repo: &GitRepository, stack: &crate::stack::Stack) -> Result<Vec<String>> {
+    let mut unpushed = Vec::new();
+    let head_commit = repo.get_head_commit()?;
+    let mut current_commit = head_commit;
+    
+    // Walk back from HEAD until we find a commit that's already in the stack
+    loop {
+        let commit_hash = current_commit.id().to_string();
+        let already_in_stack = stack.entries.iter()
+            .any(|entry| entry.commit_hash == commit_hash);
+        
+        if already_in_stack {
+            break;
+        }
+        
+        unpushed.push(commit_hash);
+        
+        // Move to parent commit
+        if let Some(parent) = current_commit.parents().next() {
+            current_commit = parent;
+        } else {
+            break;
+        }
+    }
+    
+    unpushed.reverse(); // Reverse to get chronological order
+    Ok(unpushed)
+}
+
+/// Squash the last N commits into a single commit
+async fn squash_commits(repo: &GitRepository, count: usize, since_ref: Option<String>) -> Result<()> {
+    if count <= 1 {
+        return Ok(()); // Nothing to squash
+    }
+
+    // Get the current branch
+    let _current_branch = repo.get_current_branch()?;
+    
+    // Determine the range for interactive rebase
+    let rebase_range = if let Some(ref since) = since_ref {
+        since.clone()
+    } else {
+        format!("HEAD~{}", count)
+    };
+
+    println!("   Analyzing {} commits to create smart squash message...", count);
+    
+    // Get the commits that will be squashed to create a smart message
+    let head_commit = repo.get_head_commit()?;
+    let mut commits_to_squash = Vec::new();
+    let mut current = head_commit;
+    
+    // Collect the last N commits
+    for _ in 0..count {
+        commits_to_squash.push(current.clone());
+        if current.parent_count() > 0 {
+            current = current.parent(0).map_err(|e| CascadeError::Git(e))?;
+        } else {
+            break;
+        }
+    }
+    
+    // Generate smart commit message from the squashed commits
+    let smart_message = generate_squash_message(&commits_to_squash)?;
+    println!("   Smart message: {}", smart_message.lines().next().unwrap_or(""));
+    
+    // Get the commit we want to reset to (the commit before our range)
+    let reset_target = if let Some(_) = since_ref {
+        // If squashing since a reference, reset to that reference
+        format!("{}~1", rebase_range)
+    } else {
+        // If squashing last N commits, reset to N commits before
+        format!("HEAD~{}", count)
+    };
+    
+    // Soft reset to preserve changes in staging area
+    repo.reset_soft(&reset_target)?;
+    
+    // Stage all changes (they should already be staged from the reset --soft)
+    repo.stage_all()?;
+    
+    // Create the new commit with the smart message
+    let new_commit_hash = repo.commit(&smart_message)?;
+    
+    println!("   Created squashed commit: {} ({})", 
+             &new_commit_hash[..8], 
+             smart_message.lines().next().unwrap_or(""));
+    println!("   💡 Tip: Use 'git commit --amend' to edit the commit message if needed");
+    
+    Ok(())
+}
+
+/// Generate a smart commit message from multiple commits being squashed
+fn generate_squash_message(commits: &[git2::Commit]) -> Result<String> {
+    if commits.is_empty() {
+        return Ok("Squashed commits".to_string());
+    }
+    
+    // Get all commit messages
+    let messages: Vec<String> = commits.iter()
+        .map(|c| c.message().unwrap_or("").trim().to_string())
+        .filter(|m| !m.is_empty())
+        .collect();
+    
+    if messages.is_empty() {
+        return Ok("Squashed commits".to_string());
+    }
+    
+    // Strategy 1: If the last commit looks like a "Final:" commit, use it
+    if let Some(last_msg) = messages.first() { // first() because we're in reverse chronological order
+        if last_msg.starts_with("Final:") || last_msg.starts_with("final:") {
+            return Ok(last_msg.trim_start_matches("Final:").trim_start_matches("final:").trim().to_string());
+        }
+    }
+    
+    // Strategy 2: If most commits are WIP, find the most descriptive non-WIP message
+    let wip_count = messages.iter()
+        .filter(|m| m.to_lowercase().starts_with("wip") || m.to_lowercase().contains("work in progress"))
+        .count();
+    
+    if wip_count > messages.len() / 2 {
+        // Mostly WIP commits, find the best non-WIP one or create a summary
+        let non_wip: Vec<&String> = messages.iter()
+            .filter(|m| !m.to_lowercase().starts_with("wip") && !m.to_lowercase().contains("work in progress"))
+            .collect();
+        
+        if let Some(best_msg) = non_wip.first() {
+            return Ok(best_msg.to_string());
+        }
+        
+        // All are WIP, try to extract the feature being worked on
+        let feature = extract_feature_from_wip(&messages);
+        return Ok(feature);
+    }
+    
+    // Strategy 3: Use the last (most recent) commit message
+    Ok(messages.first().unwrap().clone())
+}
+
+/// Extract feature name from WIP commit messages
+fn extract_feature_from_wip(messages: &[String]) -> String {
+    // Look for patterns like "WIP: add authentication" -> "Add authentication"
+    for msg in messages {
+        let lower = msg.to_lowercase();
+        if let Some(rest) = lower.strip_prefix("wip:") {
+            let feature = rest.trim();
+            if !feature.is_empty() && feature.len() > 3 {
+                // Capitalize first letter
+                let mut chars: Vec<char> = feature.chars().collect();
+                if let Some(first) = chars.first_mut() {
+                    *first = first.to_uppercase().next().unwrap_or(*first);
+                }
+                return chars.into_iter().collect();
+            }
+        }
+    }
+    
+    // Fallback: Use the latest commit without WIP prefix
+    if let Some(first) = messages.first() {
+        let cleaned = first
+            .trim_start_matches("WIP:")
+            .trim_start_matches("wip:")
+            .trim_start_matches("WIP")
+            .trim_start_matches("wip")
+            .trim();
+        
+        if !cleaned.is_empty() {
+            return format!("Implement {}", cleaned);
+        }
+    }
+    
+    format!("Squashed {} commits", messages.len())
+}
+
+/// Count commits since a given reference
+fn count_commits_since(repo: &GitRepository, since_commit_hash: &str) -> Result<usize> {
+    let head_commit = repo.get_head_commit()?;
+    let since_commit = repo.get_commit(since_commit_hash)?;
+    
+    let mut count = 0;
+    let mut current = head_commit;
+    
+    // Walk backwards from HEAD until we reach the since commit
+    loop {
+        if current.id() == since_commit.id() {
+            break;
+        }
+        
+        count += 1;
+        
+        // Get parent commit
+        if current.parent_count() == 0 {
+            break; // Reached root commit
+        }
+        
+        current = current.parent(0)
+            .map_err(|e| CascadeError::Git(e))?;
+    }
+    
+    Ok(count)
 }
 
 #[cfg(test)]

@@ -649,6 +649,18 @@ impl GitRepository {
         obj.peel_to_commit()
             .map_err(|e| CascadeError::branch(format!("Reference '{}' does not point to a commit: {}", reference, e)))
     }
+
+    /// Soft reset to a specific reference (keeps changes in staging area)
+    pub fn reset_soft(&self, target_ref: &str) -> Result<()> {
+        let target_commit = self.resolve_reference(target_ref)?;
+        let target_object = target_commit.as_object();
+        
+        self.repo.reset(target_object, git2::ResetType::Soft, None)
+            .map_err(|e| CascadeError::Git(e))?;
+            
+        tracing::debug!("Soft reset to {}", target_ref);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
