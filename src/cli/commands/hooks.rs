@@ -278,10 +278,9 @@ impl HooksManager {
 
 set -e
 
-# Get the commit hash
+# Get the commit hash and message
 COMMIT_HASH=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log --format=%s -n 1 HEAD)
-BRANCH_NAME=$(git branch --show-current)
 
 # Check if Cascade is initialized
 if [ ! -d ".cascade" ]; then
@@ -296,9 +295,10 @@ if ! "{cascade_cli}" stack list --active > /dev/null 2>&1; then
     exit 0
 fi
 
-# Add commit to active stack
+# Add commit to active stack (let CLI auto-generate branch name from commit message)
 echo "🪝 Adding commit to active stack..."
-if "{cascade_cli}" stack push --commit "$COMMIT_HASH" --branch "$BRANCH_NAME" --message "$COMMIT_MSG"; then
+echo "📝 Commit: $COMMIT_MSG"
+if "{cascade_cli}" stack push --commit "$COMMIT_HASH" --message "$COMMIT_MSG"; then
     echo "✅ Commit added to stack successfully"
 else
     echo "⚠️ Failed to add commit to stack"

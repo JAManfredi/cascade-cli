@@ -647,8 +647,8 @@ cc config set bitbucket.token "your-personal-access-token"
 Cascade CLI provides 4 Git hooks that automate common stacked diff workflows:
 
 | Hook Name | Purpose | When It Runs |
-|-----------|---------|--------------|
-| `post-commit` | Auto-add new commits to active stack | After every `git commit` |
+|-----------|---------|--------------| 
+| `post-commit` | Auto-add commits to active stack with unique branch names | After every `git commit` |
 | `pre-push` | Prevent force pushes, validate stack state | Before `git push` |
 | `commit-msg` | Validate commit message format | During `git commit` |
 | `prepare-commit-msg` | Add stack context to commit messages | Before commit message editor |
