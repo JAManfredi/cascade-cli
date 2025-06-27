@@ -7,6 +7,32 @@ use uuid::Uuid;
 use chrono::Utc;
 use tracing::{info, warn, debug};
 
+/// Conflict resolution result
+#[derive(Debug, Clone)]
+enum ConflictResolution {
+    /// Conflict was successfully resolved
+    Resolved,
+    /// Conflict is too complex for automatic resolution
+    TooComplex,
+}
+
+/// Represents a conflict region in a file
+#[derive(Debug, Clone)]
+struct ConflictRegion {
+    /// Byte position where conflict starts
+    start: usize,
+    /// Byte position where conflict ends  
+    end: usize,
+    /// Line number where conflict starts
+    start_line: usize,
+    /// Line number where conflict ends
+    end_line: usize,
+    /// Content from "our" side (before separator)
+    our_content: String,
+    /// Content from "their" side (after separator)
+    their_content: String,
+}
+
 /// Different strategies for rebasing stacks without force-pushing
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RebaseStrategy {
@@ -355,17 +381,329 @@ impl RebaseManager {
             return Ok(true);
         }
         
-        warn!("Found conflicts in files: {:?}", conflicted_files);
+        info!("Found conflicts in {} files: {:?}", conflicted_files.len(), conflicted_files);
         
-        // For now, we can't auto-resolve complex conflicts
-        // In a production system, this would:
-        // 1. Detect simple conflict types (whitespace, imports, etc.)
-        // 2. Apply resolution strategies based on file types
-        // 3. Use conflict resolution rules from config
-        // 4. Stage resolved files and continue
+        let mut resolved_count = 0;
+        let mut failed_files = Vec::new();
         
-        // Return false to indicate manual resolution is needed
-        Ok(false)
+        for file_path in &conflicted_files {
+            match self.resolve_file_conflicts(file_path) {
+                Ok(ConflictResolution::Resolved) => {
+                    resolved_count += 1;
+                    info!("✅ Auto-resolved conflicts in {}", file_path);
+                }
+                Ok(ConflictResolution::TooComplex) => {
+                    debug!("⚠️  Conflicts in {} are too complex for auto-resolution", file_path);
+                    failed_files.push(file_path.clone());
+                }
+                Err(e) => {
+                    warn!("❌ Failed to analyze conflicts in {}: {}", file_path, e);
+                    failed_files.push(file_path.clone());
+                }
+            }
+        }
+        
+        if resolved_count > 0 {
+            info!("🎉 Auto-resolved conflicts in {}/{} files", resolved_count, conflicted_files.len());
+            
+            // Stage all resolved files
+            self.git_repo.stage_all()?;
+        }
+        
+        // Return true only if ALL conflicts were resolved
+        let all_resolved = failed_files.is_empty();
+        
+        if !all_resolved {
+            info!("⚠️  {} files still need manual resolution: {:?}", failed_files.len(), failed_files);
+        }
+        
+        Ok(all_resolved)
+    }
+
+    /// Resolve conflicts in a single file using smart strategies
+    fn resolve_file_conflicts(&self, file_path: &str) -> Result<ConflictResolution> {
+        let repo_path = self.git_repo.path();
+        let full_path = repo_path.join(file_path);
+        
+        // Read the file content with conflict markers
+        let content = std::fs::read_to_string(&full_path)
+            .map_err(|e| CascadeError::config(format!("Failed to read file {}: {}", file_path, e)))?;
+        
+        // Parse conflicts from the file
+        let conflicts = self.parse_conflict_markers(&content)?;
+        
+        if conflicts.is_empty() {
+            // No conflict markers found - file might already be resolved
+            return Ok(ConflictResolution::Resolved);
+        }
+        
+        info!("Found {} conflict regions in {}", conflicts.len(), file_path);
+        
+        // Try to resolve each conflict using our strategies
+        let mut resolved_content = content;
+        let mut any_resolved = false;
+        
+        // Process conflicts in reverse order to maintain string indices
+        for conflict in conflicts.iter().rev() {
+            match self.resolve_single_conflict(conflict, file_path) {
+                Ok(Some(resolution)) => {
+                    // Replace the conflict region with the resolved content
+                    let before = &resolved_content[..conflict.start];
+                    let after = &resolved_content[conflict.end..];
+                    resolved_content = format!("{}{}{}", before, resolution, after);
+                    any_resolved = true;
+                    debug!("✅ Resolved conflict at lines {}-{} in {}", 
+                           conflict.start_line, conflict.end_line, file_path);
+                }
+                Ok(None) => {
+                    debug!("⚠️  Conflict at lines {}-{} in {} too complex for auto-resolution", 
+                           conflict.start_line, conflict.end_line, file_path);
+                }
+                Err(e) => {
+                    debug!("❌ Failed to resolve conflict in {}: {}", file_path, e);
+                }
+            }
+        }
+        
+        if any_resolved {
+            // Check if we resolved ALL conflicts in this file
+            let remaining_conflicts = self.parse_conflict_markers(&resolved_content)?;
+            
+            if remaining_conflicts.is_empty() {
+                // All conflicts resolved - write the file back
+                std::fs::write(&full_path, resolved_content)
+                    .map_err(|e| CascadeError::config(format!("Failed to write resolved file {}: {}", file_path, e)))?;
+                
+                return Ok(ConflictResolution::Resolved);
+            } else {
+                info!("⚠️  Partially resolved conflicts in {} ({} remaining)", file_path, remaining_conflicts.len());
+            }
+        }
+        
+        Ok(ConflictResolution::TooComplex)
+    }
+
+    /// Parse conflict markers from file content
+    fn parse_conflict_markers(&self, content: &str) -> Result<Vec<ConflictRegion>> {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut conflicts = Vec::new();
+        let mut i = 0;
+        
+        while i < lines.len() {
+            if lines[i].starts_with("<<<<<<<") {
+                // Found start of conflict
+                let start_line = i + 1;
+                let mut separator_line = None;
+                let mut end_line = None;
+                
+                // Find the separator and end
+                for j in (i + 1)..lines.len() {
+                    if lines[j].starts_with("=======") {
+                        separator_line = Some(j + 1);
+                    } else if lines[j].starts_with(">>>>>>>") {
+                        end_line = Some(j + 1);
+                        break;
+                    }
+                }
+                
+                if let (Some(sep), Some(end)) = (separator_line, end_line) {
+                    // Calculate byte positions
+                    let start_pos = lines[..i].iter().map(|l| l.len() + 1).sum::<usize>();
+                    let end_pos = lines[..end].iter().map(|l| l.len() + 1).sum::<usize>();
+                    
+                    let our_content = lines[(i + 1)..(sep - 1)].join("\n");
+                    let their_content = lines[sep..(end - 1)].join("\n");
+                    
+                    conflicts.push(ConflictRegion {
+                        start: start_pos,
+                        end: end_pos,
+                        start_line,
+                        end_line: end,
+                        our_content,
+                        their_content,
+                    });
+                    
+                    i = end;
+                } else {
+                    i += 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        
+        Ok(conflicts)
+    }
+
+    /// Resolve a single conflict using smart strategies
+    fn resolve_single_conflict(&self, conflict: &ConflictRegion, file_path: &str) -> Result<Option<String>> {
+        debug!("Analyzing conflict in {} (lines {}-{})", file_path, conflict.start_line, conflict.end_line);
+        
+        // Strategy 1: Whitespace-only differences
+        if let Some(resolved) = self.resolve_whitespace_conflict(conflict)? {
+            debug!("Resolved as whitespace-only conflict");
+            return Ok(Some(resolved));
+        }
+        
+        // Strategy 2: Line ending differences
+        if let Some(resolved) = self.resolve_line_ending_conflict(conflict)? {
+            debug!("Resolved as line ending conflict");
+            return Ok(Some(resolved));
+        }
+        
+        // Strategy 3: Pure addition conflicts (no overlapping changes)
+        if let Some(resolved) = self.resolve_addition_conflict(conflict)? {
+            debug!("Resolved as pure addition conflict");
+            return Ok(Some(resolved));
+        }
+        
+        // Strategy 4: Import/dependency reordering
+        if let Some(resolved) = self.resolve_import_conflict(conflict, file_path)? {
+            debug!("Resolved as import reordering conflict");
+            return Ok(Some(resolved));
+        }
+        
+        // No strategy could resolve this conflict
+        Ok(None)
+    }
+
+    /// Resolve conflicts that only differ by whitespace
+    fn resolve_whitespace_conflict(&self, conflict: &ConflictRegion) -> Result<Option<String>> {
+        let our_normalized = self.normalize_whitespace(&conflict.our_content);
+        let their_normalized = self.normalize_whitespace(&conflict.their_content);
+        
+        if our_normalized == their_normalized {
+            // Only whitespace differences - prefer the version with better formatting
+            let resolved = if conflict.our_content.trim().len() >= conflict.their_content.trim().len() {
+                conflict.our_content.clone()
+            } else {
+                conflict.their_content.clone()
+            };
+            
+            return Ok(Some(resolved));
+        }
+        
+        Ok(None)
+    }
+
+    /// Resolve conflicts that only differ by line endings
+    fn resolve_line_ending_conflict(&self, conflict: &ConflictRegion) -> Result<Option<String>> {
+        let our_normalized = conflict.our_content.replace("\r\n", "\n").replace('\r', "\n");
+        let their_normalized = conflict.their_content.replace("\r\n", "\n").replace('\r', "\n");
+        
+        if our_normalized == their_normalized {
+            // Only line ending differences - prefer Unix line endings
+            return Ok(Some(our_normalized));
+        }
+        
+        Ok(None)
+    }
+
+    /// Resolve conflicts where both sides only add lines (no overlapping edits)
+    fn resolve_addition_conflict(&self, conflict: &ConflictRegion) -> Result<Option<String>> {
+        let our_lines: Vec<&str> = conflict.our_content.lines().collect();
+        let their_lines: Vec<&str> = conflict.their_content.lines().collect();
+        
+        // Check if one side is a subset of the other (pure addition)
+        if our_lines.is_empty() {
+            return Ok(Some(conflict.their_content.clone()));
+        }
+        if their_lines.is_empty() {
+            return Ok(Some(conflict.our_content.clone()));
+        }
+        
+        // Try to merge additions intelligently
+        let mut merged_lines = Vec::new();
+        let mut our_idx = 0;
+        let mut their_idx = 0;
+        
+        while our_idx < our_lines.len() || their_idx < their_lines.len() {
+            if our_idx >= our_lines.len() {
+                // Only their lines left
+                merged_lines.extend_from_slice(&their_lines[their_idx..]);
+                break;
+            } else if their_idx >= their_lines.len() {
+                // Only our lines left
+                merged_lines.extend_from_slice(&our_lines[our_idx..]);
+                break;
+            } else if our_lines[our_idx] == their_lines[their_idx] {
+                // Same line - add once
+                merged_lines.push(our_lines[our_idx]);
+                our_idx += 1;
+                their_idx += 1;
+            } else {
+                // Different lines - this might be too complex
+                return Ok(None);
+            }
+        }
+        
+        Ok(Some(merged_lines.join("\n")))
+    }
+
+    /// Resolve import/dependency conflicts by sorting and merging
+    fn resolve_import_conflict(&self, conflict: &ConflictRegion, file_path: &str) -> Result<Option<String>> {
+        // Only apply to likely import sections in common file types
+        let is_import_file = file_path.ends_with(".rs") || 
+                            file_path.ends_with(".py") || 
+                            file_path.ends_with(".js") || 
+                            file_path.ends_with(".ts") ||
+                            file_path.ends_with(".go") ||
+                            file_path.ends_with(".java");
+        
+        if !is_import_file {
+            return Ok(None);
+        }
+        
+        let our_lines: Vec<&str> = conflict.our_content.lines().collect();
+        let their_lines: Vec<&str> = conflict.their_content.lines().collect();
+        
+        // Check if all lines look like imports/uses
+        let our_imports = our_lines.iter().all(|line| self.is_import_line(line, file_path));
+        let their_imports = their_lines.iter().all(|line| self.is_import_line(line, file_path));
+        
+        if our_imports && their_imports {
+            // Merge and sort imports
+            let mut all_imports: Vec<&str> = our_lines.into_iter().chain(their_lines.into_iter()).collect();
+            all_imports.sort();
+            all_imports.dedup();
+            
+            return Ok(Some(all_imports.join("\n")));
+        }
+        
+        Ok(None)
+    }
+
+    /// Check if a line looks like an import statement
+    fn is_import_line(&self, line: &str, file_path: &str) -> bool {
+        let trimmed = line.trim();
+        
+        if trimmed.is_empty() {
+            return true; // Empty lines are OK in import sections
+        }
+        
+        if file_path.ends_with(".rs") {
+            return trimmed.starts_with("use ") || trimmed.starts_with("extern crate");
+        } else if file_path.ends_with(".py") {
+            return trimmed.starts_with("import ") || trimmed.starts_with("from ");
+        } else if file_path.ends_with(".js") || file_path.ends_with(".ts") {
+            return trimmed.starts_with("import ") || trimmed.starts_with("const ") || trimmed.starts_with("require(");
+        } else if file_path.ends_with(".go") {
+            return trimmed.starts_with("import ") || trimmed == "import (" || trimmed == ")";
+        } else if file_path.ends_with(".java") {
+            return trimmed.starts_with("import ");
+        }
+        
+        false
+    }
+
+    /// Normalize whitespace for comparison
+    fn normalize_whitespace(&self, content: &str) -> String {
+        content
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Update a stack entry with new branch information
