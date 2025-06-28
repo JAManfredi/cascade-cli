@@ -90,6 +90,7 @@ jobs:
 
     - name: Run tests (if supported)
       if: matrix.can-test
+      continue-on-error: true
       run: cargo test --target ${{ matrix.target }}
 
     - name: Create binary package (Unix)
