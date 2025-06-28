@@ -1370,16 +1370,18 @@ pub fn generate_squash_message(commits: &[git2::Commit]) -> Result<String> {
 pub fn extract_feature_from_wip(messages: &[String]) -> String {
     // Look for patterns like "WIP: add authentication" -> "Add authentication"
     for msg in messages {
-        let lower = msg.to_lowercase();
-        if let Some(rest) = lower.strip_prefix("wip:") {
-            let feature = rest.trim();
-            if !feature.is_empty() && feature.len() > 3 {
-                // Capitalize first letter
-                let mut chars: Vec<char> = feature.chars().collect();
-                if let Some(first) = chars.first_mut() {
-                    *first = first.to_uppercase().next().unwrap_or(*first);
+        // Check both case variations, but preserve original case
+        if msg.to_lowercase().starts_with("wip:") {
+            if let Some(rest) = msg.strip_prefix("WIP:").or_else(|| msg.strip_prefix("wip:")) {
+                let feature = rest.trim();
+                if !feature.is_empty() && feature.len() > 3 {
+                    // Capitalize first letter only, preserve rest
+                    let mut chars: Vec<char> = feature.chars().collect();
+                    if let Some(first) = chars.first_mut() {
+                        *first = first.to_uppercase().next().unwrap_or(*first);
+                    }
+                    return chars.into_iter().collect();
                 }
-                return chars.into_iter().collect();
             }
         }
     }
