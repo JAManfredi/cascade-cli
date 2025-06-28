@@ -121,6 +121,7 @@ Follow [Semantic Versioning](https://semver.org/):
 - **PATCH** (v1.0.1): Bug fixes, backward compatible
 
 **Examples:**
+- `v0.1.1` - Bug fixes and CI improvements
 - `v0.1.0` - Initial Beta release
 - `v1.1.0` - Added new `cc stacks merge` command
 - `v1.0.1` - Fixed critical bug in rebase logic

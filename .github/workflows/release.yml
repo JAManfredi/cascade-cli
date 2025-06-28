@@ -9,7 +9,7 @@ on:
       tag:
         description: 'Tag to release'
         required: true
-        default: 'v0.1.0'
+        default: 'v0.1.1'
 
 permissions:
   contents: write
@@ -234,19 +234,58 @@ jobs:
     - name: Download and test binary (Unix)
       if: matrix.os != 'windows-latest'
       run: |
-        TAG=${GITHUB_REF#refs/tags/}
-        curl -L "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" | tar -xz
+        # Handle both tag push and workflow_dispatch events
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+        else
+          TAG=${GITHUB_REF#refs/tags/}
+        fi
+        
+        echo "Testing release with tag: $TAG"
+        echo "Download URL: https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}"
+        
+        # Wait a bit for release to be fully published
+        sleep 10
+        
+        # Download with better error handling
+        curl -L -f --retry 3 --retry-delay 10 \
+          "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" \
+          -o "${{ matrix.target }}"
+        
+        # Verify it's actually a gzip file
+        file "${{ matrix.target }}"
+        
+        # Extract and test
+        tar -xzf "${{ matrix.target }}"
         ./cc --version
         ./cc --help
 
     - name: Download and test binary (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        $TAG = $env:GITHUB_REF -replace 'refs/tags/', ''
-        Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" -OutFile "cc.zip"
-        Expand-Archive -Path "cc.zip" -DestinationPath "."
-        .\cc.exe --version
-        .\cc.exe --help 
+        # Handle both tag push and workflow_dispatch events
+        if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          $TAG = "${{ github.event.inputs.tag }}"
+        } else {
+          $TAG = $env:GITHUB_REF -replace 'refs/tags/', ''
+        }
+        
+        Write-Host "Testing release with tag: $TAG"
+        Write-Host "Download URL: https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}"
+        
+        # Wait a bit for release to be fully published
+        Start-Sleep -Seconds 10
+        
+        # Download with error handling
+        try {
+          Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" -OutFile "cc.zip" -UseBasicParsing
+          Expand-Archive -Path "cc.zip" -DestinationPath "."
+          .\cc.exe --version
+          .\cc.exe --help
+        } catch {
+          Write-Error "Failed to download or extract: $_"
+          exit 1
+        } 
 
   # Publish to crates.io
   publish-crates:
@@ -266,3 +305,74 @@ jobs:
       run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # Update Homebrew Formula
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: create-release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download release assets
+      run: |
+        # Get tag name
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+        else
+          TAG=${GITHUB_REF#refs/tags/}
+        fi
+        
+        echo "Updating Homebrew formula for: $TAG"
+        
+        # Download macOS binaries to get SHA256
+        curl -L -o cc-macos-arm64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/cc-macos-arm64.tar.gz"
+        curl -L -o cc-macos-x64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/cc-macos-x64.tar.gz"
+        
+        # Calculate SHA256
+        ARM64_SHA=$(sha256sum cc-macos-arm64.tar.gz | cut -d' ' -f1)
+        X64_SHA=$(sha256sum cc-macos-x64.tar.gz | cut -d' ' -f1)
+        
+        echo "ARM64_SHA: $ARM64_SHA"
+        echo "X64_SHA: $X64_SHA"
+        echo "TAG: $TAG"
+        
+        # Update Homebrew formula
+        sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/cc-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/cc-macos-arm64.tar.gz|g" homebrew/cascade-cli.rb
+        sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/cc-macos-x64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/cc-macos-x64.tar.gz|g" homebrew/cascade-cli.rb
+        sed -i "s|ARM64_SHA256_PLACEHOLDER|$ARM64_SHA|g" homebrew/cascade-cli.rb
+        sed -i "s|X64_SHA256_PLACEHOLDER|$X64_SHA|g" homebrew/cascade-cli.rb
+        sed -i "s|version \"[^\"]*\"|version \"${TAG#v}\"|g" homebrew/cascade-cli.rb
+        
+        # Show the changes
+        echo "Updated Homebrew formula:"
+        cat homebrew/cascade-cli.rb
+        
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Update Homebrew formula to ${{ steps.release_notes.outputs.tag || github.event.inputs.tag || github.ref_name }}"
+        title: "Update Homebrew formula to ${{ steps.release_notes.outputs.tag || github.event.inputs.tag || github.ref_name }}"
+        body: |
+          🍺 **Homebrew Formula Update**
+          
+          This PR automatically updates the Homebrew formula for the new release.
+          
+          **Changes:**
+          - Updated download URLs to point to the new release
+          - Updated SHA256 checksums for macOS binaries
+          - Updated version number
+          
+          **Testing:**
+          ```bash
+          brew install --build-from-source JAManfredi/cascade-cli/cascade-cli
+          ```
+          
+          Auto-generated by the release workflow.
+        branch: update-homebrew-${{ steps.release_notes.outputs.tag || github.event.inputs.tag || github.ref_name }}
+        base: master
+        delete-branch: true
