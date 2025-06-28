@@ -1,5 +1,280 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Architecture Patterns Guide
+
+## Core Design Principles
+
+### Command Pattern
+All CLI commands implement a consistent pattern in [src/cli/commands/](mdc:src/cli/commands):
+
+```rust
+// Standard command module structure
+pub async fn run(args: CommandArgs) -> Result<()> {
+    // 1. Validate input
+    // 2. Load repository/configuration
+    // 3. Execute business logic
+    // 4. Handle output/errors
+}
+```
+
+### Repository Pattern
+Git operations are abstracted through [src/git/repository.rs](mdc:src/git/repository.rs):
+
+```rust
+pub struct Repository {
+    git_repo: git2::Repository,
+    repo_path: PathBuf,
+}
+
+impl Repository {
+    // High-level operations that combine multiple git2 calls
+    pub fn create_branch(&self, name: &str) -> Result<()>
+    pub fn force_push_branch(&self, branch: &str) -> Result<()>
+}
+```
+
+## Modular Architecture
+
+### Layer Separation
+
+#### 1. CLI Layer ([src/cli/](mdc:src/cli))
+- **Responsibility**: User interface, argument parsing, command routing
+- **Key Files**: [mod.rs](mdc:src/cli/mod.rs), [commands/](mdc:src/cli/commands)
+- **Pattern**: Each command is a separate module with standardized interface
+
+#### 2. Business Logic Layer ([src/stack/](mdc:src/stack), [src/config/](mdc:src/config))
+- **Responsibility**: Core domain logic, state management
+- **Key Files**: [stack/manager.rs](mdc:src/stack/manager.rs), [config/settings.rs](mdc:src/config/settings.rs)
+- **Pattern**: Manager classes coordinate between repositories and business rules
+
+#### 3. Infrastructure Layer ([src/git/](mdc:src/git), [src/bitbucket/](mdc:src/bitbucket))
+- **Responsibility**: External system integration
+- **Key Files**: [git/repository.rs](mdc:src/git/repository.rs), [bitbucket/client.rs](mdc:src/bitbucket/client.rs)
+- **Pattern**: Adapter pattern for external APIs and tools
+
+## Error Handling Strategy
+
+### Centralized Error Types
+All errors flow through [src/errors.rs](mdc:src/errors.rs):
+
+```rust
+#[derive(Debug)]
+pub enum CascadeError {
+    Git(String),
+    Config(String),
+    Validation(String),
+    // ... other variants
+}
+```
+
+### Error Propagation Pattern
+```rust
+// Functions return Result<T, CascadeError>
+pub fn operation() -> Result<String> {
+    let git_result = git_operation()
+        .map_err(|e| CascadeError::Git(e.to_string()))?;
+    
+    Ok(git_result)
+}
+```
+
+## State Management
+
+### Stack Metadata
+Stack state is persisted through [src/stack/metadata.rs](mdc:src/stack/metadata.rs):
+
+```rust
+pub struct StackMetadata {
+    pub name: String,
+    pub entries: Vec<StackEntry>,
+    pub base_branch: String,
+}
+
+impl StackMetadata {
+    pub fn save(&self, repo_path: &Path) -> Result<()>
+    pub fn load(repo_path: &Path, name: &str) -> Result<Self>
+}
+```
+
+### Configuration Management
+Application settings use [src/config/settings.rs](mdc:src/config/settings.rs):
+
+```rust
+pub struct Settings {
+    pub bitbucket_url: Option<String>,
+    pub auth: AuthConfig,
+}
+
+impl Settings {
+    pub fn load_from_file(repo_path: &Path) -> Result<Self>
+    pub fn save_to_file(&self, repo_path: &Path) -> Result<()>
+}
+```
+
+## Async Patterns
+
+### Command Execution
+CLI commands are async to support:
+- Network operations (Bitbucket API)
+- Long-running Git operations
+- User interaction (prompts, confirmations)
+
+```rust
+#[tokio::main]
+async fn main() -> Result<()> {
+    match cli.command {
+        Commands::Stack(action) => stack::run(action).await,
+        Commands::Init(args) => init::run(args.bitbucket_url, args.force).await,
+        // ... other commands
+    }
+}
+```
+
+## External Integration Patterns
+
+### Bitbucket API Client
+[src/bitbucket/client.rs](mdc:src/bitbucket/client.rs) implements:
+
+```rust
+pub struct BitbucketClient {
+    base_url: String,
+    client: reqwest::Client,
+}
+
+impl BitbucketClient {
+    // Factory methods for different auth types
+    pub fn with_token(base_url: String, token: String) -> Self
+    pub fn with_credentials(base_url: String, username: String, password: String) -> Self
+    
+    // High-level operations
+    pub async fn create_pull_request(&self, pr: &PullRequest) -> Result<PullRequest>
+}
+```
+
+### Git Abstraction
+[src/git/repository.rs](mdc:src/git/repository.rs) wraps git2 with domain-specific operations:
+
+```rust
+impl Repository {
+    // High-level workflows
+    pub fn create_feature_branch(&self, base: &str, name: &str) -> Result<String>
+    pub fn squash_and_merge(&self, commits: &[String]) -> Result<()>
+    
+    // Lifecycle management
+    pub fn get_commits_between(&self, from: &str, to: &str) -> Result<Vec<git2::Commit<'_>>>
+}
+```
+
+## Testing Patterns
+
+### Test Organization
+- **Unit tests**: Co-located with source files using `#[cfg(test)]`
+- **Integration tests**: Separate [tests/](mdc:tests) directory
+- **Test helpers**: Shared utilities for repository creation and setup
+
+### Mock and Test Double Strategy
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    
+    // Standard test setup pattern
+    fn create_test_repo() -> (TempDir, PathBuf) {
+        // Creates isolated test environment
+    }
+    
+    async fn create_initialized_repo() -> (TempDir, PathBuf) {
+        // Creates repo with Cascade initialized
+    }
+}
+```
+
+## Configuration Architecture
+
+### Hierarchical Configuration
+Settings are loaded with precedence:
+1. **Command line arguments** (highest priority)
+2. **Environment variables**
+3. **Repository configuration** (`.cascade/config.toml`)
+4. **Global configuration** (`~/.cascade/config.toml`)
+5. **Default values** (lowest priority)
+
+### Configuration Schema
+```rust
+// Repository-specific configuration
+pub struct RepositoryConfig {
+    pub bitbucket_url: String,
+    pub default_reviewers: Vec<String>,
+}
+
+// User-specific configuration
+pub struct UserConfig {
+    pub auth: AuthConfig,
+    pub preferences: UserPreferences,
+}
+```
+
+## Hook System Architecture
+
+### Hook Management
+[src/cli/commands/hooks.rs](mdc:src/cli/commands/hooks.rs) implements:
+
+```rust
+pub enum HookType {
+    PostCommit,    // Validates commits are added to stacks
+    PrePush,       // Prevents force pushes, validates stack state
+    CommitMsg,     // Validates commit message format
+    PrepareCommitMsg, // Prepares commit message with stack context
+}
+
+pub struct HooksManager {
+    repo_path: PathBuf,
+    hooks_dir: PathBuf,
+}
+```
+
+### Hook Content Generation
+Each hook type has a dedicated content generator:
+- **Template-based**: Hooks use shell script templates
+- **Binary path resolution**: Hooks find the cascade binary dynamically
+- **Error handling**: Hooks provide clear error messages
+
+## Performance Considerations
+
+### Lazy Loading
+- Repository objects are created on-demand
+- Stack metadata is cached during operations
+- Git operations batch when possible
+
+### Resource Management
+- Temporary files use RAII with `tempfile::TempDir`
+- Git repository objects have explicit lifetime management
+- Network connections are pooled via `reqwest::Client`
+
+## Security Patterns
+
+### Authentication
+- **Token-based**: Bitbucket API tokens (preferred)
+- **Credential storage**: Platform-specific secure storage
+- **No plaintext secrets**: All auth data is encrypted at rest
+
+### Input Validation
+- All user input is validated before Git operations
+- Branch names are sanitized
+- URLs are validated before network requests
+
+## Future Extensibility
+
+### Plugin Architecture Preparation
+- Commands are modular and self-contained
+- External integrations use adapter pattern
+- Configuration system supports plugin-specific settings
+
+### API Abstraction
+- Git operations are abstracted for potential alternative backends
+- Bitbucket client can be extended to other platforms
+- Hook system supports custom hook types

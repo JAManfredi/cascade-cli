@@ -1,5 +1,246 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# CI Compatibility Guide
+
+## Cross-Platform Development
+
+Cascade CLI supports and is tested on **Ubuntu, Windows, and macOS**. This guide covers critical compatibility considerations.
+
+## Common CI Failures and Solutions
+
+### 1. Rust Lifetime Annotation Errors (Ubuntu)
+
+**Issue**: Ubuntu CI failing with lifetime syntax errors for git2 objects.
+
+**Error Example**:
+```
+error: lifetime flowing from input to output with different syntax can be confusing
+```
+
+**Solution**: Use explicit lifetime annotations for git2 objects in [src/git/repository.rs](mdc:src/git/repository.rs):
+
+```rust
+// ✅ CORRECT - Explicit lifetimes
+pub fn get_head_commit(&self) -> Result<git2::Commit<'_>>
+pub fn get_commit(&self, commit_hash: &str) -> Result<git2::Commit<'_>>
+pub fn get_signature(&self) -> Result<Signature<'_>>
+```
+
+### 2. Unused Variable Errors (Windows)
+
+**Issue**: Windows CI failing due to platform-specific unused variables.
+
+**Error Example**:
+```
+error: unused variable: `permissions`
+```
+
+**Solution**: Scope variables inside conditional compilation blocks:
+
+```rust
+// ✅ CORRECT - Variable scoped to where it's used
+#[cfg(unix)]
+{
+    use std::os::unix::fs::PermissionsExt;
+    let permissions = metadata.permissions();
+    assert!(permissions.mode() & 0o111 != 0);
+}
+```
+
+### 3. Environment-Dependent Test Failures
+
+**Issue**: Tests assuming specific Git configurations failing in CI.
+
+**Error Example**: Test expecting "master" branch fails when CI uses "main".
+
+**Solution**: Make tests environment-agnostic:
+
+```rust
+// ❌ BAD - Hardcoded branch name
+assert!(branch_info.iter().any(|b| b.name == "master"));
+
+// ✅ GOOD - Environment-agnostic
+let current_branch = repo.head().unwrap().shorthand().unwrap();
+assert!(branch_info.iter().any(|b| b.name == current_branch));
+```
+
+## Platform-Specific Code Patterns
+
+### File Permissions
+Only validate executable permissions on Unix systems:
+
+```rust
+#[cfg(unix)]
+{
+    use std::os::unix::fs::PermissionsExt;
+    let permissions = metadata.permissions();
+    assert!(permissions.mode() & 0o111 != 0);
+}
+
+#[cfg(windows)]
+{
+    // Windows doesn't have executable bits
+    // Alternative validation if needed
+}
+```
+
+### Path Handling
+Always use cross-platform path operations:
+
+```rust
+// ✅ CORRECT - Cross-platform
+use std::path::PathBuf;
+let path = base_path.join("subdir").join("file.txt");
+
+// ❌ WRONG - Unix-specific
+let path = format!("{}/subdir/file.txt", base_path);
+```
+
+### Command Execution
+Handle platform differences in shell commands:
+
+```rust
+#[cfg(windows)]
+let output = Command::new("cmd")
+    .args(["/C", "git", "status"])
+    .output()?;
+
+#[cfg(not(windows))]
+let output = Command::new("git")
+    .args(["status"])
+    .output()?;
+```
+
+## Git Configuration Differences
+
+### Default Branch Names
+Different Git versions and CI environments use different default branch names:
+
+- **Legacy Git**: "master"
+- **Modern Git/GitHub**: "main" 
+- **Custom setups**: Can be anything
+
+**Solution**: Always query the current branch dynamically:
+
+```rust
+fn get_default_branch(repo: &git2::Repository) -> Result<String> {
+    let head = repo.head()?;
+    let branch_name = head.shorthand()
+        .ok_or("Could not get branch name")?
+        .to_string();
+    Ok(branch_name)
+}
+```
+
+### Git User Configuration
+CI environments may lack git user configuration:
+
+```rust
+// Ensure git user is configured for tests
+Command::new("git")
+    .args(["config", "user.name", "Test User"])
+    .current_dir(&repo_path)
+    .output()?;
+    
+Command::new("git")
+    .args(["config", "user.email", "test@example.com"])
+    .current_dir(&repo_path)
+    .output()?;
+```
+
+## MSRV (Minimum Supported Rust Version)
+
+**Current MSRV**: Rust 1.82.0 (specified in [Cargo.toml](mdc:Cargo.toml))
+
+### Dependency Compatibility
+Some dependencies require newer Rust versions:
+- Monitor `cargo check` output for MSRV violations
+- Update MSRV in both [Cargo.toml](mdc:Cargo.toml) and CI workflows
+- Update documentation when MSRV changes
+
+## CI Workflow Configuration
+
+### GitHub Actions Matrix
+The project uses matrix builds for cross-platform testing:
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+    rust: [1.82.0, stable]
+```
+
+### Platform-Specific Steps
+Some CI steps are conditional:
+
+```yaml
+- name: Install dependencies (Ubuntu)
+  if: matrix.os == 'ubuntu-latest'
+  run: sudo apt-get update && sudo apt-get install -y build-essential
+```
+
+## Testing in CI Environments
+
+### Environment Limitations
+- **Network access**: May be restricted
+- **File system**: Different permissions and case sensitivity
+- **Git configuration**: May be minimal or non-standard
+- **External dependencies**: May not be available
+
+### Robust Test Design
+```rust
+#[test]
+fn test_with_fallback() {
+    let result = some_operation();
+    
+    // Primary assertion
+    if let Ok(value) = result {
+        assert_eq!(value, expected);
+    } else {
+        // Fallback for CI environments
+        println!("Operation not available in CI environment");
+    }
+}
+```
+
+## Pre-Push Validation
+
+The [scripts/pre-push-check.sh](mdc:scripts/pre-push-check.sh) replicates CI checks locally:
+
+- Helps catch platform-specific issues before push
+- Includes environment awareness warnings
+- Runs same commands as CI workflows
+
+**Limitation**: Cannot catch all environment-dependent issues (like default Git branch differences).
+
+## Troubleshooting CI Failures
+
+### 1. Check Platform Specifics
+- Review the failing OS (Ubuntu/Windows/macOS)
+- Look for platform-specific error patterns
+- Check conditional compilation usage
+
+### 2. Reproduce Locally
+```bash
+# Test with different Git configurations
+git config --global init.defaultBranch main  # or master
+./scripts/pre-push-check.sh
+```
+
+### 3. Use CI Debug Mode
+Add debug output to CI workflows:
+```yaml
+- name: Debug Git Configuration
+  run: |
+    git --version
+    git config --list
+    git branch -a
+```
+
+### 4. Review Recent Changes
+- Check for new platform-specific code
+- Look for hardcoded assumptions
+- Verify conditional compilation blocks
