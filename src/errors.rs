@@ -1,5 +1,3 @@
-use thiserror::Error;
-
 /// Cascade Error Types
 #[derive(Debug, thiserror::Error)]
 pub enum CascadeError {

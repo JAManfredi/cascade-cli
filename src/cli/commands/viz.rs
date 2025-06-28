@@ -1,9 +1,8 @@
+use crate::stack::{StackManager, Stack};
 use crate::errors::{CascadeError, Result};
-use crate::stack::{StackManager, Stack, StackEntry};
 use std::env;
 use std::collections::HashMap;
 use std::fs;
-use uuid::Uuid;
 
 /// Visualization output formats
 #[derive(Debug, Clone)]

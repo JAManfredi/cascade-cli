@@ -4,7 +4,7 @@ use crate::git::GitRepository;
 use clap::{Subcommand, ValueEnum};
 use std::env;
 use tracing::{info, warn};
-use indicatif::{ProgressBar, ProgressStyle, ProgressIterator};
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::bitbucket::BitbucketIntegration;
 
 /// CLI argument version of RebaseStrategy
@@ -249,7 +249,7 @@ async fn create_stack(name: String, base: Option<String>, description: Option<St
     Ok(())
 }
 
-async fn list_stacks(verbose: bool, active: bool, format: Option<String>) -> Result<()> {
+async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 

@@ -299,6 +299,11 @@ impl StackManager {
         &self.repo
     }
 
+    /// Get the repository path
+    pub fn repo_path(&self) -> &Path {
+        &self.repo_path
+    }
+
     // Edit mode management methods
 
     /// Check if currently in edit mode

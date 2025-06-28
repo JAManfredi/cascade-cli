@@ -2,7 +2,6 @@ use crate::errors::{CascadeError, Result};
 use git2::{Repository, Signature, Oid};
 use std::path::{Path, PathBuf};
 use tracing::info;
-use std::process::Command;
 
 /// Repository information
 #[derive(Debug, Clone)]

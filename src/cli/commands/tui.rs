@@ -5,11 +5,11 @@ use std::time::{Duration, Instant};
 use std::io;
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect, Alignment, Margin},
+    layout::{Constraint, Direction, Layout, Rect, Alignment},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{
-        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Gauge, 
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, 
         Table, Row, Cell, Tabs, Wrap
     },
     Frame, Terminal,

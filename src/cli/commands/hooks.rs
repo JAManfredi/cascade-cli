@@ -1,9 +1,8 @@
 use crate::errors::{CascadeError, Result};
-use crate::config::{CascadeConfig, Settings};
+use crate::config::Settings;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
 /// Git repository type detection
