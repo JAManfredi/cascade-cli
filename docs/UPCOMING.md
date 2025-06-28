@@ -2,7 +2,7 @@
 
 This document tracks planned features and improvements for Cascade CLI that are not yet implemented but are in development or planned for future releases.
 
-## ✅ **Recently Implemented**
+## ✅ **Beta Features**
 
 ### **Smart Conflict Resolution** (✅ **Completed**)
 Smart automatic conflict resolution is now **fully implemented** with 4 strategies:
@@ -13,7 +13,7 @@ Smart automatic conflict resolution is now **fully implemented** with 4 strategi
 - **✅ Import Reordering**: Sorts and merges import statements in common file types (Rust, Python, JS/TS, Go, Java)
 
 **Status**: ✅ **Implemented and Available**  
-**How to Use**: Enabled by default in `cc stack rebase` - conflicts are auto-resolved when possible  
+**How to Use**: Enabled by default in `cc stacks rebase` - conflicts are auto-resolved when possible  
 **Benefits**: Reduces manual intervention in routine rebases by 60-80% in typical workflows
 
 This feature has been moved to the main README documentation!
@@ -69,8 +69,8 @@ Further enhancements to conflict resolution beyond the currently implemented str
 Support for Git worktrees to allow working on multiple stacks simultaneously:
 
 ```bash
-cc stack create --worktree feature-auth
-cc stack create --worktree bug-fix-123
+cc stacks create --worktree feature-auth
+cc stacks create --worktree bug-fix-123
 ```
 
 **Status**: 🔄 Research phase

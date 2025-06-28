@@ -3,10 +3,10 @@ use crate::errors::{CascadeError, Result};
 use crate::git::{get_current_repository, GitRepository};
 use std::env;
 
-/// Show repository status
+/// Show repository overview and all stacks status
 pub async fn run() -> Result<()> {
-    println!("📊 Cascade Repository Status");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("📊 Repository Overview");
+    println!("━━━━━━━━━━━━━━━━━━━━━━");
 
     // Get current directory and repository
     let _current_dir = env::current_dir()
@@ -159,27 +159,36 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
 
             if stacks.is_empty() {
                 println!("  No stacks created yet");
-                println!("  Run 'cc stack create \"Stack Name\"' to create your first stack");
+                println!("  Run 'cc stacks create \"Stack Name\"' to create your first stack");
             } else {
                 println!("  Total stacks: {}", stacks.len());
-                if let Some(active) = active_stack {
-                    println!(
-                        "  Active stack: {} ({} entries)",
-                        active.name,
-                        active.entries.len()
-                    );
-
-                    // Show quick summary of active stack
-                    let submitted = active.entries.iter().filter(|e| e.is_submitted).count();
-                    if submitted > 0 {
-                        println!(
-                            "  Submitted entries: {}/{}",
-                            submitted,
-                            active.entries.len()
-                        );
+                
+                // Show each stack with detailed status
+                for stack in &stacks {
+                    let is_active = active_stack.as_ref().map(|a| a.name == stack.name).unwrap_or(false);
+                    let active_marker = if is_active { "◉" } else { "◯" };
+                    
+                    let submitted = stack.entries.iter().filter(|e| e.is_submitted).count();
+                    
+                    let status_info = if submitted > 0 {
+                        format!("{}/{} submitted", submitted, stack.entries.len())
+                    } else if !stack.entries.is_empty() {
+                        format!("{} entries, none submitted", stack.entries.len())
+                    } else {
+                        "empty".to_string()
+                    };
+                    
+                    println!("  {} {} - {}", active_marker, stack.name, status_info);
+                    
+                    // Show additional details for active stack
+                    if is_active && !stack.entries.is_empty() {
+                        let first_branch = stack.entries.first().map(|e| e.branch.as_str()).unwrap_or("unknown");
+                        println!("    Base: {} → {}", stack.base_branch, first_branch);
                     }
-                } else {
-                    println!("  No active stack (use 'cc stack switch' to activate one)");
+                }
+                
+                if active_stack.is_none() && !stacks.is_empty() {
+                    println!("\n  💡 No active stack. Use 'cc stacks switch <name>' to activate one");
                 }
             }
         }

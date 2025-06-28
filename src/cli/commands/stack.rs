@@ -73,6 +73,13 @@ pub enum StackAction {
         name: String,
     },
 
+    /// Deactivate the current stack (turn off stack mode)
+    Deactivate {
+        /// Force deactivation without confirmation
+        #[arg(long)]
+        force: bool,
+    },
+
     /// Show the current stack status  
     Show {
         /// Show detailed pull request information
@@ -100,8 +107,8 @@ pub enum StackAction {
         /// Push multiple specific commits (comma-separated)
         #[arg(long)]
         commits: Option<String>,
-        /// Squash last N commits into one before pushing
-        #[arg(long)]
+        /// Squash unpushed commits before pushing (optional: specify count)
+        #[arg(long, num_args = 0..=1, default_missing_value = "0")]
         squash: Option<usize>,
         /// Squash all commits since this reference (e.g., HEAD~5)
         #[arg(long)]
@@ -284,6 +291,7 @@ pub async fn run(action: StackAction) -> Result<()> {
             list_stacks(verbose, active, format).await
         }
         StackAction::Switch { name } => switch_stack(name).await,
+        StackAction::Deactivate { force } => deactivate_stack(force).await,
         StackAction::Show { verbose, mergeable } => show_stack(verbose, mergeable).await,
         StackAction::Push {
             branch,
@@ -438,6 +446,14 @@ pub async fn rebase(
     rebase_stack(interactive, onto, strategy).await
 }
 
+pub async fn deactivate(force: bool) -> Result<()> {
+    deactivate_stack(force).await
+}
+
+pub async fn switch(name: String) -> Result<()> {
+    switch_stack(name).await
+}
+
 async fn create_stack(
     name: String,
     base: Option<String>,
@@ -538,6 +554,48 @@ async fn switch_stack(name: String) -> Result<()> {
     Ok(())
 }
 
+async fn deactivate_stack(force: bool) -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let mut manager = StackManager::new(&current_dir)?;
+
+    let active_stack = manager.get_active_stack();
+    
+    if active_stack.is_none() {
+        println!("ℹ️  No active stack to deactivate");
+        return Ok(());
+    }
+
+    let stack_name = active_stack.unwrap().name.clone();
+    
+    if !force {
+        println!("⚠️  This will deactivate stack '{}' and return to normal Git workflow", stack_name);
+        println!("   You can reactivate it later with 'cc stacks switch {}'", stack_name);
+        print!("   Continue? (y/N): ");
+        
+        use std::io::{self, Write};
+        io::stdout().flush().unwrap();
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        
+        if !input.trim().to_lowercase().starts_with('y') {
+            println!("Cancelled deactivation");
+            return Ok(());
+        }
+    }
+
+    // Deactivate the stack
+    manager.set_active_stack(None)?;
+    
+    println!("✅ Deactivated stack '{}'", stack_name);
+    println!("   Stack management is now OFF - you can use normal Git workflow");
+    println!("   To reactivate: cc stacks switch {}", stack_name);
+    
+    Ok(())
+}
+
 async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
@@ -548,7 +606,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
     let (stack_id, stack_name, stack_base, stack_entries) = {
         let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
             CascadeError::config(
-                "No active stack. Use 'cc stack create' or 'cc stack switch' to select a stack"
+                "No active stack. Use 'cc stacks create' or 'cc stacks switch' to select a stack"
                     .to_string(),
             )
         })?;
@@ -567,7 +625,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
     if stack_entries.is_empty() {
         println!("   No entries in this stack yet");
-        println!("   Use 'cc stack push' to add commits to this stack");
+        println!("   Use 'cc push' to add commits to this stack");
         return Ok(());
     }
 
@@ -703,7 +761,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
                     if ready_to_land > 0 {
                         println!(
-                            "\n🎯 {} PR{} ready to land! Use 'cc stack land' to land them all.",
+                            "\n🎯 {} PR{} ready to land! Use 'cc land' to land them all.",
                             ready_to_land,
                             if ready_to_land == 1 { " is" } else { "s are" }
                         );
@@ -787,6 +845,11 @@ async fn push_to_stack(
 
     let mut manager = StackManager::new(&current_dir)?;
     let repo = GitRepository::open(&current_dir)?;
+
+    // Check for branch changes and prompt user if needed
+    if !manager.check_for_branch_change()? {
+        return Ok(()); // User chose to cancel or deactivate stack
+    }
 
     // Get the active stack to check base branch
     let active_stack = manager.get_active_stack().ok_or_else(|| {
@@ -931,9 +994,28 @@ async fn push_to_stack(
 
     // Handle squash operations first
     if let Some(squash_count) = squash {
-        println!("🔄 Squashing last {squash_count} commits...");
-        squash_commits(&repo, squash_count, None).await?;
-        println!("✅ Squashed {squash_count} commits into one");
+        if squash_count == 0 {
+            // User used --squash without specifying count, auto-detect unpushed commits
+            let active_stack = manager.get_active_stack().ok_or_else(|| {
+                CascadeError::config("No active stack. Create a stack first with 'cc stacks create'")
+            })?;
+            
+            let unpushed_count = get_unpushed_commits(&repo, &active_stack)?.len();
+            
+            if unpushed_count == 0 {
+                println!("ℹ️  No unpushed commits to squash");
+            } else if unpushed_count == 1 {
+                println!("ℹ️  Only 1 unpushed commit, no squashing needed");
+            } else {
+                println!("🔄 Auto-detected {} unpushed commits, squashing...", unpushed_count);
+                squash_commits(&repo, unpushed_count, None).await?;
+                println!("✅ Squashed {} unpushed commits into one", unpushed_count);
+            }
+        } else {
+            println!("🔄 Squashing last {squash_count} commits...");
+            squash_commits(&repo, squash_count, None).await?;
+            println!("✅ Squashed {squash_count} commits into one");
+        }
     } else if let Some(since_ref) = squash_since {
         println!("🔄 Squashing commits since {since_ref}...");
         let since_commit = repo.resolve_reference(&since_ref)?;
@@ -1127,6 +1209,13 @@ async fn submit_entry(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
+    let mut stack_manager = StackManager::new(&current_dir)?;
+
+    // Check for branch changes and prompt user if needed
+    if !stack_manager.check_for_branch_change()? {
+        return Ok(()); // User chose to cancel or deactivate stack
+    }
+
     // Load configuration first
     let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
     let config_path = config_dir.join("config.json");
@@ -1138,8 +1227,6 @@ async fn submit_entry(
         git: settings.git.clone(),
         auth: crate::config::AuthConfig::default(),
     };
-
-    let stack_manager = StackManager::new(&current_dir)?;
 
     // Get the active stack
     let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
@@ -3320,30 +3407,27 @@ mod tests {
 
     #[test]
     fn test_command_flow_logic() {
-        // Test the logical flow for determining what to process
+        // These just test the command structure exists
+        assert!(matches!(StackAction::Push { 
+            branch: None, message: None, commit: None, since: None, commits: None,
+            squash: None, squash_since: None, auto_branch: false, allow_base_branch: false 
+        }, StackAction::Push { .. }));
         
-        // Scenario 1: No specific arguments = default to all
-        let commit = None::<String>;
-        let since = None::<String>;
-        let commits = None::<String>;
+        assert!(matches!(StackAction::Submit { 
+            entry: None, title: None, description: None, range: None, draft: false 
+        }, StackAction::Submit { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_deactivate_command_structure() {
+        // Test that deactivate command structure exists and can be constructed
+        let deactivate_action = StackAction::Deactivate { force: false };
         
-        let should_use_default = commit.is_none() && since.is_none() && commits.is_none();
-        assert!(should_use_default, "Should use default 'all' behavior when no targeting options provided");
+        // Verify it matches the expected pattern
+        assert!(matches!(deactivate_action, StackAction::Deactivate { force: false }));
         
-        // Scenario 2: Specific commit provided = use that commit only
-        let commit = Some("abc123".to_string());
-        let since = None::<String>;
-        let commits = None::<String>;
-        
-        let should_use_default = commit.is_none() && since.is_none() && commits.is_none();
-        assert!(!should_use_default, "Should NOT use default behavior when specific commit provided");
-        
-        // Scenario 3: Since reference provided = use commits since that reference
-        let commit = None::<String>;
-        let since = Some("HEAD~2".to_string());
-        let commits = None::<String>;
-        
-        let should_use_default = commit.is_none() && since.is_none() && commits.is_none();
-        assert!(!should_use_default, "Should NOT use default behavior when since reference provided");
+        // Test with force flag
+        let force_deactivate = StackAction::Deactivate { force: true };
+        assert!(matches!(force_deactivate, StackAction::Deactivate { force: true }));
     }
 }

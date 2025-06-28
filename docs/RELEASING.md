@@ -49,14 +49,14 @@ Cascade CLI uses GitHub Actions for fully automated cross-platform releases:
 ### **Version Management**
 
 - [ ] **Cargo.toml version updated**: Bump version number
-- [ ] **CHANGELOG.md updated**: Document new features and fixes
+- [ ] **CHANGELOG.md updated**: Document features and fixes
 - [ ] **Breaking changes documented**: If any API changes
 - [ ] **Migration guide created**: If needed for breaking changes
 
 ### **Documentation**
 
 - [ ] **README.md current**: Features, installation, examples
-- [ ] **User manual updated**: New commands or options
+- [ ] **User manual updated**: Commands or options
 - [ ] **API documentation**: `cargo doc` generates correctly
 - [ ] **Examples work**: All code examples in docs are functional
 
@@ -75,8 +75,8 @@ cargo build --release
 
 # Test core workflows
 ./target/release/cc init
-./target/release/cc stack create test-stack
-./target/release/cc stack list
+./target/release/cc stacks create test-stack
+./target/release/cc stacks list
 ```
 
 ---
@@ -117,12 +117,12 @@ git push origin v1.2.3
 Follow [Semantic Versioning](https://semver.org/):
 
 - **MAJOR** (v2.0.0): Breaking changes
-- **MINOR** (v1.1.0): New features, backward compatible
+- **MINOR** (v1.1.0): Features, backward compatible
 - **PATCH** (v1.0.1): Bug fixes, backward compatible
 
 **Examples:**
-- `v1.0.0` - Initial stable release
-- `v1.1.0` - Added new `cc stack merge` command
+- `v0.1.0` - Initial Beta release
+- `v1.1.0` - Added new `cc stacks merge` command
 - `v1.0.1` - Fixed critical bug in rebase logic
 - `v2.0.0` - Changed CLI interface (breaking)
 
@@ -290,7 +290,7 @@ The workflow automatically generates release notes with:
 - **Pull requests**: Ensure PRs are tested and documented
 - **Version bumps**: Don't bump versions in PRs (maintainers handle this)
 - **Breaking changes**: Clearly document any breaking changes
-- **Testing**: Include tests for new features
+- **Testing**: Include tests for features
 
 ---
 

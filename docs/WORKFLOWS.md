@@ -43,21 +43,21 @@ A comprehensive guide to real-world development workflows using Cascade CLI's st
 ```bash
 # Create a stack while on main
 git checkout main
-cc stack create my-feature --base main
+cc stacks create my-feature --base main
 
 # Switch to a different Git branch
 git checkout some-other-branch
 
 # Your stack is STILL active!
-cc show  # Still shows "my-feature" stack
+cc stack  # Still shows "my-feature" stack
 ```
 
 #### **2. Each Stack Has Its Own Base Branch**
 ```bash
 # Different stacks can have different base branches
-cc stack create frontend-work --base main
-cc stack create hotfix --base release-1.2
-cc stack create experiment --base develop
+cc stacks create frontend-work --base main
+cc stacks create hotfix --base release-1.2
+cc stacks create experiment --base develop
 ```
 
 #### **3. Stack Entries Create Individual Branches**
@@ -74,7 +74,7 @@ git branch  # Shows: main, feature/my-feature-1, feature/my-feature-2
 #### **Pattern 1: Work Directly on Base Branch (Recommended)**
 ```bash
 git checkout main           # Start on main
-cc stack create my-feature  # Create stack based on main
+cc stacks create my-feature  # Create stack based on main
 # Make commits directly on main
 cc push                     # Each commit becomes a stack entry with its own branch
 ```
@@ -83,8 +83,8 @@ cc push                     # Each commit becomes a stack entry with its own bra
 ```bash
 git checkout -b feature-branch
 # Make several commits
-cc stack create my-feature --base main
-cc push --all               # Add existing commits to stack
+cc stacks create my-feature --base main
+cc push               # Add existing commits to stack
 ```
 
 ### **🤔 What Happens When You Switch Git Branches?**
@@ -96,14 +96,14 @@ cc push --all               # Add existing commits to stack
 
 ```bash
 # Start with stack active
-cc show  # Shows "my-feature" stack
+cc stack  # Shows "my-feature" stack
 
 # Switch Git branches
 git checkout develop
 git checkout -b random-experiment
 
 # Stack is STILL active
-cc show  # Still shows "my-feature" stack
+cc stack  # Still shows "my-feature" stack
 cc push  # Still adds to "my-feature" stack
 ```
 
@@ -129,9 +129,9 @@ cc push  # Still adds to "my-feature" stack
 #### **1. "Orphaned" Stack Feeling**
 ```bash
 git checkout some-random-branch
-cc show  # Shows stack that doesn't match your current branch
+cc stack  # Shows stack that doesn't match your current branch
 ```
-**Solution**: Use `cc stack switch` to explicitly change stacks.
+**Solution**: Use `cc stacks switch` to explicitly change stacks.
 
 #### **2. Commits from Wrong Branch**
 ```bash
@@ -139,11 +139,11 @@ git checkout feature-branch
 # Commit some work
 cc push  # Adds feature-branch commits to whatever stack is active
 ```
-**Solution**: Always check `cc show` before `cc push`.
+**Solution**: Always check `cc stack` before `cc push`.
 
 #### **3. Multiple Stacks Confusion**
 ```bash
-cc stack list  # Shows multiple stacks
+cc stacks list  # Shows multiple stacks
 # Which one is active? Which branch am I on?
 ```
 **Solution**: Use status indicators and explicit switching.
@@ -153,26 +153,26 @@ cc stack list  # Shows multiple stacks
 #### **1. Use Stack-Aware Status**
 ```bash
 # Always check both Git and stack status
-git status && cc show
+git status && cc stack
 ```
 
 #### **2. Explicit Stack Switching**
 ```bash
 # Don't rely on Git branch to determine stack
-cc stack switch my-other-feature
+cc stacks switch my-other-feature
 ```
 
 #### **3. Name Stacks Clearly**
 ```bash
 # Use descriptive names that match your mental model
-cc stack create user-auth-backend --base main
-cc stack create mobile-ui-fixes --base develop
+cc stacks create user-auth-backend --base main
+cc stacks create mobile-ui-fixes --base develop
 ```
 
 #### **4. One Stack Per Feature Branch (If Using Pattern 2)**
 ```bash
 git checkout -b user-authentication
-cc stack create user-auth --base main
+cc stacks create user-auth --base main
 # Keep the feature branch and stack names aligned
 ```
 
@@ -181,7 +181,7 @@ cc stack create user-auth --base main
 The current behavior could be enhanced with:
 
 1. **Branch-aware default**: When creating a stack, use current branch name as default stack name
-2. **Visual indicators**: Show current Git branch vs active stack in `cc show`
+2. **Visual indicators**: Show current Git branch vs active stack in `cc stack`
 3. **Auto-switch option**: Flag to auto-switch stacks when changing Git branches
 4. **Stack-branch binding**: Option to bind a stack to a specific Git branch
 
@@ -228,7 +228,7 @@ cc push --auto-branch
 Cascade CLI now tracks where each commit was originally made:
 
 ```bash
-cc show
+cc stack
 # Output:
 # 📚 Stack Entries:
 #    1. a1b2c3d4 📝 Add authentication (from main)
@@ -247,14 +247,14 @@ cc push --allow-base-branch
 #### **Pattern 1: Safe Feature Branch Workflow (Recommended)**
 ```bash
 git checkout main
-cc stack create user-auth --base main
+cc stacks create user-auth --base main
 
 # Always work on feature branches
 git checkout -b feature/authentication
 git commit -am "Add login system"
 git commit -am "Add password validation"
 
-cc push --all  # Safe: commits are on feature branch
+cc push  # Safe: commits are on feature branch
 ```
 
 #### **Pattern 2: Auto-Branch Recovery**
@@ -277,6 +277,17 @@ git checkout -b feature/my-work
 cc push  # Now safe
 ```
 
+#### **Pattern 4: Emergency on Feature Branch**
+If you happen to be on a feature branch that matches the commits you want to add:
+
+```bash
+git checkout feature/urgent-fix  
+git commit -am "Fix critical bug"
+
+# Safe because cascade tracks the source branch:
+cc push  # Safe: commits are on feature branch
+```
+
 ---
 
 ## 🚀 **Modern Quick Workflows**
@@ -287,7 +298,7 @@ The fastest way to build and ship features with clean commit history:
 
 ```bash
 # Start feature (using shortcuts!)
-cc stack create user-auth --base main
+cc stacks create user-auth --base main
 git checkout main  # Work directly on main locally
 
 # Rapid development - commit frequently for backup
@@ -297,8 +308,8 @@ git add . && git commit -m "WIP: fix bugs"
 git add . && git commit -m "WIP: add tests"
 git add . && git commit -m "Final: complete auth with docs"
 
-# 🎉 NEW: Squash all WIP commits into clean final commit
-cc push --squash 5  # Combines 5 commits into 1 clean commit
+# Squash all WIP commits into clean final commit
+cc stacks push --squash  # Auto-detects unpushed commits to squash
 
 # Submit and auto-land when ready
 cc submit            # Create PR
@@ -322,13 +333,11 @@ git commit -m "Tests"
 git commit -m "Fix test bug"
 git commit -m "Documentation"
 
-# 🎉 NEW: Intelligent squashing into logical commits
-cc push --squash 3        # First logical unit: "Add user model"
-cc push --squash 2        # Second logical unit: "Add validation" 
-cc push --squash 3        # Third logical unit: "Add tests & docs"
+# Intelligent squashing into logical commits  
+cc stacks push --squash 3  # Squash last 3 commits
 
 # Submit as separate PRs for focused review
-cc submit --all          # 3 PRs: model → validation → tests
+cc submit          # 3 PRs: model → validation → tests
 ```
 
 ### **Auto-Landing Ready PRs**
@@ -337,7 +346,7 @@ Set up automatic merging for approved changes:
 
 ```bash
 # Create and populate stack
-cc stack create api-improvements --base main
+cc stacks create api-improvements --base main
 git commit -m "Optimize database queries"
 cc push && cc submit
 
@@ -347,7 +356,7 @@ cc push && cc submit
 git commit -m "Improve error messages"
 cc push && cc submit
 
-# 🎉 NEW: Auto-land all approved changes
+# Auto-land all approved changes
 cc autoland
 # ✅ Monitors all PRs in stack
 # ✅ Auto-merges when: approved + builds pass + no conflicts
@@ -355,7 +364,7 @@ cc autoland
 # ✅ Handles merge order dependencies
 
 # Check status
-cc show  # Shows PR status with auto-land indicators
+cc stack  # Shows PR status with auto-land indicators
 ```
 
 ---
@@ -368,7 +377,7 @@ You have a 3-commit stack and need to modify the middle commit based on review f
 
 ```bash
 # Your stack: A -> B -> C (need to modify B)
-cc show
+cc stack
 # Entry 1: [abc123] Add authentication endpoints    (PR #101 - Open)
 # Entry 2: [def456] Add password validation        (PR #102 - Changes Requested) ← Need to fix
 # Entry 3: [ghi789] Add user registration tests    (PR #103 - Open)
@@ -384,7 +393,9 @@ git rebase -i HEAD~3   # Pick the commit to edit
 # Edit the commit, then:
 cc rebase              # Cascade handles the rest
 
-# 🎉 NEW: Auto-update dependent PRs
+# Auto-update dependent PRs
+cc sync  
+
 # ✅ Force-pushed new content to existing branches (preserves PR #101, #102, #103)
 # ✅ All dependent commits automatically updated
 # ✅ Review history preserved on all PRs
@@ -396,13 +407,13 @@ Main branch gets updated while you're working on a feature stack:
 
 ```bash
 # Your feature stack is based on old main
-cc show
+cc stack
 # Base: main (behind by 5 commits)
 # Entry 1: [abc123] Implement OAuth flow
 # Entry 2: [def456] Add OAuth tests
 
-# 🎉 NEW: Smart sync with conflict detection
-cc sync    # Replaces manual git checkout main && git pull + rebase
+# Smart sync with conflict detection
+cc sync --check-conflicts
 
 # Smart force push preserves all PR history:
 🔄 Syncing stack: oauth-feature
@@ -427,7 +438,7 @@ Need to change the foundation commit that other commits depend on:
 
 ```bash
 # Stack with dependencies: A -> B -> C (need to modify A)
-cc show  
+cc stack  
 # Entry 1: [abc123] Add database schema     (PR #110)
 # Entry 2: [def456] Add user model         (PR #111) ← depends on schema
 # Entry 3: [ghi789] Add user endpoints     (PR #112) ← depends on model
@@ -454,23 +465,23 @@ Working on authentication feature that depends on database changes from another 
 
 ```bash
 # Create dependent stack
-cc stack create auth-endpoints --base user-database --description "Auth endpoints (depends on DB stack)"
+cc stacks create auth-endpoints --base user-database --description "Auth endpoints (depends on DB stack)"
 
-# 🎉 NEW: Visual dependency tracking
-cc viz deps --format ascii
+# Visual dependency tracking
+cc viz stack
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │ main           │────│ user-database   │────│ auth-endpoints  │
 │ (stable)       │    │ (Team A)        │    │ (Your stack)    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 
 # When Team A's database stack gets updated:
-cc sync  # 🎉 NEW: Automatic dependency resolution
+cc sync  # Automatic dependency resolution
 # ✅ Detects user-database changes
 # ✅ Rebases auth-endpoints on latest user-database
 # ✅ Preserves your work while incorporating their changes
 
 # Advanced: Cross-team coordination
-cc stack list --team="Team A"  # See all Team A stacks
+cc repo  # See all team stacks
 cc sync --upstream=user-database  # Explicit upstream sync
 ```
 
@@ -483,20 +494,8 @@ cc rebase
 # ❌ Merge conflict in src/auth.rs
 # ❌ Rebase paused - resolve conflicts and continue
 
-# 🎉 NEW: Smart conflict resolution assistance
-cc doctor conflicts
-# 📋 Conflict analysis:
-#   ✅ Import conflicts: 3 (auto-resolvable)
-#   ⚠️  Logic conflicts: 1 (manual resolution needed)
-#   📁 Files affected: src/auth.rs
-
-# Auto-resolve simple conflicts
-cc resolve --auto
-# ✅ Resolved import statement conflicts
-# ⚠️  Manual resolution needed in src/auth.rs lines 45-52
-
-# Resolve remaining conflicts in your editor
-vim src/auth.rs  # Fix conflicts manually
+# Smart conflict resolution assistance
+cc sync --resolve
 
 # Complete the rebase
 git add src/auth.rs
@@ -513,12 +512,12 @@ Need to create urgent hotfix while feature work continues:
 
 ```bash
 # Currently working on feature stack
-cc stack list
+cc stacks list
 # * feature-oauth (active)
 #   user-profiles
 
-# 🎉 NEW: Quick hotfix workflow
-cc stack create security-patch --base main --priority urgent
+# Quick hotfix workflow
+cc stacks create hotfix-critical-bug
 # ✅ Automatically switches to hotfix context
 # ✅ Preserves feature-oauth stack state
 
@@ -527,13 +526,13 @@ git add . && git commit -m "Fix authentication vulnerability"
 cc push
 cc submit --priority high
 
-# 🎉 NEW: Fast-track approval and merge
-cc autoland --watch     # Continuous monitoring
+# Fast-track approval and merge  
+cc autoland --wait-for-builds
 # ✅ Auto-merges as soon as approved (bypasses normal wait times)
 # ✅ Sends notifications to team about urgent merge
 
 # Switch back to feature work seamlessly
-cc stack switch feature-oauth
+cc stacks switch feature-oauth
 # ✅ Restored exact working state
 # ✅ No git stash/unstash needed
 
@@ -554,8 +553,8 @@ cc prs  # Using shortcut!
 # Entry 2: [def456] Add user validation    (PR #121 - Open)
 # Entry 3: [ghi789] Add user endpoints     (PR #122 - Open)
 
-# 🎉 NEW: Automatic cleanup of merged entries
-cc sync --cleanup
+# Automatic cleanup of merged entries
+cc land --cleanup
 # ✅ Detected merged PR #120
 # ✅ Removed merged entries from stack
 # ✅ Rebased remaining entries on latest main (includes merged changes)
@@ -566,7 +565,7 @@ cc pop 1 --merged  # Remove only merged entries
 cc rebase         # Update remaining stack
 
 # Final clean state
-cc show
+cc stack
 # Entry 1: [def456] Add user validation    (PR #121)
 # Entry 2: [ghi789] Add user endpoints     (PR #122)
 # ✅ Stack continues cleanly from merged base
@@ -585,11 +584,12 @@ Managing features that depend on work from other teams:
 # Team B (you) working on API layer that depends on database
 
 # Create stack with explicit dependency
-cc stack create api-v2 --base team-a/database-refactor
-cc stack create payments --base api-v2  # Further dependency
+cc stacks create api-v2 --base team-a/database-refactor
+cc stacks create payments --base api-v2  # Further dependency
 
-# 🎉 NEW: Team coordination features
-cc stack deps --team="Team A"
+# Team coordination features
+cc repo  # See all team stacks
+cc stacks deps --team="Team A"
 # Shows: team-a/database-refactor (2 commits ahead, 0 behind)
 # Shows: Estimated completion: 2 days (based on Team A velocity)
 
@@ -606,7 +606,7 @@ Managing changes that affect multiple teams:
 
 ```bash
 # Infrastructure change affecting 3 teams
-cc stack create auth-migration --base main --shared
+cc stacks create auth-migration --base main --shared
 cc tag add breaking-change
 
 # Build migration with rollback plan
@@ -617,7 +617,7 @@ cc push
 git commit -m "Remove legacy auth (breaking change)"
 cc push
 
-# 🎉 NEW: Coordinated rollout
+# Coordinated rollout
 cc submit --strategy=rolling
 # ✅ Creates PR #1 (non-breaking) - can merge immediately
 # ✅ Creates PR #2 (migration) - scheduled for next sprint
@@ -636,14 +636,14 @@ Coordinating multiple features for a scheduled release:
 
 ```bash
 # Release train for Q1 features
-cc stack create q1-release --base main --release="2024.1"
+cc stacks create q1-release --base main --release="2024.1"
 
 # Add features from different teams to release
-cc stack merge feature-auth --target=q1-release
-cc stack merge feature-search --target=q1-release  
-cc stack merge feature-billing --target=q1-release
+cc stacks merge feature-auth --target=q1-release
+cc stacks merge feature-search --target=q1-release  
+cc stacks merge feature-billing --target=q1-release
 
-# 🎉 NEW: Release coordination
+# Release coordination
 cc release plan q1-release
 # 📋 Feature readiness:
 #   ✅ feature-auth: Ready (approved, tested)
@@ -682,7 +682,7 @@ cc submit --size=small  # Ensures commits stay review-friendly
 # Large repository optimizations
 cc config set performance.lazy_loading true
 cc config set performance.batch_operations true
-cc stack create large-feature --workers=4  # Parallel processing
+cc stacks create large-feature --workers=4  # Parallel processing
 ```
 
 ### **Integration with CI/CD**
@@ -691,7 +691,7 @@ cc stack create large-feature --workers=4  # Parallel processing
 # Pipeline integration
 cc hooks install --ci-mode  # Optimized for automated environments
 cc submit --wait-for-ci     # Block until CI passes
-cc autoland --require-green-ci  # Extra safety for production
+cc autoland --require-green-ci  # Extra safety for Beta environments
 ```
 
 These workflows showcase how Cascade CLI's modern features like shortcuts, smart sync, autoland, and conflict resolution make complex development scenarios much simpler and safer to manage. 

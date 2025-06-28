@@ -88,11 +88,11 @@ cc setup [OPTIONS]
 
 ### **📚 Stack Management**
 
-#### **`cc stack create`** - Create New Stack
+#### **`cc stacks create`** - Create New Stack
 Create a new stack for organizing related commits.
 
 ```bash
-cc stack create <NAME> [OPTIONS]
+cc stacks create <NAME> [OPTIONS]
 
 # Options:
 --base <BRANCH>           # Base branch (default: current branch)
@@ -103,20 +103,20 @@ cc stack create <NAME> [OPTIONS]
 **Examples:**
 ```bash
 # Basic stack creation
-cc stack create feature-auth --base develop
+cc stacks create feature-auth --base develop
 
 # With description
-cc stack create fix-performance --base main --description "Database query optimizations"
+cc stacks create fix-performance --base main --description "Database query optimizations"
 
 # Create without activating
-cc stack create future-feature --base develop --no-activate
+cc stacks create future-feature --base develop --no-activate
 ```
 
-#### **`cc stack list`** - List All Stacks
+#### **`cc stacks list`** - List All Stacks
 Display all stacks with their status and information.
 
 ```bash
-cc stack list [OPTIONS]
+cc stacks list [OPTIONS]
 
 # Options:
 --verbose, -v            # Show detailed information
@@ -127,23 +127,23 @@ cc stack list [OPTIONS]
 **Examples:**
 ```bash
 # Simple list
-cc stack list
+cc stacks list
 
 # Detailed view
-cc stack list --verbose
+cc stacks list --verbose
 
 # Only active stack
-cc stack list --active
+cc stacks list --active
 
 # Custom format
-cc stack list --format status
+cc stacks list --format status
 ```
 
-#### **`cc stack show`** - Display Stack Details
+#### **`cc stack`** - Display Stack Details
 Show detailed information about a specific stack.
 
 ```bash
-cc stack show [NAME]
+cc stack [NAME]
 
 # Arguments:
 [NAME]                   # Stack name (defaults to active stack)
@@ -155,11 +155,11 @@ cc stack show [NAME]
 - Pull request status and links
 - Dependency information
 
-#### **`cc stack switch`** - Activate Stack
+#### **`cc stacks switch`** - Activate Stack
 Switch to a different stack, making it the active stack.
 
 ```bash
-cc stack switch <NAME>
+cc stacks switch <NAME>
 
 # Arguments:
 <NAME>                   # Stack name to activate
@@ -167,15 +167,15 @@ cc stack switch <NAME>
 
 **Examples:**
 ```bash
-cc stack switch feature-auth
-cc stack switch fix-bugs
+cc stacks switch feature-auth
+cc stacks switch fix-bugs
 ```
 
-#### **`cc stack delete`** - Remove Stack
+#### **`cc stacks delete`** - Remove Stack
 Delete a stack and optionally its associated branches.
 
 ```bash
-cc stack delete <NAME> [OPTIONS]
+cc stacks delete <NAME> [OPTIONS]
 
 # Options:
 --force                  # Skip confirmation prompt
@@ -185,22 +185,22 @@ cc stack delete <NAME> [OPTIONS]
 **Examples:**
 ```bash
 # With confirmation
-cc stack delete old-feature
+cc stacks delete old-feature
 
 # Force deletion
-cc stack delete temp-stack --force
+cc stacks delete temp-stack --force
 
 # Delete but keep branches
-cc stack delete feature-x --keep-branches
+cc stacks delete feature-x --keep-branches
 ```
 
 ### **📤 Stack Operations**
 
-#### **`cc stack push`** - Add Commits to Stack
+#### **`cc stacks push`** - Add Commits to Stack
 Add commits to the active stack. By default, pushes all unpushed commits.
 
 ```bash
-cc stack push [OPTIONS]
+cc stacks push [OPTIONS]
 
 # Options:
 --branch <NAME>         # Custom branch name for this commit
@@ -212,7 +212,7 @@ cc stack push [OPTIONS]
 --squash-since <REF>    # 🎉 Squash all commits since reference
 ```
 
-**Default Behavior:** When no specific targeting options are provided, `cc stack push` pushes **all unpushed commits** since the last stack push.
+**Default Behavior:** When no specific targeting options are provided, `cc stacks push` pushes **all unpushed commits** since the last stack push.
 
 **Squash Workflow Examples:**
 ```bash
@@ -223,29 +223,29 @@ git commit -m "WIP: fix bugs"
 git commit -m "Final: complete feature with tests"
 
 # 🔍 See unpushed commits and get squash suggestions
-cc stack show
-# 🚧 Unpushed commits (4): use 'cc stack push --squash 4' to squash them
+cc stack
+# 🚧 Unpushed commits (4): use 'cc stacks push --squash 4' to squash them
 #    1. WIP: start feature (abc123)
 #    2. WIP: add core logic (def456)
 #    3. WIP: fix bugs (ghi789)
 #    4. Final: complete feature with tests (jkl012)
 # 💡 Squash options:
-#    cc stack push --squash 4           # Squash all unpushed commits
-#    cc stack push --squash 3           # Squash last 3 commits only
+#    cc stacks push --squash 4           # Squash all unpushed commits
+#    cc stacks push --squash 3           # Squash last 3 commits only
 
 # 🎉 Smart squash automatically detects "Final:" commits and creates intelligent messages
-cc stack push --squash 4
+cc stacks push --squash 4
 # ✅ Smart message: Complete feature with tests (automatically extracted from "Final:" commit)
 
 # Alternative patterns that smart squash recognizes:
 git commit -m "WIP: authentication work"
 git commit -m "Add user authentication with OAuth"  # Uses this descriptive message
-cc stack push --squash 2  # Result: "Add user authentication with OAuth"
+cc stacks push --squash 2  # Result: "Add user authentication with OAuth"
 
 git commit -m "fix typo"
 git commit -m "fix bug"  
 git commit -m "refactor cleanup"
-cc stack push --squash 3  # Result: "Refactor cleanup" (uses last commit)
+cc stacks push --squash 3  # Result: "Refactor cleanup" (uses last commit)
 ```
 
 **Branch Naming:** Generated from final squashed commit message using Cascade CLI's branch naming rules.
@@ -255,32 +255,32 @@ cc stack push --squash 3  # Result: "Refactor cleanup" (uses last commit)
 # Push all unpushed commits (default behavior)
 git commit -m "Add user authentication"
 git commit -m "Add password validation"
-cc stack push  # Pushes both commits as separate stack entries
+cc stacks push  # Pushes both commits as separate stack entries
 
 # Push specific commit only
-cc stack push --commit abc123
+cc stacks push --commit abc123
 
 # Push commits since specific reference
-cc stack push --since HEAD~3
+cc stacks push --since HEAD~3
 
 # Push specific commits
-cc stack push --commits abc123,def456,ghi789
+cc stacks push --commits abc123,def456,ghi789
 
 # Push with custom branch name
-cc stack push --branch custom-auth-branch
+cc stacks push --branch custom-auth-branch
 
 # Squash multiple commits before pushing
-cc stack push --squash 3  # Squashes last 3 commits into one
+cc stacks push --squash 3  # Squashes last 3 commits into one
 
 # Squash commits since reference
-cc stack push --squash-since HEAD~5
+cc stacks push --squash-since HEAD~5
 ```
 
-#### **`cc stack pop`** - Remove Entry from Stack
+#### **`cc stacks pop`** - Remove Entry from Stack
 Remove the top entry from the stack.
 
 ```bash
-cc stack pop [OPTIONS]
+cc stacks pop [OPTIONS]
 
 # Options:
 --keep-branch           # Keep the associated branch
@@ -290,20 +290,20 @@ cc stack pop [OPTIONS]
 **Examples:**
 ```bash
 # Remove top entry
-cc stack pop
+cc stacks pop
 
 # Keep the branch
-cc stack pop --keep-branch
+cc stacks pop --keep-branch
 
 # Force removal
-cc stack pop --force
+cc stacks pop --force
 ```
 
-#### **`cc stack submit`** - Create Pull Requests
+#### **`cc stacks submit`** - Create Pull Requests
 Submit stack entries as pull requests. By default, submits all unsubmitted entries.
 
 ```bash
-cc stack submit [ENTRY] [OPTIONS]
+cc stacks submit [ENTRY] [OPTIONS]
 
 # Arguments:
 [ENTRY]                 # Entry index (defaults to all unsubmitted entries)
@@ -316,37 +316,37 @@ cc stack submit [ENTRY] [OPTIONS]
 --reviewers <USERS>     # Comma-separated reviewer list
 ```
 
-**Default Behavior:** When no specific entry is provided, `cc stack submit` submits **all unsubmitted entries** as separate pull requests.
+**Default Behavior:** When no specific entry is provided, `cc stacks submit` submits **all unsubmitted entries** as separate pull requests.
 
 **Examples:**
 ```bash
 # Submit all unsubmitted entries (default behavior)
-cc stack submit
+cc stacks submit
 
 # Submit specific entry
-cc stack submit 2
+cc stacks submit 2
 
 # Submit range of entries
-cc stack submit --range 1-3
+cc stacks submit --range 1-3
 
 # Submit specific entries 
-cc stack submit --range 2,4,6
+cc stacks submit --range 2,4,6
 
 # Submit with custom details
-cc stack submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
+cc stacks submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
 
 # Create draft PRs
-cc stack submit --draft
+cc stacks submit --draft
 
 # Add reviewers
-cc stack submit --reviewers "alice,bob,charlie"
+cc stacks submit --reviewers "alice,bob,charlie"
 ```
 
-#### **`cc stack sync`** - Synchronize with Remote
+#### **`cc stacks sync`** - Synchronize with Remote
 Update stack with latest changes from base branch and dependencies.
 
 ```bash
-cc stack sync [OPTIONS]
+cc stacks sync [OPTIONS]
 
 # Options:
 --force                 # Force sync even with conflicts
@@ -356,20 +356,20 @@ cc stack sync [OPTIONS]
 **Examples:**
 ```bash
 # Standard sync
-cc stack sync
+cc stacks sync
 
 # Force sync with conflicts
-cc stack sync --force
+cc stacks sync --force
 
 # Use specific strategy
-cc stack sync --strategy rebase
+cc stacks sync --strategy rebase
 ```
 
-#### **`cc stack rebase`** - Rebase Stack
+#### **`cc stacks rebase`** - Rebase Stack
 Rebase all stack entries on latest base branch using smart force push strategy.
 
 ```bash
-cc stack rebase [OPTIONS]
+cc stacks rebase [OPTIONS]
 
 # Options:
 --interactive          # Interactive rebase mode
@@ -390,21 +390,21 @@ This approach follows industry standards (Graphite, Phabricator, GitHub CLI) and
 **Examples:**
 ```bash
 # Standard rebase with PR history preservation
-cc stack rebase
+cc stacks rebase
 
 # Interactive rebase
-cc stack rebase --interactive
+cc stacks rebase --interactive
 
 # Continue after conflict resolution
-cc stack rebase --continue
+cc stacks rebase --continue
 
 # Abort rebase
-cc stack rebase --abort
+cc stacks rebase --abort
 ```
 
 **What you'll see:**
 ```bash
-$ cc stack rebase
+$ cc stacks rebase
 
 🔄 Rebasing stack: authentication
    📋 Branch mapping:
@@ -420,11 +420,11 @@ $ cc stack rebase
 
 ### **📊 Status and Information**
 
-#### **`cc status`** - Show Status
+#### **`cc repo`** - Show Repository Overview
 Display comprehensive status of current repository and stacks.
 
 ```bash
-cc status [OPTIONS]
+cc repo [OPTIONS]
 
 # Options:
 --verbose, -v           # Show detailed information
@@ -438,21 +438,21 @@ cc status [OPTIONS]
 - Pull request status
 - Sync status with remotes
 
-#### **`cc stack status`** - Stack-Specific Status
+#### **`cc stacks status`** - Stack-Specific Status
 Show detailed status for current or specified stack.
 
 ```bash
-cc stack status [NAME]
+cc stacks status [NAME]
 
 # Arguments:
 [NAME]                  # Stack name (defaults to active stack)
 ```
 
-#### **`cc stack prs`** - List Pull Requests
+#### **`cc stacks prs`** - List Pull Requests
 Show all pull requests associated with stacks.
 
 ```bash
-cc stack prs [OPTIONS]
+cc stacks prs [OPTIONS]
 
 # Options:
 --stack <NAME>          # Filter by stack name
@@ -463,13 +463,13 @@ cc stack prs [OPTIONS]
 **Examples:**
 ```bash
 # All PRs
-cc stack prs
+cc stacks prs
 
 # PRs for specific stack
-cc stack prs --stack feature-auth
+cc stacks prs --stack feature-auth
 
 # Only open PRs
-cc stack prs --status open
+cc stacks prs --status open
 ```
 
 ### **🎨 Visualization**
@@ -672,7 +672,7 @@ cc version [OPTIONS]
 #### **1. Start New Feature**
 ```bash
 # Create feature stack
-cc stack create feature-user-profiles --base develop --description "User profile management system"
+cc stacks create feature-user-profiles --base develop --description "User profile management system"
 
 # Start development
 git checkout develop
@@ -683,23 +683,23 @@ git pull origin develop
 ```bash
 # First increment: basic profile model
 git add . && git commit -m "Add user profile model"
-cc stack push
+cc stacks push
 
 # Second increment: profile endpoints
 git add . && git commit -m "Add profile CRUD endpoints"
-cc stack push
+cc stacks push
 
 # Third increment: profile validation
 git add . && git commit -m "Add profile data validation"
-cc stack push
+cc stacks push
 ```
 
 #### **3. Submit for Review**
 ```bash
 # Submit each increment as separate PRs
-cc stack submit 1  # Submit profile model
-cc stack submit 2  # Submit endpoints (depends on model)
-cc stack submit 3  # Submit validation (depends on endpoints)
+cc stacks submit 1  # Submit profile model
+cc stacks submit 2  # Submit endpoints (depends on model)
+cc stacks submit 3  # Submit validation (depends on endpoints)
 ```
 
 #### **4. Handle Review Feedback**
@@ -708,21 +708,21 @@ cc stack submit 3  # Submit validation (depends on endpoints)
 git add . && git commit -m "Address review feedback: improve validation"
 
 # Update existing PR
-cc stack submit 3 --title "Updated: Add profile data validation"
+cc stacks submit 3 --title "Updated: Add profile data validation"
 
 # Or sync if dependencies changed
-cc stack sync
+cc stacks sync
 ```
 
 #### **5. Merge and Clean Up**
 ```bash
 # After PRs are approved and merged
-cc stack pop  # Remove merged entries
-cc stack pop
-cc stack pop
+cc stacks pop  # Remove merged entries
+cc stacks pop
+cc stacks pop
 
 # Or delete completed stack
-cc stack delete feature-user-profiles
+cc stacks delete feature-user-profiles
 ```
 
 ### **Bug Fix Workflow**
@@ -730,34 +730,34 @@ cc stack delete feature-user-profiles
 #### **Quick Fix**
 ```bash
 # Create fix stack
-cc stack create fix-login-bug --base main --description "Fix login timeout issue"
+cc stacks create fix-login-bug --base main --description "Fix login timeout issue"
 
 # Make fix
 git add . && git commit -m "Fix login timeout in OAuth flow"
-cc stack push
+cc stacks push
 
 # Submit immediately
-cc stack submit --reviewers "security-team"
+cc stacks submit --reviewers "security-team"
 ```
 
 #### **Complex Fix with Investigation**
 ```bash
 # Investigation stack
-cc stack create investigate-memory-leak --base develop
+cc stacks create investigate-memory-leak --base develop
 
 # Add investigation commits
 git commit -m "Add memory profiling tools"
-cc stack push
+cc stacks push
 
 git commit -m "Identify memory leak in cache layer"
-cc stack push
+cc stacks push
 
 git commit -m "Fix memory leak and add tests"
-cc stack push
+cc stacks push
 
 # Submit investigation and fix separately
-cc stack submit 1 --title "Add memory profiling tools"
-cc stack submit 3 --title "Fix memory leak in cache layer"
+cc stacks submit 1 --title "Add memory profiling tools"
+cc stacks submit 3 --title "Fix memory leak in cache layer"
 ```
 
 ### **Team Collaboration Patterns**
@@ -765,29 +765,29 @@ cc stack submit 3 --title "Fix memory leak in cache layer"
 #### **Dependent Feature Development**
 ```bash
 # Team member A: Core infrastructure
-cc stack create auth-core --base main
+cc stacks create auth-core --base main
 git commit -m "Add OAuth2 infrastructure"
-cc stack push
-cc stack submit
+cc stacks push
+cc stacks submit
 
 # Team member B: Dependent feature (waits for A's PR)
-cc stack create user-management --base auth-core
+cc stacks create user-management --base auth-core
 git commit -m "Add user management using OAuth2"
-cc stack push
+cc stacks push
 
 # After A's PR is merged, B syncs
-cc stack sync  # Rebase on latest main including A's changes
-cc stack submit
+cc stacks sync  # Rebase on latest main including A's changes
+cc stacks submit
 ```
 
 #### **Parallel Development with Coordination**
 ```bash
 # Feature A: Independent
-cc stack create feature-a --base develop
+cc stacks create feature-a --base develop
 # ... development work ...
 
 # Feature B: Independent
-cc stack create feature-b --base develop  
+cc stacks create feature-b --base develop  
 # ... development work ...
 
 # Visualize dependencies
@@ -804,7 +804,7 @@ cc viz deps --format mermaid > team-deps.md
 ```bash
 # In CI pipeline
 cc doctor --verbose           # Validate environment
-cc stack status --format json # Get status for reporting
+cc stacks status --format json # Get status for reporting
 cc viz deps --format dot      # Generate dependency graphs
 ```
 
@@ -832,7 +832,7 @@ cc config set network.timeout 120
 #### **Selective Stack Management**
 ```bash
 # Work with specific stacks only
-cc stack list --format name | grep feature- | xargs -I {} cc stack validate {}
+cc stacks list --format name | grep feature- | xargs -I {} cc stacks validate {}
 ```
 
 ### **Advanced Visualization**
@@ -918,10 +918,10 @@ BITBUCKET_URL="https://bitbucket.company.com"
 #### **"Stack not found" errors**
 ```bash
 # List all stacks to verify names
-cc stack list
+cc stacks list
 
 # Check if in correct repository
-cc status
+cc repo
 
 # Re-initialize if needed
 cc init --force
@@ -942,15 +942,15 @@ cc setup --force
 #### **Sync conflicts**
 ```bash
 # Check conflict status
-cc stack status
+cc stacks status
 
 # Resolve manually and continue
 git add .
-cc stack rebase --continue
+cc stacks rebase --continue
 
 # Or abort and try different strategy
-cc stack rebase --abort
-cc stack sync --strategy merge
+cc stacks rebase --abort
+cc stacks sync --strategy merge
 ```
 
 #### **Performance issues**
@@ -970,7 +970,7 @@ cc config set performance.cache_size 500
 ```bash
 # Enable debug logging
 export CASCADE_LOG_LEVEL=debug
-cc stack push
+cc stacks push
 
 # Check logs
 tail -f ~/.cascade/logs/cascade.log
@@ -981,7 +981,7 @@ tail -f ~/.cascade/logs/cascade.log
 # Built-in help
 cc --help
 cc stack --help
-cc stack create --help
+cc stacks create --help
 
 # System diagnostics
 cc doctor --verbose

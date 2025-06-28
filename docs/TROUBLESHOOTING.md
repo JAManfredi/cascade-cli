@@ -246,16 +246,16 @@ Error: No active stack found
 
 1. **Check existing stacks:**
    ```bash
-   cc stack list
+   cc stacks list
    ```
 
 2. **Create or activate a stack:**
    ```bash
    # Create new stack
-   cc stack create my-feature --base main
+   cc stacks create my-feature --base main
    
    # Or activate existing stack
-   cc stack switch existing-stack-name
+   cc stacks switch existing-stack-name
    ```
 
 3. **Recover from corruption:**
@@ -264,10 +264,10 @@ Error: No active stack found
    ls .cascade/stacks/
    
    # Validate stack integrity
-   cc stack validate
+   cc stacks validate
    
    # Force create new stack if needed
-   cc stack create recovery-stack --base main --force
+   cc stacks create recovery-stack --base main --force
    ```
 
 #### **Stack synchronization failures**
@@ -287,11 +287,11 @@ Error: Base branch 'main' not found
    
    # Resolve conflicts manually
    git add .
-   cc stack rebase --continue
+   cc stacks rebase --continue
    
    # Or abort and try different strategy
-   cc stack rebase --abort
-   cc stack sync --strategy merge
+   cc stacks rebase --abort
+   cc stacks sync --strategy merge
    ```
 
 2. **Update base branch:**
@@ -307,7 +307,7 @@ Error: Base branch 'main' not found
    git pull origin main
    
    # Try sync again
-   cc stack sync
+   cc stacks sync
    ```
 
 3. **Stack corruption recovery:**
@@ -316,16 +316,16 @@ Error: Base branch 'main' not found
    git stash
    
    # Reset stack to known good state
-   cc stack show  # Note commit hashes
+   cc stack  # Note commit hashes
    git checkout main
    git pull origin main
    
    # Recreate stack manually
-   cc stack create recovery --base main
+   cc stacks create recovery --base main
    git cherry-pick COMMIT_HASH_1
-   cc stack push
+   cc stacks push
    git cherry-pick COMMIT_HASH_2
-   cc stack push
+   cc stacks push
    ```
 
 #### **Pull request creation failures**
@@ -341,7 +341,7 @@ Error: Failed to create pull request: source branch not found
 1. **Check commit exists:**
    ```bash
    git log --oneline -n 5
-   cc stack show
+   cc stack
    ```
 
 2. **Verify branch state:**
@@ -356,11 +356,11 @@ Error: Failed to create pull request: source branch not found
 3. **Manual PR creation:**
    ```bash
    # Get commit details
-   cc stack show
+   cc stack
    
    # Create PR manually in Bitbucket UI
    # Then update stack metadata
-   cc stack submit --pr-id 123
+   cc stacks submit --pr-id 123
    ```
 
 ### **🔴 Performance Issues**
@@ -470,7 +470,7 @@ Error: Failed to create pull request: source branch not found
 3. **Use alternative interface:**
    ```bash
    # Use CLI instead of TUI
-   cc stack list --verbose
+   cc stacks list --verbose
    cc viz stack
    ```
 
@@ -524,7 +524,7 @@ Error: Existing hook found, use --force to overwrite
 3. **Manual integration:**
    ```bash
    # Edit existing hook to call Cascade CLI
-   echo "cc stack push --auto || true" >> .git/hooks/post-commit
+   echo "cc stacks push --auto || true" >> .git/hooks/post-commit
    ```
 
 ---
@@ -538,7 +538,7 @@ Error: Existing hook found, use --force to overwrite
 export CASCADE_LOG_LEVEL=debug
 
 # Run command with debug output
-cc stack push
+cc stacks push
 
 # Check logs
 tail -f ~/.cascade/logs/cascade.log
@@ -615,7 +615,7 @@ rm -rf .cascade/
 cc setup
 
 # 4. Recreate stacks manually
-cc stack create recovery --base main
+cc stacks create recovery --base main
 # Cherry-pick commits as needed
 ```
 
@@ -625,19 +625,19 @@ For corrupted stack metadata:
 
 ```bash
 # 1. Export stack information
-cc stack show > stack-backup.txt
+cc stack > stack-backup.txt
 
 # 2. Note commit hashes and PR IDs
 
 # 3. Delete corrupted stack
-cc stack delete problematic-stack --force
+cc stacks delete problematic-stack --force
 
 # 4. Recreate with same commits
-cc stack create recovered-stack --base main
+cc stacks create recovered-stack --base main
 git cherry-pick HASH1
-cc stack push
+cc stacks push
 git cherry-pick HASH2  
-cc stack push
+cc stacks push
 
 # 5. Reconnect to existing PRs
 cc config set stack.recovered-stack.pr.1 PR_ID_1
@@ -675,7 +675,7 @@ cc doctor
    ```bash
    cc --help
    cc stack --help
-   cc stack create --help
+   cc stacks create --help
    ```
 
 2. **Diagnostics:**
@@ -793,13 +793,13 @@ If PRs don't update correctly:
 
 ```bash
 # Check if PRs still exist
-cc stack prs --verbose
+cc stacks prs --verbose
 
 # Manually update PR if needed  
 cc config set stack.STACK_NAME.pr.INDEX PR_ID
 
 # Re-submit if PR was closed
-cc stack submit INDEX --title "Updated after rebase"
+cc stacks submit INDEX --title "Updated after rebase"
 ```
 
 ### **Versioned Branches Accumulating**
@@ -844,8 +844,8 @@ git log --oneline origin/your-branch..your-branch-v2
 | E001 | Configuration missing | Run `cc init` or `cc setup` |
 | E002 | Git repository not found | Ensure you're in a Git repository |
 | E003 | Bitbucket connection failed | Check credentials and network |
-| E004 | Stack not found | Use `cc stack list` to see available stacks |
-| E005 | Merge conflict detected | Resolve conflicts and run `cc stack rebase --continue` |
+| E004 | Stack not found | Use `cc stacks list` to see available stacks |
+| E005 | Merge conflict detected | Resolve conflicts and run `cc stacks rebase --continue` |
 | E006 | Invalid commit hash | Check commit exists with `git log` |
 | E007 | Permission denied | Check file permissions and access rights |
 | E008 | Network timeout | Increase timeout with `cc config set network.timeout 120` |

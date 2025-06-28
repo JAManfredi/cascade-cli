@@ -44,7 +44,7 @@ pub enum Commands {
     },
 
     /// Stack management
-    Stack {
+    Stacks {
         #[command(subcommand)]
         action: StackAction,
     },
@@ -55,8 +55,8 @@ pub enum Commands {
         action: EntryAction,
     },
 
-    /// Show repository status
-    Status,
+    /// Show repository overview and all stacks
+    Repo,
 
     /// Show version information  
     Version,
@@ -93,8 +93,8 @@ pub enum Commands {
     },
 
     // Stack command shortcuts for commonly used operations
-    /// Show the current stack status (shortcut for 'stack show')
-    Show {
+    /// Show current stack details
+    Stack {
         /// Show detailed pull request information
         #[arg(short, long)]
         verbose: bool,
@@ -208,6 +208,19 @@ pub enum Commands {
         /// Rebase strategy to use
         #[arg(long, value_enum)]
         strategy: Option<RebaseStrategyArg>,
+    },
+
+    /// Switch to a different stack (shortcut for 'stacks switch')
+    Switch {
+        /// Name of the stack to switch to
+        name: String,
+    },
+
+    /// Deactivate the current stack - turn off stack mode (shortcut for 'stacks deactivate')
+    Deactivate {
+        /// Force deactivation without confirmation
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -356,9 +369,9 @@ impl Cli {
                 force,
             } => commands::init::run(bitbucket_url, force).await,
             Commands::Config { action } => commands::config::run(action).await,
-            Commands::Stack { action } => commands::stack::run(action).await,
+            Commands::Stacks { action } => commands::stack::run(action).await,
             Commands::Entry { action } => commands::entry::run(action).await,
-            Commands::Status => commands::status::run().await,
+            Commands::Repo => commands::status::run().await,
             Commands::Version => commands::version::run().await,
             Commands::Doctor => commands::doctor::run().await,
 
@@ -434,7 +447,7 @@ impl Cli {
                 }
             },
 
-            Commands::Show { verbose, mergeable } => commands::stack::show(verbose, mergeable).await,
+            Commands::Stack { verbose, mergeable } => commands::stack::show(verbose, mergeable).await,
 
             Commands::Push {
                 branch,
@@ -479,6 +492,10 @@ impl Cli {
                 onto,
                 strategy,
             } => commands::stack::rebase(interactive, onto, strategy).await,
+
+            Commands::Switch { name } => commands::stack::switch(name).await,
+
+            Commands::Deactivate { force } => commands::stack::deactivate(force).await,
         }
     }
 

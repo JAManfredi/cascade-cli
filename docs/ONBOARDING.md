@@ -51,7 +51,7 @@ The setup wizard will:
 ### **Step 2: Create Your First Stack**
 ```bash
 # Create a new stack for your feature
-cc stack create my-first-feature --base main --description "Learning stacked diffs"
+cc stacks create my-first-feature --base main --description "Learning stacked diffs"
 
 # Make a simple change
 echo "# My Feature" > FEATURE.md
@@ -59,19 +59,19 @@ git add FEATURE.md
 git commit -m "Add feature documentation"
 
 # Add commit to stack
-cc stack push
+cc stacks push
 
 # Check status
-cc status
+cc repo
 ```
 
 ### **Step 3: Submit Your First PR**
 ```bash
 # Submit the commit as a pull request
-cc stack submit
+cc stacks submit
 
 # Check what happened
-cc stack status
+cc stacks status
 ```
 
 🎉 **Congratulations!** You've created your first stacked diff. The commit is now a pull request ready for review.
@@ -94,10 +94,10 @@ git checkout main
 git pull origin main
 
 # Create our feature stack
-cc stack create user-auth --base main --description "Complete user authentication system"
+cc stacks create user-auth --base main --description "Complete user authentication system"
 
 # Verify we're set up correctly
-cc stack show
+cc stack
 ```
 
 #### **Phase 2: Database Layer (10 minutes)**
@@ -121,7 +121,7 @@ git add src/models/user.py
 git commit -m "Add User model with password verification"
 
 # Add to stack
-cc stack push
+cc stacks push
 
 # Create database schema
 cat << 'EOF' > migrations/001_create_users.sql
@@ -138,14 +138,14 @@ git add migrations/001_create_users.sql
 git commit -m "Add user table migration"
 
 # Add to stack
-cc stack push
+cc stacks push
 
 # Submit database layer for review
-cc stack submit 1 --title "Add User model" --description "Core user model with password verification"
-cc stack submit 2 --title "Add user database schema" --description "Migration to create users table"
+cc stacks submit 1 --title "Add User model" --description "Core user model with password verification"
+cc stacks submit 2 --title "Add user database schema" --description "Migration to create users table"
 
 # Check our progress
-cc stack show
+cc stack
 ```
 
 #### **Phase 3: Authentication Logic (10 minutes)**
@@ -180,7 +180,7 @@ EOF
 git add src/services/auth.py
 git commit -m "Add authentication service with login/register"
 
-cc stack push
+cc stacks push
 
 # Add JWT token handling
 cat << 'EOF' > src/services/token.py
@@ -209,11 +209,11 @@ EOF
 git add src/services/token.py
 git commit -m "Add JWT token service for session management"
 
-cc stack push
+cc stacks push
 
 # Submit authentication layer
-cc stack submit 3 --title "Add authentication service" --description "Core login/register functionality"
-cc stack submit 4 --title "Add JWT token service" --description "Session management with secure tokens"
+cc stacks submit 3 --title "Add authentication service" --description "Core login/register functionality"
+cc stacks submit 4 --title "Add JWT token service" --description "Session management with secure tokens"
 
 # Visualize our stack
 cc viz stack
@@ -268,7 +268,7 @@ EOF
 git add src/api/auth_routes.py
 git commit -m "Add authentication API endpoints"
 
-cc stack push
+cc stacks push
 
 # Add API documentation
 cat << 'EOF' > docs/api/authentication.md
@@ -301,24 +301,24 @@ EOF
 git add docs/api/authentication.md
 git commit -m "Add API documentation for authentication endpoints"
 
-cc stack push
+cc stacks push
 
 # Submit API layer
-cc stack submit 5 --title "Add authentication API endpoints" --description "REST API for login, register, and profile"
-cc stack submit 6 --title "Add API documentation" --description "Complete documentation for auth endpoints"
+cc stacks submit 5 --title "Add authentication API endpoints" --description "REST API for login, register, and profile"
+cc stacks submit 6 --title "Add API documentation" --description "Complete documentation for auth endpoints"
 ```
 
 #### **Phase 5: Review Your Work**
 
 ```bash
 # Show complete stack
-cc stack show
+cc stack
 
 # Visualize with dependencies
 cc viz stack --format mermaid
 
 # Check all PRs
-cc stack prs
+cc stacks prs
 
 # Launch interactive TUI to explore
 cc tui
@@ -350,10 +350,10 @@ git add src/models/user.py
 git commit -m "Address review feedback: improve password validation"
 
 # Update the existing PR
-cc stack submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
+cc stacks submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
 
 # Sync dependent PRs if needed
-cc stack sync
+cc stacks sync
 ```
 
 ### **Scenario 2: Dependency Changes**
@@ -366,16 +366,16 @@ git checkout main
 git pull origin main
 
 # Sync your stack with new base
-cc stack sync
+cc stacks sync
 
 # Resolve any conflicts
 # Git will guide you through conflict resolution
 
 # Continue after resolving conflicts
-cc stack rebase --continue
+cc stacks rebase --continue
 
 # Update affected PRs
-cc stack submit 2 --title "Add user database schema (updated for new DB version)"
+cc stacks submit 2 --title "Add user database schema (updated for new DB version)"
 ```
 
 ### **Scenario 3: Parallel Development**
@@ -384,24 +384,24 @@ Another developer is working on related features:
 
 ```bash
 # Check what other stacks exist
-cc stack list
+cc stacks list
 
 # Visualize all dependencies
 cc viz deps --format mermaid --output team-deps.md
 
 # Create dependent stack
-cc stack create user-profiles --base user-auth --description "User profile management (depends on auth)"
+cc stacks create user-profiles --base user-auth --description "User profile management (depends on auth)"
 
 # Your stack will automatically be rebased when user-auth merges
 ```
 
 ### **🔄 Understanding Smart Force Push (Important!)**
 
-When you run `cc stack rebase`, Cascade CLI uses a **smart force push strategy** that preserves all your PR history:
+When you run `cc stacks rebase`, Cascade CLI uses a **smart force push strategy** that preserves all your PR history:
 
 ```bash
 # When you rebase...
-cc stack rebase
+cc stacks rebase
 
 # What happens behind the scenes:
 # 1. Creates temporary branches: add-auth-v2, add-tests-v2  
@@ -449,7 +449,7 @@ cc hooks install
 
 # Now commits are automatically added to active stack
 git commit -m "Auto-added to stack!"
-# No need to run `cc stack push`
+# No need to run `cc stacks push`
 
 # Check hook status
 cc hooks status
@@ -475,7 +475,7 @@ cc completions install
 
 # Now you can tab-complete:
 cc stack <TAB>        # Shows: create, list, show, switch, etc.
-cc stack create <TAB> # Shows available options
+cc stacks create <TAB> # Shows available options
 ```
 
 ---
@@ -488,16 +488,16 @@ cc stack create <TAB> # Shows available options
 ```bash
 # Start of day: sync with team
 git checkout main && git pull
-cc stack list  # See what you're working on
+cc stacks list  # See what you're working on
 
 # Work on features
-cc stack switch current-feature
+cc stacks switch current-feature
 # ... make commits ...
-cc stack push  # Add to stack
-cc stack submit  # Create PRs
+cc stacks push  # Add to stack
+cc stacks submit  # Create PRs
 
 # End of day: check status
-cc status  # See what's pending review
+cc repo  # See what's pending review
 ```
 
 ### **For Team Leads**
@@ -505,11 +505,11 @@ cc status  # See what's pending review
 **Stack Review Process:**
 ```bash
 # Review team's work
-cc stack list --verbose  # See all stacks
+cc stacks list --verbose  # See all stacks
 cc viz deps --format mermaid  # Understand dependencies
 
 # Check PR status across team
-cc stack prs --format json | jq '.[] | select(.status == "open")'
+cc stacks prs --format json | jq '.[] | select(.status == "open")'
 ```
 
 ### **For Release Management**
@@ -517,7 +517,7 @@ cc stack prs --format json | jq '.[] | select(.status == "open")'
 **Pre-release Validation:**
 ```bash
 # Validate all stacks
-cc stack list --format name | xargs -I {} cc stack validate {}
+cc stacks list --format name | xargs -I {} cc stacks validate {}
 
 # Generate release documentation
 cc viz deps --format mermaid > docs/release-dependencies.md

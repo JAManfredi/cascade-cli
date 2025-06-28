@@ -82,7 +82,7 @@
       Cascade CLI
     </text>
     <text x="600" y="220" fill="#5e5e5e" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, system-ui, sans-serif" font-size="24" font-weight="400" text-anchor="middle" letter-spacing="1px">
-      Professional Git Stack Management
+      Git Stack Management for Bitbucket Server
     </text>
     <text x="600" y="250" fill="#3a3a3a" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, system-ui, sans-serif" font-size="16" font-weight="400" text-anchor="middle">
       Transform your workflow with stacked diffs • Bitbucket integration • Smart conflict resolution
@@ -101,10 +101,8 @@
     <circle cx="495" cy="306" r="4" fill="#22e55d"/>
     <text x="505" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Smart Rebase</text>
     
-    <!-- Enterprise Ready -->
-    <rect x="605" y="290" width="130" height="32" rx="16" fill="#262626" stroke="#22e55d" stroke-width="1"/>
     <circle cx="620" cy="306" r="4" fill="#22e55d"/>
-    <text x="630" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Enterprise Ready</text>
+    <text x="630" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Beta Release</text>
     
     <!-- Rust Powered -->
     <rect x="745" y="290" width="115" height="32" rx="16" fill="#262626" stroke="#22e55d" stroke-width="1"/>
@@ -160,4 +158,5 @@
   <!-- Subtle corner accent -->
   <path d="M0 0 L60 0 L0 60 Z" fill="url(#sageGrad)" opacity="0.1"/>
   <path d="M1200 400 L1140 400 L1200 340 Z" fill="url(#sageGrad)" opacity="0.1"/>
+  
 </svg> 

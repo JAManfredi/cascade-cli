@@ -309,24 +309,26 @@ COMMIT_MSG=$(git log --format=%s -n 1 HEAD)
 # Check if Cascade is initialized
 if [ ! -d ".cascade" ]; then
     echo "ℹ️ Cascade not initialized, skipping stack management"
+    echo "💡 Run 'cc init' to start using stacked diffs"
     exit 0
 fi
 
 # Check if there's an active stack
 if ! "{cascade_cli}" stack list --active > /dev/null 2>&1; then
     echo "ℹ️ No active stack found, commit will not be added to any stack"
-    echo "💡 Use 'cc stack create' to create a stack or 'cc stack activate' to set one active"
+    echo "💡 Use 'cc stack create <name>' to create a stack for this commit"
     exit 0
 fi
 
-# Add commit to active stack (let CLI auto-generate branch name from commit message)
+# Add commit to active stack (using specific commit targeting)
 echo "🪝 Adding commit to active stack..."
 echo "📝 Commit: $COMMIT_MSG"
 if "{cascade_cli}" stack push --commit "$COMMIT_HASH" --message "$COMMIT_MSG"; then
     echo "✅ Commit added to stack successfully"
+    echo "💡 Next: 'cc submit' to create PRs when ready"
 else
     echo "⚠️ Failed to add commit to stack"
-    echo "💡 You can manually add it with: cc stack push --commit $COMMIT_HASH"
+    echo "💡 You can manually add it with: cc push --commit $COMMIT_HASH"
 fi
 "#
         )
@@ -343,12 +345,13 @@ set -e
 # Check for force push
 if echo "$*" | grep -q -- "--force\|--force-with-lease\|-f"; then
     echo "❌ Force push detected!"
-    echo "🌊 Cascade CLI uses stacked diffs - force pushes can break the stack integrity"
+    echo "🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity"
     echo ""
-    echo "💡 Instead of force pushing, try:"
-    echo "   • cc stack sync    - Sync with remote changes"
-    echo "   • cc stack rebase  - Rebase stack on latest base"
-    echo "   • cc stack submit  - Submit entries for review"
+    echo "💡 Instead of force pushing, try these streamlined commands:"
+    echo "   • cc sync      - Sync with remote changes (handles rebasing)"
+    echo "   • cc push      - Push all unpushed commits (new default)"
+    echo "   • cc submit    - Submit all entries for review (new default)"
+    echo "   • cc autoland  - Auto-merge when approved + builds pass"
     echo ""
     echo "🚨 If you really need to force push, run:"
     echo "   git push --force-with-lease [remote] [branch]"
@@ -369,9 +372,9 @@ if "{cascade_cli}" stack validate; then
 else
     echo "❌ Stack validation failed"
     echo "💡 Fix validation errors before pushing:"
-    echo "   • cc doctor           - Check overall health"
-    echo "   • cc stack status     - Check stack status"
-    echo "   • cc stack sync       - Sync with remote"
+    echo "   • cc doctor       - Check overall health"
+    echo "   • cc status       - Check current stack status" 
+    echo "   • cc sync         - Sync with remote and rebase if needed"
     exit 1
 fi
 
@@ -533,39 +536,22 @@ fi
         match repo_type {
             RepositoryType::Bitbucket => {
                 println!("✅ Bitbucket repository detected");
+                println!("💡 Hooks will work great with 'cc submit' and 'cc autoland' for Bitbucket integration");
             }
             RepositoryType::GitHub => {
-                return Err(CascadeError::config(
-                    "🚫 GitHub repository detected!\n\n\
-                    Cascade CLI is designed for Bitbucket Server repositories.\n\
-                    GitHub has its own stacked diff solutions:\n\
-                    • GitHub CLI: https://cli.github.com/\n\
-                    • git-branchless: https://github.com/arxanas/git-branchless\n\
-                    • Graphite: https://graphite.dev/\n\n\
-                    Use --force to install anyway (not recommended)."
-                        .to_string(),
-                ));
+                println!("✅ GitHub repository detected");
+                println!("💡 Consider setting up GitHub Actions for CI/CD integration");
             }
             RepositoryType::GitLab => {
-                return Err(CascadeError::config(
-                    "🚫 GitLab repository detected!\n\n\
-                    Cascade CLI is designed for Bitbucket Server repositories.\n\
-                    GitLab has its own merge request workflows.\n\n\
-                    Use --force to install anyway (not recommended)."
-                        .to_string(),
-                ));
+                println!("✅ GitLab repository detected");
+                println!("💡 GitLab CI integration works well with Cascade stacks");
             }
             RepositoryType::AzureDevOps => {
-                return Err(CascadeError::config(
-                    "🚫 Azure DevOps repository detected!\n\n\
-                    Cascade CLI is designed for Bitbucket Server repositories.\n\
-                    Azure DevOps has its own pull request workflows.\n\n\
-                    Use --force to install anyway (not recommended)."
-                        .to_string(),
-                ));
+                println!("✅ Azure DevOps repository detected");
+                println!("💡 Azure Pipelines can be configured to work with Cascade workflows");
             }
             RepositoryType::Unknown => {
-                println!("⚠️ Unknown repository type - proceeding with caution");
+                println!("ℹ️ Unknown repository type - hooks will still work for local Git operations");
             }
         }
 
@@ -626,8 +612,9 @@ fi
                     💡 Recommended workflow:\n\
                     1. Create a feature branch: git checkout -b feature/my-feature\n\
                     2. Install hooks: cc hooks install\n\
-                    3. Develop with stacked commits\n\
-                    4. Submit stack: cc stack submit\n\n\
+                    3. Develop with stacked commits (auto-added with hooks)\n\
+                    4. Push & submit: cc push && cc submit (all by default)\n\
+                    5. Auto-land when ready: cc autoland\n\n\
                     Use --force to install anyway (not recommended)."
                         .to_string(),
                 ));
@@ -667,6 +654,12 @@ fi
         println!("• Validate commit messages");
         println!("• Prevent force pushes that break stack integrity");
         println!("• Add stack context to commit messages");
+        
+        println!("\n✨ With hooks + new defaults, your workflow becomes:");
+        println!("  git commit       → Auto-added to stack");
+        println!("  cc push          → Pushes all by default");
+        println!("  cc submit        → Submits all by default");
+        println!("  cc autoland      → Auto-merges when ready");
 
         use std::io::{self, Write};
         print!("\n❓ Install Cascade hooks? [Y/n]: ");

@@ -153,6 +153,14 @@ impl StackManager {
             stack.set_active(Some(stack.id) == stack_id);
         }
 
+        // Track the current branch when activating a stack
+        if let Some(id) = stack_id {
+            let current_branch = self.repo.get_current_branch().ok();
+            if let Some(stack_meta) = self.metadata.get_stack_mut(&id) {
+                stack_meta.set_current_branch(current_branch);
+            }
+        }
+
         self.metadata.set_active_stack(stack_id);
         self.save_to_disk()?;
 
@@ -224,6 +232,20 @@ impl StackManager {
         if !self.repo.commit_exists(&commit_hash)? {
             return Err(CascadeError::branch(format!(
                 "Commit {commit_hash} does not exist"
+            )));
+        }
+
+        // Check for duplicate commit messages within the same stack
+        if let Some(duplicate_entry) = stack.entries.iter().find(|entry| entry.message == message) {
+            return Err(CascadeError::validation(format!(
+                "Duplicate commit message in stack: \"{message}\"\n\n\
+                 This message already exists in entry {} (commit: {})\n\n\
+                 💡 Consider using a more specific message:\n\
+                    • Add context: \"{message} - add validation\"\n\
+                    • Be more specific: \"Fix user authentication timeout bug\"\n\
+                    • Or amend the previous commit: git commit --amend",
+                duplicate_entry.id, 
+                &duplicate_entry.commit_hash[..8]
             )));
         }
 
@@ -587,6 +609,113 @@ impl StackManager {
 
         Ok(())
     }
+
+    /// Check if the user has changed branches since the stack was activated
+    /// Returns true if branch change detected and user wants to proceed
+    pub fn check_for_branch_change(&mut self) -> Result<bool> {
+        // Extract stack information first to avoid borrow conflicts
+        let (stack_id, stack_name, stored_branch) = {
+            if let Some(active_stack) = self.get_active_stack() {
+                let stack_id = active_stack.id;
+                let stack_name = active_stack.name.clone();
+                let stored_branch = if let Some(stack_meta) = self.metadata.get_stack(&stack_id) {
+                    stack_meta.current_branch.clone()
+                } else {
+                    None
+                };
+                (Some(stack_id), stack_name, stored_branch)
+            } else {
+                (None, String::new(), None)
+            }
+        };
+
+        // If no active stack, nothing to check
+        let Some(stack_id) = stack_id else {
+            return Ok(true);
+        };
+
+        let current_branch = self.repo.get_current_branch().ok();
+        
+        // Check if branch has changed
+        if stored_branch.as_ref() != current_branch.as_ref() {
+            println!("⚠️  Branch change detected!");
+            println!("   Stack '{}' was active on: {}", 
+                    stack_name, 
+                    stored_branch.as_deref().unwrap_or("unknown"));
+            println!("   Current branch: {}", 
+                    current_branch.as_deref().unwrap_or("unknown"));
+            println!();
+            println!("What would you like to do?");
+            println!("   1. Keep stack '{}' active (continue with stack workflow)", stack_name);
+            println!("   2. Deactivate stack (use normal Git workflow)");
+            println!("   3. Switch to a different stack");
+            println!("   4. Cancel and stay on current workflow");
+            print!("   Choice (1-4): ");
+            
+            use std::io::{self, Write};
+            io::stdout().flush().unwrap();
+            
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).unwrap();
+            
+            match input.trim() {
+                "1" => {
+                    // Update the tracked branch and continue
+                    if let Some(stack_meta) = self.metadata.get_stack_mut(&stack_id) {
+                        stack_meta.set_current_branch(current_branch);
+                    }
+                    self.save_to_disk()?;
+                    println!("✅ Continuing with stack '{}' on current branch", stack_name);
+                    return Ok(true);
+                },
+                "2" => {
+                    // Deactivate the stack
+                    self.set_active_stack(None)?;
+                    println!("✅ Deactivated stack '{}' - using normal Git workflow", stack_name);
+                    return Ok(false);
+                },
+                "3" => {
+                    // Show available stacks
+                    let stacks = self.get_all_stacks();
+                    if stacks.len() <= 1 {
+                        println!("⚠️  No other stacks available. Deactivating current stack.");
+                        self.set_active_stack(None)?;
+                        return Ok(false);
+                    }
+                    
+                    println!("\nAvailable stacks:");
+                    for (i, stack) in stacks.iter().enumerate() {
+                        if stack.id != stack_id {
+                            println!("   {}. {}", i + 1, stack.name);
+                        }
+                    }
+                    print!("   Enter stack name: ");
+                    io::stdout().flush().unwrap();
+                    
+                    let mut stack_name_input = String::new();
+                    io::stdin().read_line(&mut stack_name_input).unwrap();
+                    let stack_name_input = stack_name_input.trim();
+                    
+                    if let Err(e) = self.set_active_stack_by_name(stack_name_input) {
+                        println!("⚠️  {}", e);
+                        println!("   Deactivating stack instead.");
+                        self.set_active_stack(None)?;
+                        return Ok(false);
+                    } else {
+                        println!("✅ Switched to stack '{}'", stack_name_input);
+                        return Ok(true);
+                    }
+                },
+                _ => {
+                    println!("Cancelled - no changes made");
+                    return Ok(false);
+                }
+            }
+        }
+        
+        // No branch change detected
+        Ok(true)
+    }
 }
 
 #[cfg(test)]
@@ -749,5 +878,342 @@ mod tests {
 
         // Should pass validation
         assert!(manager.validate_all().is_ok());
+    }
+
+    #[test]
+    fn test_duplicate_commit_message_detection() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let mut manager = StackManager::new(&repo_path).unwrap();
+
+        // Create a stack
+        manager
+            .create_stack("test-stack".to_string(), None, None)
+            .unwrap();
+
+        // Create first commit
+        std::fs::write(repo_path.join("file1.txt"), "content1").unwrap();
+        Command::new("git")
+            .args(["add", "file1.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Add authentication feature"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit1_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit1_hash = String::from_utf8_lossy(&commit1_hash.stdout).trim().to_string();
+
+        // Push first commit to stack - should succeed
+        let entry1_id = manager
+            .push_to_stack(
+                "feature/auth".to_string(),
+                commit1_hash,
+                "Add authentication feature".to_string(),
+                "main".to_string(),
+            )
+            .unwrap();
+
+        // Verify first entry was added
+        assert!(manager.get_active_stack().unwrap().get_entry(&entry1_id).is_some());
+
+        // Create second commit
+        std::fs::write(repo_path.join("file2.txt"), "content2").unwrap();
+        Command::new("git")
+            .args(["add", "file2.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Different commit message"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit2_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit2_hash = String::from_utf8_lossy(&commit2_hash.stdout).trim().to_string();
+
+        // Try to push second commit with the SAME message - should fail
+        let result = manager.push_to_stack(
+            "feature/auth2".to_string(),
+            commit2_hash.clone(),
+            "Add authentication feature".to_string(), // Same message as first commit
+            "main".to_string(),
+        );
+
+        // Should fail with validation error
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, CascadeError::Validation(_)));
+        
+        // Error message should contain helpful information
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("Duplicate commit message"));
+        assert!(error_msg.contains("Add authentication feature"));
+        assert!(error_msg.contains("💡 Consider using a more specific message"));
+
+        // Push with different message - should succeed
+        let entry2_id = manager
+            .push_to_stack(
+                "feature/auth2".to_string(),
+                commit2_hash,
+                "Add authentication validation".to_string(), // Different message
+                "main".to_string(),
+            )
+            .unwrap();
+
+        // Verify both entries exist
+        let stack = manager.get_active_stack().unwrap();
+        assert_eq!(stack.entries.len(), 2);
+        assert!(stack.get_entry(&entry1_id).is_some());
+        assert!(stack.get_entry(&entry2_id).is_some());
+    }
+
+    #[test]
+    fn test_duplicate_message_with_different_case() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let mut manager = StackManager::new(&repo_path).unwrap();
+
+        manager
+            .create_stack("test-stack".to_string(), None, None)
+            .unwrap();
+
+        // Create and push first commit
+        std::fs::write(repo_path.join("file1.txt"), "content1").unwrap();
+        Command::new("git")
+            .args(["add", "file1.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "fix bug"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit1_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit1_hash = String::from_utf8_lossy(&commit1_hash.stdout).trim().to_string();
+
+        manager
+            .push_to_stack(
+                "feature/fix1".to_string(),
+                commit1_hash,
+                "fix bug".to_string(),
+                "main".to_string(),
+            )
+            .unwrap();
+
+        // Create second commit
+        std::fs::write(repo_path.join("file2.txt"), "content2").unwrap();
+        Command::new("git")
+            .args(["add", "file2.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Fix Bug"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit2_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit2_hash = String::from_utf8_lossy(&commit2_hash.stdout).trim().to_string();
+
+        // Different case should be allowed (case-sensitive comparison)
+        let result = manager.push_to_stack(
+            "feature/fix2".to_string(),
+            commit2_hash,
+            "Fix Bug".to_string(), // Different case
+            "main".to_string(),
+        );
+
+        // Should succeed because it's case-sensitive
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_duplicate_message_across_different_stacks() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let mut manager = StackManager::new(&repo_path).unwrap();
+
+        // Create first stack and push commit
+        let stack1_id = manager
+            .create_stack("stack1".to_string(), None, None)
+            .unwrap();
+
+        std::fs::write(repo_path.join("file1.txt"), "content1").unwrap();
+        Command::new("git")
+            .args(["add", "file1.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "shared message"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit1_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit1_hash = String::from_utf8_lossy(&commit1_hash.stdout).trim().to_string();
+
+        manager
+            .push_to_stack(
+                "feature/shared1".to_string(),
+                commit1_hash,
+                "shared message".to_string(),
+                "main".to_string(),
+            )
+            .unwrap();
+
+        // Create second stack
+        let stack2_id = manager
+            .create_stack("stack2".to_string(), None, None)
+            .unwrap();
+
+        // Set second stack as active
+        manager.set_active_stack(Some(stack2_id)).unwrap();
+
+        // Create commit for second stack
+        std::fs::write(repo_path.join("file2.txt"), "content2").unwrap();
+        Command::new("git")
+            .args(["add", "file2.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "shared message"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit2_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit2_hash = String::from_utf8_lossy(&commit2_hash.stdout).trim().to_string();
+
+        // Same message in different stack should be allowed
+        let result = manager.push_to_stack(
+            "feature/shared2".to_string(),
+            commit2_hash,
+            "shared message".to_string(), // Same message but different stack
+            "main".to_string(),
+        );
+
+        // Should succeed because it's a different stack
+        assert!(result.is_ok());
+
+        // Verify both stacks have entries with the same message
+        let stack1 = manager.get_stack(&stack1_id).unwrap();
+        let stack2 = manager.get_stack(&stack2_id).unwrap();
+        
+        assert_eq!(stack1.entries.len(), 1);
+        assert_eq!(stack2.entries.len(), 1);
+        assert_eq!(stack1.entries[0].message, "shared message");
+        assert_eq!(stack2.entries[0].message, "shared message");
+    }
+
+    #[test]
+    fn test_duplicate_after_pop() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let mut manager = StackManager::new(&repo_path).unwrap();
+
+        manager
+            .create_stack("test-stack".to_string(), None, None)
+            .unwrap();
+
+        // Create and push first commit
+        std::fs::write(repo_path.join("file1.txt"), "content1").unwrap();
+        Command::new("git")
+            .args(["add", "file1.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "temporary message"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit1_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit1_hash = String::from_utf8_lossy(&commit1_hash.stdout).trim().to_string();
+
+        manager
+            .push_to_stack(
+                "feature/temp".to_string(),
+                commit1_hash,
+                "temporary message".to_string(),
+                "main".to_string(),
+            )
+            .unwrap();
+
+        // Pop the entry
+        let popped = manager.pop_from_stack().unwrap();
+        assert_eq!(popped.message, "temporary message");
+
+        // Create new commit 
+        std::fs::write(repo_path.join("file2.txt"), "content2").unwrap();
+        Command::new("git")
+            .args(["add", "file2.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "temporary message"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let commit2_hash = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let commit2_hash = String::from_utf8_lossy(&commit2_hash.stdout).trim().to_string();
+
+        // Should be able to push same message again after popping
+        let result = manager.push_to_stack(
+            "feature/temp2".to_string(),
+            commit2_hash,
+            "temporary message".to_string(),
+            "main".to_string(),
+        );
+
+        assert!(result.is_ok());
     }
 }

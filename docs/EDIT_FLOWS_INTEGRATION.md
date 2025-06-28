@@ -71,7 +71,7 @@ git_repo.force_push_branch(&existing_branch, &new_branch)?;
 ## What Happens During Rebase with Smart Force Push:
 
 ```bash
-$ cc stack rebase
+$ cc stacks rebase
 
 🔄 Rebasing stack: authentication
    📋 Branch mapping:
@@ -170,7 +170,7 @@ git checkout -b add-auth
 git push origin add-auth --force
 
 # Or just create new PR manually:
-cc stack submit --title "Updated feature after rebase"
+cc stacks submit --title "Updated feature after rebase"
 ```
 
 ## Why This Approach Wins
@@ -187,4 +187,4 @@ cc stack submit --title "Updated feature after rebase"
 3. They're done atomically with proper error handling
 4. They follow established authentication patterns
 
-This is why Cascade CLI adopted the smart force push strategy - it provides the best developer and reviewer experience while maintaining the safety and reliability needed for production workflows. 
+This is why Cascade CLI adopted the smart force push strategy - it provides the best developer and reviewer experience while maintaining the safety and reliability needed for Beta workflows. 

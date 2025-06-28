@@ -115,6 +115,28 @@ pub async fn run(force: bool) -> Result<()> {
         }
     }
 
+    // Step 9: Install Git hooks (recommended)
+    println!("\n🪝 Step 7: Git hooks...");
+    let install_hooks = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Would you like to install Git hooks for enhanced workflow?")
+        .default(true)
+        .interact()
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+    if install_hooks {
+        match crate::cli::commands::hooks::install_with_options(false, true, true, false).await {
+            Ok(_) => {
+                println!("   ✅ Essential Git hooks installed");
+                println!("   💡 Hooks installed: pre-push, commit-msg, prepare-commit-msg");
+                println!("   📚 See docs/HOOKS.md for details");
+            }
+            Err(e) => {
+                warn!("   ⚠️  Failed to install hooks: {}", e);
+                println!("   💡 You can install them later with: cc hooks install");
+            }
+        }
+    }
+
     // Success summary
     println!("\n🎉 Setup Complete!");
     println!("━━━━━━━━━━━━━━━━━");
@@ -122,13 +144,15 @@ pub async fn run(force: bool) -> Result<()> {
     println!();
     println!("💡 Next steps:");
     println!("   1. Create your first stack: cc stack create \"My Feature\"");
-    println!("   2. Push commits to the stack: cc stack push");
-    println!("   3. Submit for review: cc stack submit");
-    println!("   4. Check status: cc stack status");
+    println!("   2. Push commits to the stack: cc push");
+    println!("   3. Submit for review: cc submit");
+    println!("   4. Check status: cc status");
     println!();
     println!("📚 Learn more:");
     println!("   • Run 'cc --help' for all commands");
     println!("   • Run 'cc doctor' to verify your setup");
+    println!("   • Run 'cc hooks status' to check hook installation");
+    println!("   • Visit docs/HOOKS.md for hook details");
     println!("   • Visit the documentation for advanced usage");
 
     Ok(())

@@ -139,22 +139,22 @@ esac
     ;;
 esac
 ;;
-(stack)
+(stacks)
 _arguments "${_arguments_options[@]}" : \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
 '--no-color[Disable colored output]' \
 '-h[Print help]' \
 '--help[Print help]' \
-":: :_cc__stack_commands" \
-"*::: :->stack" \
+":: :_cc__stacks_commands" \
+"*::: :->stacks" \
 && ret=0
 
     case $state in
-    (stack)
+    (stacks)
         words=($line[1] "${words[@]}")
         (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:cc-stack-command-$line[1]:"
+        curcontext="${curcontext%:*:*}:cc-stacks-command-$line[1]:"
         case $line[1] in
             (create)
 _arguments "${_arguments_options[@]}" : \
@@ -213,6 +213,8 @@ _arguments "${_arguments_options[@]}" : \
 '--commits=[Push multiple specific commits (comma-separated)]:COMMITS:_default' \
 '--squash=[Squash last N commits into one before pushing]:SQUASH:_default' \
 '--squash-since=[Squash all commits since this reference (e.g., HEAD~5)]:SQUASH_SINCE:_default' \
+'--auto-branch[Auto-create feature branch when pushing from base branch]' \
+'--allow-base-branch[Allow pushing commits from base branch (not recommended)]' \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
 '--no-color[Disable colored output]' \
@@ -243,7 +245,7 @@ _arguments "${_arguments_options[@]}" : \
 '--no-color[Disable colored output]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'::entry -- Stack entry number (1-based, defaults to top):_default' \
+'::entry -- Stack entry number (1-based, defaults to all unsubmitted):_default' \
 && ret=0
 ;;
 (status)
@@ -431,7 +433,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (help)
 _arguments "${_arguments_options[@]}" : \
-":: :_cc__stack__help_commands" \
+":: :_cc__stacks__help_commands" \
 "*::: :->help" \
 && ret=0
 
@@ -439,7 +441,7 @@ _arguments "${_arguments_options[@]}" : \
     (help)
         words=($line[1] "${words[@]}")
         (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:cc-stack-help-command-$line[1]:"
+        curcontext="${curcontext%:*:*}:cc-stacks-help-command-$line[1]:"
         case $line[1] in
             (create)
 _arguments "${_arguments_options[@]}" : \
@@ -631,7 +633,7 @@ esac
     ;;
 esac
 ;;
-(status)
+(repo)
 _arguments "${_arguments_options[@]}" : \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
@@ -954,7 +956,7 @@ esac
     ;;
 esac
 ;;
-(show)
+(stack)
 _arguments "${_arguments_options[@]}" : \
 '-v[Show detailed pull request information]' \
 '--verbose[Show detailed pull request information]' \
@@ -976,6 +978,8 @@ _arguments "${_arguments_options[@]}" : \
 '--commits=[Push multiple specific commits (comma-separated)]:COMMITS:_default' \
 '--squash=[Squash last N commits into one before pushing]:SQUASH:_default' \
 '--squash-since=[Squash all commits since this reference (e.g., HEAD~5)]:SQUASH_SINCE:_default' \
+'--auto-branch[Auto-create feature branch when pushing from base branch]' \
+'--allow-base-branch[Allow pushing commits from base branch (not recommended)]' \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
 '--no-color[Disable colored output]' \
@@ -1108,17 +1112,17 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
-(stack)
+(stacks)
 _arguments "${_arguments_options[@]}" : \
-":: :_cc__help__stack_commands" \
-"*::: :->stack" \
+":: :_cc__help__stacks_commands" \
+"*::: :->stacks" \
 && ret=0
 
     case $state in
-    (stack)
+    (stacks)
         words=($line[1] "${words[@]}")
         (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:cc-help-stack-command-$line[1]:"
+        curcontext="${curcontext%:*:*}:cc-help-stacks-command-$line[1]:"
         case $line[1] in
             (create)
 _arguments "${_arguments_options[@]}" : \
@@ -1244,7 +1248,7 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
-(status)
+(repo)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -1352,7 +1356,7 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
-(show)
+(stack)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -1398,9 +1402,9 @@ _cc_commands() {
     local commands; commands=(
 'init:Initialize repository for Cascade' \
 'config:Configuration management' \
-'stack:Stack management' \
+'stacks:Stack management' \
 'entry:Entry management and editing' \
-'status:Show repository status' \
+'repo:Show repository overview and all stacks' \
 'version:Show version information' \
 'doctor:Check repository health and configuration' \
 'completions:Generate shell completions' \
@@ -1408,7 +1412,7 @@ _cc_commands() {
 'tui:Launch interactive TUI for stack management' \
 'hooks:Git hooks management' \
 'viz:Visualize stacks and dependencies' \
-'show:Show the current stack status (shortcut for '\''stack show'\'')' \
+'stack:Show current stack details' \
 'push:Push current commit to the top of the stack (shortcut for '\''stack push'\'')' \
 'pop:Pop the top commit from the stack (shortcut for '\''stack pop'\'')' \
 'land:Land (merge) approved stack entries (shortcut for '\''stack land'\'')' \
@@ -1611,9 +1615,9 @@ _cc__help_commands() {
     local commands; commands=(
 'init:Initialize repository for Cascade' \
 'config:Configuration management' \
-'stack:Stack management' \
+'stacks:Stack management' \
 'entry:Entry management and editing' \
-'status:Show repository status' \
+'repo:Show repository overview and all stacks' \
 'version:Show version information' \
 'doctor:Check repository health and configuration' \
 'completions:Generate shell completions' \
@@ -1621,7 +1625,7 @@ _cc__help_commands() {
 'tui:Launch interactive TUI for stack management' \
 'hooks:Git hooks management' \
 'viz:Visualize stacks and dependencies' \
-'show:Show the current stack status (shortcut for '\''stack show'\'')' \
+'stack:Show current stack details' \
 'push:Push current commit to the top of the stack (shortcut for '\''stack push'\'')' \
 'pop:Pop the top commit from the stack (shortcut for '\''stack pop'\'')' \
 'land:Land (merge) approved stack entries (shortcut for '\''stack land'\'')' \
@@ -1786,18 +1790,23 @@ _cc__help__rebase_commands() {
     local commands; commands=()
     _describe -t commands 'cc help rebase commands' commands "$@"
 }
+(( $+functions[_cc__help__repo_commands] )) ||
+_cc__help__repo_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help repo commands' commands "$@"
+}
 (( $+functions[_cc__help__setup_commands] )) ||
 _cc__help__setup_commands() {
     local commands; commands=()
     _describe -t commands 'cc help setup commands' commands "$@"
 }
-(( $+functions[_cc__help__show_commands] )) ||
-_cc__help__show_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc help show commands' commands "$@"
-}
 (( $+functions[_cc__help__stack_commands] )) ||
 _cc__help__stack_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack commands' commands "$@"
+}
+(( $+functions[_cc__help__stacks_commands] )) ||
+_cc__help__stacks_commands() {
     local commands; commands=(
 'create:Create a new stack' \
 'list:List all stacks' \
@@ -1823,127 +1832,122 @@ _cc__help__stack_commands() {
 'abort-land:Abort an in-progress land operation' \
 'land-status:Show status of in-progress land operation' \
     )
-    _describe -t commands 'cc help stack commands' commands "$@"
+    _describe -t commands 'cc help stacks commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__abort-land_commands] )) ||
-_cc__help__stack__abort-land_commands() {
+(( $+functions[_cc__help__stacks__abort-land_commands] )) ||
+_cc__help__stacks__abort-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack abort-land commands' commands "$@"
+    _describe -t commands 'cc help stacks abort-land commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__abort-rebase_commands] )) ||
-_cc__help__stack__abort-rebase_commands() {
+(( $+functions[_cc__help__stacks__abort-rebase_commands] )) ||
+_cc__help__stacks__abort-rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack abort-rebase commands' commands "$@"
+    _describe -t commands 'cc help stacks abort-rebase commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__auto-land_commands] )) ||
-_cc__help__stack__auto-land_commands() {
+(( $+functions[_cc__help__stacks__auto-land_commands] )) ||
+_cc__help__stacks__auto-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack auto-land commands' commands "$@"
+    _describe -t commands 'cc help stacks auto-land commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__check_commands] )) ||
-_cc__help__stack__check_commands() {
+(( $+functions[_cc__help__stacks__check_commands] )) ||
+_cc__help__stacks__check_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack check commands' commands "$@"
+    _describe -t commands 'cc help stacks check commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__continue-land_commands] )) ||
-_cc__help__stack__continue-land_commands() {
+(( $+functions[_cc__help__stacks__continue-land_commands] )) ||
+_cc__help__stacks__continue-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack continue-land commands' commands "$@"
+    _describe -t commands 'cc help stacks continue-land commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__continue-rebase_commands] )) ||
-_cc__help__stack__continue-rebase_commands() {
+(( $+functions[_cc__help__stacks__continue-rebase_commands] )) ||
+_cc__help__stacks__continue-rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack continue-rebase commands' commands "$@"
+    _describe -t commands 'cc help stacks continue-rebase commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__create_commands] )) ||
-_cc__help__stack__create_commands() {
+(( $+functions[_cc__help__stacks__create_commands] )) ||
+_cc__help__stacks__create_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack create commands' commands "$@"
+    _describe -t commands 'cc help stacks create commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__delete_commands] )) ||
-_cc__help__stack__delete_commands() {
+(( $+functions[_cc__help__stacks__delete_commands] )) ||
+_cc__help__stacks__delete_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack delete commands' commands "$@"
+    _describe -t commands 'cc help stacks delete commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__land_commands] )) ||
-_cc__help__stack__land_commands() {
+(( $+functions[_cc__help__stacks__land_commands] )) ||
+_cc__help__stacks__land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack land commands' commands "$@"
+    _describe -t commands 'cc help stacks land commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__land-status_commands] )) ||
-_cc__help__stack__land-status_commands() {
+(( $+functions[_cc__help__stacks__land-status_commands] )) ||
+_cc__help__stacks__land-status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack land-status commands' commands "$@"
+    _describe -t commands 'cc help stacks land-status commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__list_commands] )) ||
-_cc__help__stack__list_commands() {
+(( $+functions[_cc__help__stacks__list_commands] )) ||
+_cc__help__stacks__list_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack list commands' commands "$@"
+    _describe -t commands 'cc help stacks list commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__list-prs_commands] )) ||
-_cc__help__stack__list-prs_commands() {
+(( $+functions[_cc__help__stacks__list-prs_commands] )) ||
+_cc__help__stacks__list-prs_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack list-prs commands' commands "$@"
+    _describe -t commands 'cc help stacks list-prs commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__pop_commands] )) ||
-_cc__help__stack__pop_commands() {
+(( $+functions[_cc__help__stacks__pop_commands] )) ||
+_cc__help__stacks__pop_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack pop commands' commands "$@"
+    _describe -t commands 'cc help stacks pop commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__prs_commands] )) ||
-_cc__help__stack__prs_commands() {
+(( $+functions[_cc__help__stacks__prs_commands] )) ||
+_cc__help__stacks__prs_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack prs commands' commands "$@"
+    _describe -t commands 'cc help stacks prs commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__push_commands] )) ||
-_cc__help__stack__push_commands() {
+(( $+functions[_cc__help__stacks__push_commands] )) ||
+_cc__help__stacks__push_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack push commands' commands "$@"
+    _describe -t commands 'cc help stacks push commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__rebase_commands] )) ||
-_cc__help__stack__rebase_commands() {
+(( $+functions[_cc__help__stacks__rebase_commands] )) ||
+_cc__help__stacks__rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack rebase commands' commands "$@"
+    _describe -t commands 'cc help stacks rebase commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__rebase-status_commands] )) ||
-_cc__help__stack__rebase-status_commands() {
+(( $+functions[_cc__help__stacks__rebase-status_commands] )) ||
+_cc__help__stacks__rebase-status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack rebase-status commands' commands "$@"
+    _describe -t commands 'cc help stacks rebase-status commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__show_commands] )) ||
-_cc__help__stack__show_commands() {
+(( $+functions[_cc__help__stacks__show_commands] )) ||
+_cc__help__stacks__show_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack show commands' commands "$@"
+    _describe -t commands 'cc help stacks show commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__status_commands] )) ||
-_cc__help__stack__status_commands() {
+(( $+functions[_cc__help__stacks__status_commands] )) ||
+_cc__help__stacks__status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack status commands' commands "$@"
+    _describe -t commands 'cc help stacks status commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__submit_commands] )) ||
-_cc__help__stack__submit_commands() {
+(( $+functions[_cc__help__stacks__submit_commands] )) ||
+_cc__help__stacks__submit_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack submit commands' commands "$@"
+    _describe -t commands 'cc help stacks submit commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__switch_commands] )) ||
-_cc__help__stack__switch_commands() {
+(( $+functions[_cc__help__stacks__switch_commands] )) ||
+_cc__help__stacks__switch_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack switch commands' commands "$@"
+    _describe -t commands 'cc help stacks switch commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__sync_commands] )) ||
-_cc__help__stack__sync_commands() {
+(( $+functions[_cc__help__stacks__sync_commands] )) ||
+_cc__help__stacks__sync_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack sync commands' commands "$@"
+    _describe -t commands 'cc help stacks sync commands' commands "$@"
 }
-(( $+functions[_cc__help__stack__validate_commands] )) ||
-_cc__help__stack__validate_commands() {
+(( $+functions[_cc__help__stacks__validate_commands] )) ||
+_cc__help__stacks__validate_commands() {
     local commands; commands=()
-    _describe -t commands 'cc help stack validate commands' commands "$@"
-}
-(( $+functions[_cc__help__status_commands] )) ||
-_cc__help__status_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc help status commands' commands "$@"
+    _describe -t commands 'cc help stacks validate commands' commands "$@"
 }
 (( $+functions[_cc__help__sync_commands] )) ||
 _cc__help__sync_commands() {
@@ -2082,88 +2086,23 @@ _cc__rebase_commands() {
     local commands; commands=()
     _describe -t commands 'cc rebase commands' commands "$@"
 }
+(( $+functions[_cc__repo_commands] )) ||
+_cc__repo_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc repo commands' commands "$@"
+}
 (( $+functions[_cc__setup_commands] )) ||
 _cc__setup_commands() {
     local commands; commands=()
     _describe -t commands 'cc setup commands' commands "$@"
 }
-(( $+functions[_cc__show_commands] )) ||
-_cc__show_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc show commands' commands "$@"
-}
 (( $+functions[_cc__stack_commands] )) ||
 _cc__stack_commands() {
-    local commands; commands=(
-'create:Create a new stack' \
-'list:List all stacks' \
-'switch:Switch to a different stack' \
-'show:Show the current stack status' \
-'push:Push current commit to the top of the stack' \
-'pop:Pop the top commit from the stack' \
-'submit:Submit a stack entry for review' \
-'status:Check status of all pull requests in a stack' \
-'prs:List all pull requests for the repository' \
-'check:Check stack status with remote repository (read-only)' \
-'sync:Sync stack with remote repository (pull + rebase + cleanup)' \
-'rebase:Rebase stack on updated base branch' \
-'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
-'abort-rebase:Abort an in-progress rebase' \
-'rebase-status:Show rebase status and conflict resolution guidance' \
-'delete:Delete a stack' \
-'validate:Validate stack integrity' \
-'land:Land (merge) approved stack entries' \
-'auto-land:Auto-land all ready PRs (shorthand for land --auto)' \
-'list-prs:List pull requests from Bitbucket' \
-'continue-land:Continue an in-progress land operation after resolving conflicts' \
-'abort-land:Abort an in-progress land operation' \
-'land-status:Show status of in-progress land operation' \
-'help:Print this message or the help of the given subcommand(s)' \
-    )
+    local commands; commands=()
     _describe -t commands 'cc stack commands' commands "$@"
 }
-(( $+functions[_cc__stack__abort-land_commands] )) ||
-_cc__stack__abort-land_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack abort-land commands' commands "$@"
-}
-(( $+functions[_cc__stack__abort-rebase_commands] )) ||
-_cc__stack__abort-rebase_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack abort-rebase commands' commands "$@"
-}
-(( $+functions[_cc__stack__auto-land_commands] )) ||
-_cc__stack__auto-land_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack auto-land commands' commands "$@"
-}
-(( $+functions[_cc__stack__check_commands] )) ||
-_cc__stack__check_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack check commands' commands "$@"
-}
-(( $+functions[_cc__stack__continue-land_commands] )) ||
-_cc__stack__continue-land_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack continue-land commands' commands "$@"
-}
-(( $+functions[_cc__stack__continue-rebase_commands] )) ||
-_cc__stack__continue-rebase_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack continue-rebase commands' commands "$@"
-}
-(( $+functions[_cc__stack__create_commands] )) ||
-_cc__stack__create_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack create commands' commands "$@"
-}
-(( $+functions[_cc__stack__delete_commands] )) ||
-_cc__stack__delete_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack delete commands' commands "$@"
-}
-(( $+functions[_cc__stack__help_commands] )) ||
-_cc__stack__help_commands() {
+(( $+functions[_cc__stacks_commands] )) ||
+_cc__stacks_commands() {
     local commands; commands=(
 'create:Create a new stack' \
 'list:List all stacks' \
@@ -2190,207 +2129,272 @@ _cc__stack__help_commands() {
 'land-status:Show status of in-progress land operation' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
-    _describe -t commands 'cc stack help commands' commands "$@"
+    _describe -t commands 'cc stacks commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__abort-land_commands] )) ||
-_cc__stack__help__abort-land_commands() {
+(( $+functions[_cc__stacks__abort-land_commands] )) ||
+_cc__stacks__abort-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help abort-land commands' commands "$@"
+    _describe -t commands 'cc stacks abort-land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__abort-rebase_commands] )) ||
-_cc__stack__help__abort-rebase_commands() {
+(( $+functions[_cc__stacks__abort-rebase_commands] )) ||
+_cc__stacks__abort-rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help abort-rebase commands' commands "$@"
+    _describe -t commands 'cc stacks abort-rebase commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__auto-land_commands] )) ||
-_cc__stack__help__auto-land_commands() {
+(( $+functions[_cc__stacks__auto-land_commands] )) ||
+_cc__stacks__auto-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help auto-land commands' commands "$@"
+    _describe -t commands 'cc stacks auto-land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__check_commands] )) ||
-_cc__stack__help__check_commands() {
+(( $+functions[_cc__stacks__check_commands] )) ||
+_cc__stacks__check_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help check commands' commands "$@"
+    _describe -t commands 'cc stacks check commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__continue-land_commands] )) ||
-_cc__stack__help__continue-land_commands() {
+(( $+functions[_cc__stacks__continue-land_commands] )) ||
+_cc__stacks__continue-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help continue-land commands' commands "$@"
+    _describe -t commands 'cc stacks continue-land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__continue-rebase_commands] )) ||
-_cc__stack__help__continue-rebase_commands() {
+(( $+functions[_cc__stacks__continue-rebase_commands] )) ||
+_cc__stacks__continue-rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help continue-rebase commands' commands "$@"
+    _describe -t commands 'cc stacks continue-rebase commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__create_commands] )) ||
-_cc__stack__help__create_commands() {
+(( $+functions[_cc__stacks__create_commands] )) ||
+_cc__stacks__create_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help create commands' commands "$@"
+    _describe -t commands 'cc stacks create commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__delete_commands] )) ||
-_cc__stack__help__delete_commands() {
+(( $+functions[_cc__stacks__delete_commands] )) ||
+_cc__stacks__delete_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help delete commands' commands "$@"
+    _describe -t commands 'cc stacks delete commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__help_commands] )) ||
-_cc__stack__help__help_commands() {
-    local commands; commands=()
-    _describe -t commands 'cc stack help help commands' commands "$@"
+(( $+functions[_cc__stacks__help_commands] )) ||
+_cc__stacks__help_commands() {
+    local commands; commands=(
+'create:Create a new stack' \
+'list:List all stacks' \
+'switch:Switch to a different stack' \
+'show:Show the current stack status' \
+'push:Push current commit to the top of the stack' \
+'pop:Pop the top commit from the stack' \
+'submit:Submit a stack entry for review' \
+'status:Check status of all pull requests in a stack' \
+'prs:List all pull requests for the repository' \
+'check:Check stack status with remote repository (read-only)' \
+'sync:Sync stack with remote repository (pull + rebase + cleanup)' \
+'rebase:Rebase stack on updated base branch' \
+'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
+'abort-rebase:Abort an in-progress rebase' \
+'rebase-status:Show rebase status and conflict resolution guidance' \
+'delete:Delete a stack' \
+'validate:Validate stack integrity' \
+'land:Land (merge) approved stack entries' \
+'auto-land:Auto-land all ready PRs (shorthand for land --auto)' \
+'list-prs:List pull requests from Bitbucket' \
+'continue-land:Continue an in-progress land operation after resolving conflicts' \
+'abort-land:Abort an in-progress land operation' \
+'land-status:Show status of in-progress land operation' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc stacks help commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__land_commands] )) ||
-_cc__stack__help__land_commands() {
+(( $+functions[_cc__stacks__help__abort-land_commands] )) ||
+_cc__stacks__help__abort-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help land commands' commands "$@"
+    _describe -t commands 'cc stacks help abort-land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__land-status_commands] )) ||
-_cc__stack__help__land-status_commands() {
+(( $+functions[_cc__stacks__help__abort-rebase_commands] )) ||
+_cc__stacks__help__abort-rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help land-status commands' commands "$@"
+    _describe -t commands 'cc stacks help abort-rebase commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__list_commands] )) ||
-_cc__stack__help__list_commands() {
+(( $+functions[_cc__stacks__help__auto-land_commands] )) ||
+_cc__stacks__help__auto-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help list commands' commands "$@"
+    _describe -t commands 'cc stacks help auto-land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__list-prs_commands] )) ||
-_cc__stack__help__list-prs_commands() {
+(( $+functions[_cc__stacks__help__check_commands] )) ||
+_cc__stacks__help__check_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help list-prs commands' commands "$@"
+    _describe -t commands 'cc stacks help check commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__pop_commands] )) ||
-_cc__stack__help__pop_commands() {
+(( $+functions[_cc__stacks__help__continue-land_commands] )) ||
+_cc__stacks__help__continue-land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help pop commands' commands "$@"
+    _describe -t commands 'cc stacks help continue-land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__prs_commands] )) ||
-_cc__stack__help__prs_commands() {
+(( $+functions[_cc__stacks__help__continue-rebase_commands] )) ||
+_cc__stacks__help__continue-rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help prs commands' commands "$@"
+    _describe -t commands 'cc stacks help continue-rebase commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__push_commands] )) ||
-_cc__stack__help__push_commands() {
+(( $+functions[_cc__stacks__help__create_commands] )) ||
+_cc__stacks__help__create_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help push commands' commands "$@"
+    _describe -t commands 'cc stacks help create commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__rebase_commands] )) ||
-_cc__stack__help__rebase_commands() {
+(( $+functions[_cc__stacks__help__delete_commands] )) ||
+_cc__stacks__help__delete_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help rebase commands' commands "$@"
+    _describe -t commands 'cc stacks help delete commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__rebase-status_commands] )) ||
-_cc__stack__help__rebase-status_commands() {
+(( $+functions[_cc__stacks__help__help_commands] )) ||
+_cc__stacks__help__help_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help rebase-status commands' commands "$@"
+    _describe -t commands 'cc stacks help help commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__show_commands] )) ||
-_cc__stack__help__show_commands() {
+(( $+functions[_cc__stacks__help__land_commands] )) ||
+_cc__stacks__help__land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help show commands' commands "$@"
+    _describe -t commands 'cc stacks help land commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__status_commands] )) ||
-_cc__stack__help__status_commands() {
+(( $+functions[_cc__stacks__help__land-status_commands] )) ||
+_cc__stacks__help__land-status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help status commands' commands "$@"
+    _describe -t commands 'cc stacks help land-status commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__submit_commands] )) ||
-_cc__stack__help__submit_commands() {
+(( $+functions[_cc__stacks__help__list_commands] )) ||
+_cc__stacks__help__list_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help submit commands' commands "$@"
+    _describe -t commands 'cc stacks help list commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__switch_commands] )) ||
-_cc__stack__help__switch_commands() {
+(( $+functions[_cc__stacks__help__list-prs_commands] )) ||
+_cc__stacks__help__list-prs_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help switch commands' commands "$@"
+    _describe -t commands 'cc stacks help list-prs commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__sync_commands] )) ||
-_cc__stack__help__sync_commands() {
+(( $+functions[_cc__stacks__help__pop_commands] )) ||
+_cc__stacks__help__pop_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help sync commands' commands "$@"
+    _describe -t commands 'cc stacks help pop commands' commands "$@"
 }
-(( $+functions[_cc__stack__help__validate_commands] )) ||
-_cc__stack__help__validate_commands() {
+(( $+functions[_cc__stacks__help__prs_commands] )) ||
+_cc__stacks__help__prs_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack help validate commands' commands "$@"
+    _describe -t commands 'cc stacks help prs commands' commands "$@"
 }
-(( $+functions[_cc__stack__land_commands] )) ||
-_cc__stack__land_commands() {
+(( $+functions[_cc__stacks__help__push_commands] )) ||
+_cc__stacks__help__push_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack land commands' commands "$@"
+    _describe -t commands 'cc stacks help push commands' commands "$@"
 }
-(( $+functions[_cc__stack__land-status_commands] )) ||
-_cc__stack__land-status_commands() {
+(( $+functions[_cc__stacks__help__rebase_commands] )) ||
+_cc__stacks__help__rebase_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack land-status commands' commands "$@"
+    _describe -t commands 'cc stacks help rebase commands' commands "$@"
 }
-(( $+functions[_cc__stack__list_commands] )) ||
-_cc__stack__list_commands() {
+(( $+functions[_cc__stacks__help__rebase-status_commands] )) ||
+_cc__stacks__help__rebase-status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack list commands' commands "$@"
+    _describe -t commands 'cc stacks help rebase-status commands' commands "$@"
 }
-(( $+functions[_cc__stack__list-prs_commands] )) ||
-_cc__stack__list-prs_commands() {
+(( $+functions[_cc__stacks__help__show_commands] )) ||
+_cc__stacks__help__show_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack list-prs commands' commands "$@"
+    _describe -t commands 'cc stacks help show commands' commands "$@"
 }
-(( $+functions[_cc__stack__pop_commands] )) ||
-_cc__stack__pop_commands() {
+(( $+functions[_cc__stacks__help__status_commands] )) ||
+_cc__stacks__help__status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack pop commands' commands "$@"
+    _describe -t commands 'cc stacks help status commands' commands "$@"
 }
-(( $+functions[_cc__stack__prs_commands] )) ||
-_cc__stack__prs_commands() {
+(( $+functions[_cc__stacks__help__submit_commands] )) ||
+_cc__stacks__help__submit_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack prs commands' commands "$@"
+    _describe -t commands 'cc stacks help submit commands' commands "$@"
 }
-(( $+functions[_cc__stack__push_commands] )) ||
-_cc__stack__push_commands() {
+(( $+functions[_cc__stacks__help__switch_commands] )) ||
+_cc__stacks__help__switch_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack push commands' commands "$@"
+    _describe -t commands 'cc stacks help switch commands' commands "$@"
 }
-(( $+functions[_cc__stack__rebase_commands] )) ||
-_cc__stack__rebase_commands() {
+(( $+functions[_cc__stacks__help__sync_commands] )) ||
+_cc__stacks__help__sync_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack rebase commands' commands "$@"
+    _describe -t commands 'cc stacks help sync commands' commands "$@"
 }
-(( $+functions[_cc__stack__rebase-status_commands] )) ||
-_cc__stack__rebase-status_commands() {
+(( $+functions[_cc__stacks__help__validate_commands] )) ||
+_cc__stacks__help__validate_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack rebase-status commands' commands "$@"
+    _describe -t commands 'cc stacks help validate commands' commands "$@"
 }
-(( $+functions[_cc__stack__show_commands] )) ||
-_cc__stack__show_commands() {
+(( $+functions[_cc__stacks__land_commands] )) ||
+_cc__stacks__land_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack show commands' commands "$@"
+    _describe -t commands 'cc stacks land commands' commands "$@"
 }
-(( $+functions[_cc__stack__status_commands] )) ||
-_cc__stack__status_commands() {
+(( $+functions[_cc__stacks__land-status_commands] )) ||
+_cc__stacks__land-status_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack status commands' commands "$@"
+    _describe -t commands 'cc stacks land-status commands' commands "$@"
 }
-(( $+functions[_cc__stack__submit_commands] )) ||
-_cc__stack__submit_commands() {
+(( $+functions[_cc__stacks__list_commands] )) ||
+_cc__stacks__list_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack submit commands' commands "$@"
+    _describe -t commands 'cc stacks list commands' commands "$@"
 }
-(( $+functions[_cc__stack__switch_commands] )) ||
-_cc__stack__switch_commands() {
+(( $+functions[_cc__stacks__list-prs_commands] )) ||
+_cc__stacks__list-prs_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack switch commands' commands "$@"
+    _describe -t commands 'cc stacks list-prs commands' commands "$@"
 }
-(( $+functions[_cc__stack__sync_commands] )) ||
-_cc__stack__sync_commands() {
+(( $+functions[_cc__stacks__pop_commands] )) ||
+_cc__stacks__pop_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack sync commands' commands "$@"
+    _describe -t commands 'cc stacks pop commands' commands "$@"
 }
-(( $+functions[_cc__stack__validate_commands] )) ||
-_cc__stack__validate_commands() {
+(( $+functions[_cc__stacks__prs_commands] )) ||
+_cc__stacks__prs_commands() {
     local commands; commands=()
-    _describe -t commands 'cc stack validate commands' commands "$@"
+    _describe -t commands 'cc stacks prs commands' commands "$@"
 }
-(( $+functions[_cc__status_commands] )) ||
-_cc__status_commands() {
+(( $+functions[_cc__stacks__push_commands] )) ||
+_cc__stacks__push_commands() {
     local commands; commands=()
-    _describe -t commands 'cc status commands' commands "$@"
+    _describe -t commands 'cc stacks push commands' commands "$@"
+}
+(( $+functions[_cc__stacks__rebase_commands] )) ||
+_cc__stacks__rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks rebase commands' commands "$@"
+}
+(( $+functions[_cc__stacks__rebase-status_commands] )) ||
+_cc__stacks__rebase-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks rebase-status commands' commands "$@"
+}
+(( $+functions[_cc__stacks__show_commands] )) ||
+_cc__stacks__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks show commands' commands "$@"
+}
+(( $+functions[_cc__stacks__status_commands] )) ||
+_cc__stacks__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks status commands' commands "$@"
+}
+(( $+functions[_cc__stacks__submit_commands] )) ||
+_cc__stacks__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks submit commands' commands "$@"
+}
+(( $+functions[_cc__stacks__switch_commands] )) ||
+_cc__stacks__switch_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks switch commands' commands "$@"
+}
+(( $+functions[_cc__stacks__sync_commands] )) ||
+_cc__stacks__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks sync commands' commands "$@"
+}
+(( $+functions[_cc__stacks__validate_commands] )) ||
+_cc__stacks__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stacks validate commands' commands "$@"
 }
 (( $+functions[_cc__sync_commands] )) ||
 _cc__sync_commands() {

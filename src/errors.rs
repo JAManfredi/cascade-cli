@@ -75,6 +75,10 @@ impl CascadeError {
         CascadeError::Auth(msg.into())
     }
 
+    pub fn validation<S: Into<String>>(msg: S) -> Self {
+        CascadeError::Validation(msg.into())
+    }
+
     pub fn parse<S: Into<String>>(msg: S) -> Self {
         CascadeError::Validation(msg.into())
     }

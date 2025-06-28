@@ -4,24 +4,26 @@
 
 [![Rust](https://img.shields.io/badge/rust-1.82%2B-orange.svg)](https://rustup.rs/)
 [![CI](https://github.com/JAManfredi/cascade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/JAManfredi/cascade-cli/actions/workflows/ci.yml)
-[![Production Ready](https://img.shields.io/badge/production-ready-green.svg)](./PRODUCTION_CHECKLIST.md)
-[![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen.svg)](#testing)
+[![Beta Release](https://img.shields.io/badge/status-beta-orange.svg)](./docs/DEVELOPMENT.md)
+[![Tests](https://img.shields.io/badge/tests-98%20passing-brightgreen.svg)](#testing)
 
 </div>
 
-Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a powerful technique for managing chains of related commits as separate, reviewable pull requests. Perfect for feature development, bug fixes, and complex changes that benefit from incremental review.
+Cascade CLI imporoves Git workflows by enabling **stacked diffs** for Bitbucket Server - a powerful technique for managing chains of related commits as separate, reviewable pull requests. Perfect for feature development, bug fixes, and complex changes that benefit from incremental review.
 
 ## 📋 Table of Contents
 
 - [✨ Key Features](#key-features)
 - [🌿 How Stacked Diffs Work: Branch Management](#how-stacked-diffs-work-branch-management)
+- [🌟 Why Stacked Diffs?](#why-stacked-diffs)
 - [🚀 Quick Start](#quick-start)
   - [1. Installation](#1-installation)
   - [2. Initialize Your Repository](#2-initialize-your-repository)
   - [3. Create Your First Stack](#3-create-your-first-stack)
-  - [🚀 Command Shortcuts](#command-shortcuts)
+  - [🚀 Command Overview](#command-overview)
   - [4. Experience the Magic](#4-experience-the-magic)
 - [🔧 Git Hooks (Recommended)](#git-hooks-recommended)
+- [📖 Command Reference](#command-reference)
 - [🤖 Smart Conflict Resolution](#smart-conflict-resolution)
 - [🎯 Core Workflow](#core-workflow)
   - [🛡️ Safe Development Flow (Recommended)](#safe-development-flow-recommended)
@@ -29,16 +31,14 @@ Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a power
   - [🔍 Scattered Commit Detection](#scattered-commit-detection)
   - [📝 Smart PR Creation](#smart-pr-creation)
   - [Daily Development Flow](#daily-development-flow)
-- [📖 Command Reference](#command-reference)
 - [🔧 Configuration](#configuration)
 - [🎨 Advanced Features](#advanced-features)
-- [🏗️ Architecture](#architecture)
-- [🧪 Testing](#testing)
+- [📝 Documentation](#documentation)
 - [🤝 Contributing](#contributing)
 - [🔧 Development](#development)
-- [📝 Documentation](#documentation)
+- [🏗️ Architecture](#architecture)
+- [🧪 Testing](#testing)
 - [📜 License](#license)
-- [🌟 Why Stacked Diffs?](#why-stacked-diffs)
 
 ## ✨ **Key Features**
 
@@ -49,13 +49,15 @@ Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a power
 - **Smart force-push strategy** to preserve review history
 - **Smart conflict resolution** - Auto-resolves 60-80% of common rebase conflicts
 
-### 🏢 **Enterprise Integration**
-- **Bitbucket Server/Cloud** native integration
-- **Pull request automation** with dependency tracking
+### 🏢 **Team Integration**
+
+- **Bitbucket Server** native integration
+- **Pull request automation** with dependency tracking  
 - **Team workflow enforcement** via Git hooks
 - **Progress tracking** with real-time status updates
 
-### 🖥️ **Professional Interface**
+### 🖥️ **Clean Interface**
+
 - **Interactive TUI** for visual stack management
 - **Shell completions** (bash, zsh, fish)
 - **Rich visualizations** (ASCII, Mermaid, Graphviz, PlantUML)
@@ -72,7 +74,7 @@ Cascade CLI **automatically creates individual branches** for each commit in you
 ```bash
 # You work normally (on main or a feature branch)
 git checkout main  # or: git checkout -b my-feature-branch
-cc stack create feature-auth --base main
+cc stacks create feature-auth --base main
 
 # Make commits as usual
 git commit -m "Add user authentication endpoints"
@@ -80,14 +82,14 @@ git commit -m "Add password validation logic"
 git commit -m "Add comprehensive auth tests"
 
 # Push to stack - Cascade CLI creates separate branches automatically:
-cc stack push  # → Creates: add-user-authentication-endpoints
-cc stack push  # → Creates: add-password-validation-logic  
-cc stack push  # → Creates: add-comprehensive-auth-tests
+cc stacks push  # → Creates: add-user-authentication-endpoints
+cc stacks push  # → Creates: add-password-validation-logic  
+cc stacks push  # → Creates: add-comprehensive-auth-tests
 
 # Submit creates individual PRs to main:
-cc stack submit  # PR #101: add-user-authentication-endpoints → main
-cc stack submit  # PR #102: add-password-validation-logic → main (depends on #101)
-cc stack submit  # PR #103: add-comprehensive-auth-tests → main (depends on #102)
+cc stacks submit  # PR #101: add-user-authentication-endpoints → main
+cc stacks submit  # PR #102: add-password-validation-logic → main (depends on #101)
+cc stacks submit  # PR #103: add-comprehensive-auth-tests → main (depends on #102)
 ```
 
 ### **Two Workflow Options:**
@@ -95,7 +97,7 @@ cc stack submit  # PR #103: add-comprehensive-auth-tests → main (depends on #1
 #### **Option 1: Work on Main (Recommended for Solo Development)**
 ```bash
 git checkout main
-cc stack create feature-name --base main
+cc stacks create feature-name --base main
 # Make commits directly on main (they stay local until you push to remote)
 # Cascade CLI handles all branch creation and PR management
 ```
@@ -103,7 +105,7 @@ cc stack create feature-name --base main
 #### **Option 2: Work on Feature Branch (Team-Friendly)**  
 ```bash
 git checkout -b feature-work
-cc stack create feature-name --base main
+cc stacks create feature-name --base main
 # Make commits on your feature branch
 # Cascade CLI creates individual branches from your feature branch
 # All PRs target main, not your feature branch
@@ -126,6 +128,22 @@ Cascade CLI creates meaningful branch names from your commit messages:
 "Fix login timeout bug"              → fix-login-timeout-bug  
 "Refactor password validation!!!"    → refactor-password-validation
 ```
+
+---
+
+## 🌟 **Why Stacked Diffs?**
+
+Traditional Git workflows often result in:
+- **Large, hard-to-review PRs** 
+- **Blocked development** waiting for reviews
+- **Merge conflicts** from long-lived branches
+- **Lost context** in massive changesets
+
+**Stacked diffs solve this by:**
+- ✅ **Small, focused PRs** that are easy to review
+- ✅ **Parallel development** with dependency management  
+- ✅ **Reduced conflicts** through frequent integration
+- ✅ **Better code quality** via incremental feedback
 
 ---
 
@@ -191,7 +209,7 @@ cc init --bitbucket-url https://bitbucket.company.com
 ### **3. Create Your First Stack**
 ```bash
 # Create a new stack
-cc stack create feature-auth --base develop --description "User authentication system"
+cc stacks create feature-auth --base develop --description "User authentication system"
 
 # Make multiple incremental commits (for your own tracking)
 git add . && git commit -m "WIP: start authentication"
@@ -199,58 +217,117 @@ git add . && git commit -m "WIP: add login logic"
 git add . && git commit -m "WIP: fix validation bugs"
 git add . && git commit -m "Final: complete auth with tests"
 
-# 🎉 NEW: SQUASH + PUSH - Combine incremental commits into clean commit!
-cc stack push --squash 4  # Squashes last 4 commits into 1
+# SQUASH + PUSH - Combine incremental commits into clean commit!
+cc stacks push --squash 4  # Squashes last 4 commits into 1
 
 # OR: Make some commits normally, then squash later ones
 git commit -m "Add core authentication logic"
-cc stack push  # Push first clean commit
+cc stacks push  # Push first clean commit
 
 git commit -m "WIP: start tests"
 git commit -m "WIP: more tests"  
 git commit -m "Final: comprehensive test suite"
 
-# 🎉 SQUASH UNPUSHED - Only squash the last 3 commits
-cc stack push --squash 3  # Squashes and pushes as second stack entry
+# SQUASH UNPUSHED - Only squash the last 3 commits
+cc stacks push --squash 3  # Squashes and pushes as second stack entry
 
-# 🎉 BATCH SUBMIT - Submit all unsubmitted entries as separate PRs!
-cc stack submit
+# BATCH SUBMIT - Submit all unsubmitted entries as separate PRs!
+cc stacks submit
 
 # Alternative options (for granular control):
-cc stack push                                   # Push all unpushed commits separately (default)
-cc stack push --squash-since HEAD~5             # Squash all commits since HEAD~5
-cc stack submit --range 1-3                     # Submit entries 1 through 3
+cc stacks push                               # Push all unpushed commits separately
+cc stacks push --since HEAD~3                # Push commits since reference
+cc stacks push --commits hash1,hash2,hash3   # Push specific commits
+cc stacks push --squash 4                    # Squash last 4 commits into 1 clean commit
+cc stacks push --squash-since HEAD~5         # Squash all commits since reference
+cc stacks submit                             # Submit all unsubmitted entries
+cc stacks submit --range 1-3                 # Submit entries 1 through 3
+cc stacks submit --range 2,4,6               # Submit specific entries
 ```
 
-### **🚀 Command Shortcuts** 
+## 🔧 **Git Hooks (Recommended)**
 
-For frequently used commands, you can skip the `stack` keyword for faster typing:
+Cascade CLI provides Git hooks that automate common stacked diff workflows:
+
+| Hook Name | Purpose | When It Runs |
+|-----------|---------|--------------| 
+| `post-commit` | Auto-add commits to active stack with unique branch names | After every `git commit` |
+| `pre-push` | Prevent force pushes, validate stack state | Before `git push` |
+| `commit-msg` | Validate commit message format | During `git commit` |
+| `prepare-commit-msg` | Add stack context to commit messages | Before commit message editor |
 
 ```bash
-# Full commands (always available)
-cc stack show           # Show current stack status
-cc stack push           # Add commits to stack
-cc stack land           # Merge approved PRs
-cc stack autoland       # Auto-merge all ready PRs
-cc stack sync           # Sync with remote repository
-cc stack rebase         # Rebase stack on updated base
+# Install all hooks for automated workflow
+cc hooks install
 
-# Shortcuts (same functionality, faster typing)
-cc show                 # Shortcut for 'stack show'
-cc push                 # Shortcut for 'stack push'
-cc land                 # Shortcut for 'stack land'
-cc autoland             # Shortcut for 'stack autoland'
-cc sync                 # Shortcut for 'stack sync'
-cc rebase               # Shortcut for 'stack rebase'
+# Remove all hooks 
+cc hooks uninstall
+
+# Check installation status
+cc hooks status
 ```
 
-**💡 Pro tip**: Use shortcuts for daily workflows, full commands for scripts and documentation.
+**🪝 Default hooks installed:**
+- **Pre-push**: Prevents force pushes that break stack integrity
+- **Commit-msg**: Validates commit message quality  
+- **Prepare-commit-msg**: Adds helpful stack context
+
+**📚 [Complete Hooks Guide](./docs/HOOKS.md)** - Detailed explanation of each hook, troubleshooting, and advanced usage
+
+**💡 Pro tip**: The post-commit hook (auto-add commits to stack) is available but not installed by default to avoid conflicts with existing repo hooks.
+
+```bash
+# Install optional post-commit hook if no conflicts
+cc hooks install post-commit
+```
+
+**💡 Installation Tips:**
+- **For full automation**: Install all hooks with `cc hooks install`
+- **For manual control**: Remove `post-commit` hook, keep others for safety
+- **For team safety**: Always keep `pre-push` to prevent stack corruption
+
+---
+
+### **🚀 Command Overview**
+
+```bash
+# Stack Management (Multiple Stacks)
+cc stacks create <name> --base <branch>  # Create new stack
+cc stacks list                          # List all stacks  
+cc stacks switch <name>                 # Switch active stack
+cc stacks push                          # Add commits to current stack
+cc stacks submit                        # Submit PRs for current stack
+
+# Current Stack Operations (Shortcuts)
+cc stack                                # Show current stack details
+cc push                                 # Shortcut for 'stacks push'
+cc land                                 # Merge approved PRs
+cc autoland                             # Auto-merge all ready PRs
+cc sync                                 # Sync with remote repository
+cc rebase                               # Rebase stack on updated base
+
+# Branch Management & Safety (Now with shortcuts!)
+cc deactivate                           # Turn off stack mode (shortcut)
+cc switch <name>                        # Switch to different stack (shortcut)
+
+# Or use full commands:
+cc stacks deactivate                    # Turn off stack mode (use normal Git workflow)
+cc stacks switch <name>                 # Switch to different stack
+
+# 🔍 Automatic branch change detection: Cascade detects when you switch branches
+#     and prompts you to continue with current stack, deactivate, or switch stacks
+
+# Repository Overview
+cc repo                                 # Show all stacks and repository status
+```
+
+**💡 Pro tip**: Use `cc stack` for current stack details, `cc repo` for everything overview.
 
 ### **4. Experience the Magic**
 
 ```bash
-# Check your stack status (using shortcuts!)
-cc show
+# Check your stack status
+cc stack
 # Stack: feature-auth (3 entries)
 # Entry 1: [abc123] Add authentication endpoints → PR #101
 # Entry 2: [def456] Add password validation → PR #102  
@@ -269,7 +346,7 @@ Cascade CLI protects against accidentally polluting your base branch:
 ```bash
 # ✅ SAFE: Start on base branch, but work on feature branches
 git checkout main
-cc stack create my-feature --base main
+cc stacks create my-feature --base main
 
 # Make your changes
 git checkout -b feature/auth-system  # Create feature branch
@@ -306,7 +383,7 @@ git commit -m "Add admin panel"
 git checkout main
 
 # When you push both to the same stack:
-cc push --all
+cc push
 
 # ⚠️  WARNING: Scattered Commit Detection
 #    You've pushed commits from different branches:
@@ -323,7 +400,7 @@ Cascade CLI automatically generates meaningful pull request titles and descripti
 
 ```bash
 # Create draft PRs for review:
-cc submit --all --draft
+cc submit --draft
 
 # Each PR gets intelligent metadata:
 # ┌─ PR Title: Generated from commit messages
@@ -334,8 +411,7 @@ cc submit --all --draft
 # Custom titles and descriptions:
 cc submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
 
-# Default behavior (auto-generated):
-cc submit --all  # Creates production-ready PRs
+# Default behavior (auto-generated):\ncc submit  # Creates well-structured PRs
 ```
 
 **How PR Content is Generated:**
@@ -350,7 +426,7 @@ Cascade CLI follows a simple, powerful workflow optimized for modern development
 
 ```bash
 # 1. Create & Develop
-cc stack create feature-name --base main
+cc stacks create feature-name --base main
 git commit -m "Add core functionality"
 git commit -m "Add comprehensive tests"
 
@@ -373,43 +449,6 @@ cc sync              # Update all dependent PRs automatically
 - Cross-team collaboration patterns
 - Base branch updates with smart force push
 - Modern WIP-to-clean commit workflows
-
----
-
-## 🔧 **Git Hooks (Recommended)**
-
-Cascade CLI provides Git hooks that automate common stacked diff workflows:
-
-| Hook Name | Purpose | When It Runs |
-|-----------|---------|--------------| 
-| `post-commit` | Auto-add commits to active stack with unique branch names | After every `git commit` |
-| `pre-push` | Prevent force pushes, validate stack state | Before `git push` |
-| `commit-msg` | Validate commit message format | During `git commit` |
-| `prepare-commit-msg` | Add stack context to commit messages | Before commit message editor |
-
-```bash
-# Install all hooks for automated workflow
-cc hooks install
-
-# Remove all hooks 
-cc hooks uninstall
-
-# Check installation status
-cc hooks status
-
-# Individual hook management
-cc hooks add post-commit        # Enable auto-stack management
-cc hooks add pre-push           # Enable push validation
-cc hooks add commit-msg         # Enable message validation
-cc hooks add prepare-commit-msg # Enable message enhancement
-
-cc hooks remove post-commit     # Disable auto-stack (manual control)
-```
-
-**💡 Installation Tips:**
-- **For full automation**: Install all hooks with `cc hooks install`
-- **For manual control**: Remove `post-commit` hook, keep others for safety
-- **For team safety**: Always keep `pre-push` to prevent stack corruption
 
 ---
 
@@ -474,7 +513,7 @@ Cascade CLI protects against accidentally polluting your base branch:
 ```bash
 # ✅ SAFE: Start on base branch, but work on feature branches
 git checkout main
-cc stack create my-feature --base main
+cc stacks create my-feature --base main
 
 # Make your changes
 git checkout -b feature/auth-system  # Create feature branch
@@ -482,7 +521,7 @@ git commit -am "Add user authentication"
 git commit -am "Add password validation"
 
 # Push to stack (automatically tracks source branch)
-cc push --all  # Adds commits to stack with source tracking
+cc push  # Adds commits to stack with source tracking
 ```
 
 ### **🚀 Auto-Branch Creation (Even Safer)**
@@ -511,7 +550,7 @@ git commit -m "Add admin panel"
 git checkout main
 
 # When you push both to the same stack:
-cc push --all
+cc push
 
 # ⚠️  WARNING: Scattered Commit Detection
 #    You've pushed commits from different branches:
@@ -528,7 +567,7 @@ Cascade CLI automatically generates meaningful pull request titles and descripti
 
 ```bash
 # Create draft PRs for review:
-cc submit --all --draft
+cc submit --draft
 
 # Each PR gets intelligent metadata:
 # ┌─ PR Title: Generated from commit messages
@@ -539,8 +578,7 @@ cc submit --all --draft
 # Custom titles and descriptions:
 cc submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
 
-# Default behavior (auto-generated):
-cc submit --all  # Creates production-ready PRs
+# Default behavior (auto-generated):\ncc submit  # Creates well-structured PRs
 ```
 
 **How PR Content is Generated:**
@@ -555,7 +593,7 @@ Cascade CLI follows a simple, powerful workflow optimized for modern development
 
 ```bash
 # 1. Create & Develop
-cc stack create feature-name --base main
+cc stacks create feature-name --base main
 git commit -m "Add core functionality"
 git commit -m "Add comprehensive tests"
 
@@ -586,96 +624,95 @@ cc sync              # Update all dependent PRs automatically
 ### **Stack Management**
 ```bash
 # Create and manage stacks
-cc stack create <name>                       # Create new stack (uses default base branch)
-cc stack create <name> --base <branch>       # Create stack with specific base branch
-cc stack create <name> -b <branch>           # Short form
-cc stack create <name> --description <desc>  # Add description
-cc stack create <name> -d <desc>             # Short form
+cc stacks create <name>                       # Create new stack (uses default base branch)
+cc stacks create <name> --base <branch>       # Create stack with specific base branch
+cc stacks create <name> -b <branch>           # Short form
+cc stacks create <name> --description <desc>  # Add description
+cc stacks create <name> -d <desc>             # Short form
 
 # List stacks
-cc stack list                                # Show basic stack list
-cc stack list --verbose                      # Show detailed information
-cc stack list -v                             # Short form
-cc stack list --active                       # Show only active stack
-cc stack list --format <format>              # Custom output format
+cc stacks list                                # Show basic stack list
+cc stacks list --verbose                      # Show detailed information
+cc stacks list -v                             # Short form
+cc stacks list --active                       # Show only active stack
+cc stacks list --format <format>              # Custom output format
 
 # Switch and view stacks
-cc stack switch <name>                       # Activate stack
-cc stack show                                # Show active stack details
-cc stack show <name>                         # Show specific stack details
-cc stack delete <name>                       # Remove stack
-cc stack delete <name> --force               # Force deletion without confirmation
-cc stack validate                            # Validate active stack
-cc stack validate <name>                     # Validate specific stack
+cc stacks switch <name>                       # Activate stack
+cc stack                                      # Show current stack details
+cc stacks delete <name>                       # Remove stack
+cc stacks delete <name> --force               # Force deletion without confirmation
+cc stacks validate                            # Validate active stack
+cc stacks validate <name>                     # Validate specific stack
 ```
 
 ### **Adding Commits to Stack**
 ```bash
 # Basic push operations
-cc stack push                               # Add current commit (HEAD) to stack
-cc stack push --branch <name>               # Custom branch name for this commit
-cc stack push -b <name>                     # Short form
-cc stack push --message <msg>               # Custom commit message
-cc stack push -m <msg>                      # Short form  
-cc stack push --commit <hash>               # Push specific commit instead of HEAD
+cc stacks push                               # Add current commit (HEAD) to stack
+cc stacks push --branch <name>               # Custom branch name for this commit
+cc stacks push -b <name>                     # Short form
+cc stacks push --message <msg>               # Custom commit message
+cc stacks push -m <msg>                      # Short form  
+cc stacks push --commit <hash>               # Push specific commit instead of HEAD
 
 # Batch operations
-cc stack push --all                         # 🎉 Push all unpushed commits separately
-cc stack push --since HEAD~3                # 🎉 Push commits since reference
-cc stack push --commits hash1,hash2,hash3   # 🎉 Push specific commits
+cc stacks push                               # Push all unpushed commits separately
+cc stacks push --since HEAD~3                # Push commits since reference
+cc stacks push --commits hash1,hash2,hash3   # Push specific commits
 
 # Smart squash operations
-cc stack push --squash 4                    # 🎉 Squash last 4 commits into 1 clean commit
-cc stack push --squash-since HEAD~5         # 🎉 Squash all commits since reference
+cc stacks push --squash 4                    # Squash last 4 commits into 1 clean commit
+cc stacks push --squash-since HEAD~5         # Squash all commits since reference
 
 # Remove from stack
-cc stack pop                                # Remove top entry from stack
-cc stack pop --keep-branch                  # Keep the branch when popping
+cc stacks pop                                # Remove top entry from stack
+cc stacks pop --keep-branch                  # Keep the branch when popping
 ```
 
 ### **Pull Request Workflow**
 ```bash
 # Submit for review
-cc stack submit                             # Submit top entry (creates PR)
-cc stack submit 2                           # Submit specific entry number
-cc stack submit --title <title>             # Custom PR title
-cc stack submit -t <title>                  # Short form
-cc stack submit --description <desc>        # Custom PR description
-cc stack submit -d <desc>                   # Short form
+cc stacks submit                             # Submit top entry (creates PR)
+cc stacks submit 2                           # Submit specific entry number
+cc stacks submit --title <title>             # Custom PR title
+cc stacks submit -t <title>                  # Short form
+cc stacks submit --description <desc>        # Custom PR description
+cc stacks submit -d <desc>                   # Short form
 
 # Batch submission
-cc stack submit --all                       # 🎉 Submit all unsubmitted entries
-cc stack submit --range 1-3                 # 🎉 Submit entries 1 through 3
-cc stack submit --range 2,4,6               # 🎉 Submit specific entries
+cc stacks submit                             # Submit all unsubmitted entries
+cc stacks submit --range 1-3                 # Submit entries 1 through 3
+cc stacks submit --range 2,4,6               # Submit specific entries
 
 # Status and management
-cc stack status                             # Show active stack PR status
-cc stack status <name>                      # Show specific stack PR status
-cc stack prs                                # List all repository PRs
-cc stack prs --state open                   # Filter by state (open/merged/declined)
-cc stack prs --verbose                      # Show detailed PR information
-cc stack prs -v                             # Short form
+cc stacks status                             # Show active stack PR status
+cc stacks status <name>                      # Show specific stack PR status
+cc stacks prs                                # List all repository PRs
+cc stacks prs --state open                   # Filter by state (open/merged/declined)
+cc stacks prs --verbose                      # Show detailed PR information
+cc stacks prs -v                             # Short form
 ```
 
 ### **Sync and Rebase Operations**
 ```bash
 # Sync with remote
-cc stack sync                               # Sync active stack with remote
-cc stack sync --force                       # Force sync even with conflicts
+cc stacks sync                               # Sync active stack with remote
+cc stacks sync --force                       # Force sync even with conflicts
 
 # Rebase operations
-cc stack rebase                             # Rebase stack on latest base branch
-cc stack rebase --interactive               # Interactive rebase mode
-cc stack rebase -i                          # Short form
-cc stack rebase --onto <branch>             # Rebase onto different target branch
-cc stack rebase --strategy cherry-pick      # Use specific rebase strategy
-cc stack rebase --strategy three-way-merge  # Alternative strategies available
-cc stack rebase --no-auto-resolve           # Disable smart conflict resolution
+cc stacks rebase                             # Rebase stack on latest base branch
+cc stacks rebase --interactive               # Interactive rebase mode
+cc stacks rebase -i                          # Short form
+cc stacks rebase --onto <branch>             # Rebase onto different target branch
+cc stacks rebase --strategy cherry-pick      # Use specific rebase strategy
+cc stacks rebase --strategy three-way-merge  # Alternative strategies available
+cc stacks rebase --no-auto-resolve           # Disable smart conflict resolution
 
 # Rebase conflict resolution
-cc stack continue-rebase                    # Continue after resolving conflicts
-cc stack abort-rebase                       # Abort rebase operation
-cc stack rebase-status                      # Show rebase status and guidance
+cc stacks continue-rebase                    # Continue after resolving conflicts
+cc stacks abort-rebase                       # Abort rebase operation
+cc stacks rebase-status                      # Show rebase status and guidance
 ```
 
 ### **Advanced Tools**
@@ -708,7 +745,7 @@ cc hooks remove commit-msg                  # Remove message validation
 cc hooks remove prepare-commit-msg          # Remove message enhancement
 
 # Configuration and setup
-cc setup                                    # Interactive configuration wizard
+cc setup                                    # Interactive setup: config + hooks + completions
 cc completions install                      # Install shell completions
 cc completions status                       # Check completion status
 cc completions generate bash                # Generate completions for bash
@@ -735,41 +772,6 @@ cc config set bitbucket.project "PROJECT"
 cc config set bitbucket.repository "repo-name"
 cc config set bitbucket.token "your-personal-access-token"
 ```
-
-### **Git Hooks (Recommended)**
-
-Cascade CLI provides Git hooks that automate common stacked diff workflows:
-
-| Hook Name | Purpose | When It Runs |
-|-----------|---------|--------------| 
-| `post-commit` | Auto-add commits to active stack with unique branch names | After every `git commit` |
-| `pre-push` | Prevent force pushes, validate stack state | Before `git push` |
-| `commit-msg` | Validate commit message format | During `git commit` |
-| `prepare-commit-msg` | Add stack context to commit messages | Before commit message editor |
-
-```bash
-# Install all hooks for automated workflow
-cc hooks install
-
-# Remove all hooks 
-cc hooks uninstall
-
-# Check installation status
-cc hooks status
-
-# Individual hook management
-cc hooks add post-commit        # Enable auto-stack management
-cc hooks add pre-push           # Enable push validation
-cc hooks add commit-msg         # Enable message validation
-cc hooks add prepare-commit-msg # Enable message enhancement
-
-cc hooks remove post-commit     # Disable auto-stack (manual control)
-```
-
-**💡 Installation Tips:**
-- **For full automation**: Install all hooks with `cc hooks install`
-- **For manual control**: Remove `post-commit` hook, keep others for safety
-- **For team safety**: Always keep `pre-push` to prevent stack corruption
 
 ---
 
@@ -806,38 +808,16 @@ cc completions generate bash > /etc/bash_completion.d/cc
 
 ---
 
-## 🏗️ **Architecture**
+## 📝 **Documentation**
 
-Cascade CLI is built with:
-- **🦀 Rust** - Performance, safety, and reliability
-- **📚 git2** - Native Git operations without subprocess overhead
-- **🌐 HTTP/REST** - Direct Bitbucket API integration  
-- **🎨 TUI Libraries** - Rich terminal interfaces (ratatui, crossterm)
-- **⚡ Async** - Non-blocking operations with tokio
-
-### **Design Principles**
-- **Smart Force Push** - Preserves review history while enabling safe rebases
-- **Atomic Operations** - All-or-nothing state changes
-- **Conflict Detection** - Early detection with resolution guidance
-- **Graceful Degradation** - Continue working when services are unavailable
-
----
-
-## 🧪 **Testing**
-
-```bash
-# Run full test suite
-cargo test -- --test-threads=1
-
-# Tests cover:
-# - Core stack management (40 tests)
-# - Git operations and safety
-# - Bitbucket integration  
-# - CLI command functionality
-# - Error handling and recovery
-```
-
-**Test Coverage**: 40/40 tests passing ✅
+- 📚 **[User Manual](./docs/USER_MANUAL.md)** - Complete command reference
+- 🚀 **[Installation Guide](./docs/INSTALLATION.md)** - Platform-specific instructions
+- 🎓 **[Onboarding Guide](./docs/ONBOARDING.md)** - Step-by-step tutorial
+- 🔧 **[Configuration Reference](./docs/CONFIGURATION.md)** - All settings explained
+- 🐛 **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- 🏗️ **[Architecture](./docs/ARCHITECTURE.md)** - Internal design and extending
+- 📋 **[Smart Force Push Strategy](./docs/EDIT_FLOWS_INTEGRATION.md)** - How PR history is preserved
+- 🚀 **[Upcoming Features](./docs/UPCOMING.md)** - Planned features and roadmap
 
 ---
 
@@ -855,19 +835,6 @@ cargo test
 
 ### **Release Process**
 See [Release Guide](./docs/RELEASING.md) for maintainer instructions.
-
----
-
-## 📝 **Documentation**
-
-- 📚 **[User Manual](./docs/USER_MANUAL.md)** - Complete command reference
-- 🚀 **[Installation Guide](./docs/INSTALLATION.md)** - Platform-specific instructions
-- 🎓 **[Onboarding Guide](./docs/ONBOARDING.md)** - Step-by-step tutorial
-- 🔧 **[Configuration Reference](./docs/CONFIGURATION.md)** - All settings explained
-- 🐛 **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Common issues and solutions
-- 🏗️ **[Architecture](./docs/ARCHITECTURE.md)** - Internal design and extending
-- 📋 **[Smart Force Push Strategy](./docs/EDIT_FLOWS_INTEGRATION.md)** - How PR history is preserved
-- 🚀 **[Upcoming Features](./docs/UPCOMING.md)** - Planned features and roadmap
 
 ---
 
@@ -907,48 +874,70 @@ See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for complete development guidel
 
 ---
 
+## 🏗️ **Architecture**
+
+Cascade CLI is built with:
+- **🦀 Rust** - Performance, safety, and reliability
+- **📚 git2** - Native Git operations without subprocess overhead
+- **🌐 HTTP/REST** - Direct Bitbucket API integration  
+- **🎨 TUI Libraries** - Rich terminal interfaces (ratatui, crossterm)
+- **⚡ Async** - Non-blocking operations with tokio
+
+### **Design Principles**
+- **Smart Force Push** - Preserves review history while enabling safe rebases
+- **Atomic Operations** - All-or-nothing state changes
+- **Conflict Detection** - Early detection with resolution guidance
+- **Graceful Degradation** - Continue working when services are unavailable
+
+---
+
+## 🧪 **Testing**
+
+```bash
+# Run full test suite
+cargo test -- --test-threads=1
+
+# Tests cover:
+# - Core stack management (40 tests)
+# - Git operations and safety
+# - Bitbucket integration  
+# - CLI command functionality
+# - Error handling and recovery
+```
+
+**Test Coverage**: 98 tests passing ✅
+
+---
+
 ## 📜 **License**
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🌟 **Why Stacked Diffs?**
-
-Traditional Git workflows often result in:
-- **Large, hard-to-review PRs** 
-- **Blocked development** waiting for reviews
-- **Merge conflicts** from long-lived branches
-- **Lost context** in massive changesets
-
-**Stacked diffs solve this by:**
-- ✅ **Small, focused PRs** that are easy to review
-- ✅ **Parallel development** with dependency management  
-- ✅ **Reduced conflicts** through frequent integration
-- ✅ **Better code quality** via incremental feedback
-
----
-
 <p align="center">
   <strong>📚 Transform your Git workflow with Cascade CLI</strong><br>
-  <em>Professional stack management for modern development teams</em>
+  <em>Stack management for modern development teams</em>
 </p>
 
 ### Daily Workflow Commands
 
 ```bash
 # Check if your stack needs syncing (read-only status check)
-cc stack check
+cc stacks check
 
 # Sync with remote changes (pull + rebase + cleanup)  
-cc stack sync
+cc stacks sync
 
 # Make changes and push to stack
-cc stack push --message "Add feature X"
+cc stacks push --message "Add feature X"
 
 # Submit for review
-cc stack submit --all
+cc stacks submit
 
 # Land completed PRs with auto-retargeting
-cc stack land
+cc stacks land
 ```
+
+# 🔄 INTELLIGENT BRANCH SWITCHING - Never lose track of your stacks!\ncc stacks deactivate           # Turn off stack mode (use normal Git workflow)\ncc stacks switch other-stack   # Switch to different stack\n\n# AUTOMATIC DETECTION - Cascade detects when you switch branches\n# and prompts you to:\n# 1. Continue with current stack on new branch\n# 2. Deactivate stack (normal Git workflow)\n# 3. Switch to different stack\n# 4. Cancel operation
+
