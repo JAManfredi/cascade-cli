@@ -20,9 +20,9 @@ Cascade CLI improves Git workflows by enabling **stacked diffs** for Bitbucket S
   - [1. Installation](#1-installation)
   - [2. Initialize Your Repository](#2-initialize-your-repository)
   - [3. Create Your First Stack](#3-create-your-first-stack)
-  - [🚀 Command Overview](#command-overview)
   - [4. Experience the Magic](#4-experience-the-magic)
 - [🔧 Git Hooks (Recommended)](#git-hooks-recommended)
+- [⚡ Essential Commands](#essential-commands)
 - [📖 Command Reference](#command-reference)
 - [🤖 Smart Conflict Resolution](#smart-conflict-resolution)
 - [🔧 Configuration](#configuration)
@@ -282,41 +282,6 @@ cc hooks install post-commit
 
 ---
 
-### **🚀 Command Overview**
-
-```bash
-# Stack Management (Multiple Stacks)
-cc stacks create <name> --base <branch>  # Create new stack
-cc stacks list                          # List all stacks  
-cc stacks switch <name>                 # Switch active stack
-cc stacks push                          # Add commits to current stack
-cc stacks submit                        # Submit PRs for current stack
-
-# Current Stack Operations (Shortcuts)
-cc stack                                # Show current stack details
-cc push                                 # Shortcut for 'stacks push'
-cc land                                 # Merge approved PRs
-cc autoland                             # Auto-merge all ready PRs
-cc sync                                 # Sync with remote repository
-cc rebase                               # Rebase stack on updated base
-
-# Branch Management & Safety (Now with shortcuts!)
-cc deactivate                           # Turn off stack mode (shortcut)
-cc switch <name>                        # Switch to different stack (shortcut)
-
-# Or use full commands:
-cc stacks deactivate                    # Turn off stack mode (use normal Git workflow)
-cc stacks switch <name>                 # Switch to different stack
-
-# 🔍 Automatic branch change detection: Cascade detects when you switch branches
-#     and prompts you to continue with current stack, deactivate, or switch stacks
-
-# Repository Overview
-cc repo                                 # Show all stacks and repository status
-```
-
-**💡 Pro tip**: Use `cc stack` for current stack details, `cc repo` for everything overview.
-
 ### **4. Experience the Magic**
 
 ```bash
@@ -494,6 +459,43 @@ cc config set conflicts.auto_resolve true
 cc config set conflicts.file_types "js,ts,py,rs"
 cc config set conflicts.backup_on_resolve true
 ```
+
+---
+
+## ⚡ **Essential Commands**
+
+```bash
+# Stack Management (Multiple Stacks)
+cc stacks create <name> --base <branch>  # Create new stack
+cc stacks list                          # List all stacks  
+cc stacks switch <name>                 # Switch active stack
+cc stacks push                          # Add commits to current stack
+cc stacks submit                        # Submit PRs for current stack
+
+# Current Stack Operations (Shortcuts)
+cc stack                                # Show current stack details
+cc push                                 # Shortcut for 'stacks push'
+cc land                                 # Merge approved PRs
+cc autoland                             # Auto-merge all ready PRs
+cc sync                                 # Sync with remote repository
+cc rebase                               # Rebase stack on updated base
+
+# Branch Management & Safety (Now with shortcuts!)
+cc deactivate                           # Turn off stack mode (shortcut)
+cc switch <name>                        # Switch to different stack (shortcut)
+
+# Or use full commands:
+cc stacks deactivate                    # Turn off stack mode (use normal Git workflow)
+cc stacks switch <name>                 # Switch to different stack
+
+# 🔍 Automatic branch change detection: Cascade detects when you switch branches
+#     and prompts you to continue with current stack, deactivate, or switch stacks
+
+# Repository Overview
+cc repo                                 # Show all stacks and repository status
+```
+
+**💡 Pro tip**: Use `cc stack` for current stack details, `cc repo` for everything overview.
 
 ---
 
