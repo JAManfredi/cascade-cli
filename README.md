@@ -102,21 +102,31 @@ Cascade CLI creates meaningful branch names from your commit messages:
 
 ### **1. Installation**
 
-#### **From Source (Recommended)**
-```bash
-# Clone and build
-git clone https://github.com/JAManfredi/cascade-cli.git
-cd cascade-cli
-cargo build --release
+#### **Quick Install (Recommended)**
 
-# Add to PATH
-export PATH="$PWD/target/release:$PATH"
+**Universal Script (Linux/macOS):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/install.sh | bash
 ```
 
-#### **Pre-built Binaries** *(Recommended)*
+**Package Managers:**
+```bash
+# macOS - Homebrew
+brew install JAManfredi/cascade-cli/cascade-cli
 
-Download the latest release for your platform:
+# Rust users
+cargo install cascade-cli
 
+# Windows - Chocolatey
+choco install cascade-cli
+
+# Linux - Snap
+sudo snap install cascade-cli --classic
+```
+
+#### **Manual Installation**
+
+**Pre-built Binaries:**
 ```bash
 # macOS (auto-detect architecture)
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
@@ -125,9 +135,21 @@ sudo mv cc /usr/local/bin/
 # Linux (auto-detect architecture)  
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz | tar -xz
 sudo mv cc /usr/local/bin/
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows-x64.exe.zip" -OutFile "cc.zip"
+Expand-Archive -Path "cc.zip" -DestinationPath "$env:USERPROFILE\bin\"
 ```
 
-See [Installation Guide](./docs/INSTALLATION.md) for platform-specific instructions.
+**From Source:**
+```bash
+git clone https://github.com/JAManfredi/cascade-cli.git
+cd cascade-cli
+cargo build --release
+cargo install --path .
+```
+
+See [Installation Guide](./docs/INSTALLATION.md) for detailed platform-specific instructions.
 
 ### **2. Initialize Your Repository**
 ```bash
@@ -840,8 +862,8 @@ See [Release Guide](./docs/RELEASING.md) for maintainer instructions.
 - 🔧 **[Configuration Reference](./docs/CONFIGURATION.md)** - All settings explained
 - 🐛 **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Common issues and solutions
 - 🏗️ **[Architecture](./docs/ARCHITECTURE.md)** - Internal design and extending
-- 📋 **[Smart Force Push Strategy](./EDIT_FLOWS_INTEGRATION.md)** - How PR history is preserved
-- 🚀 **[Upcoming Features](./UPCOMING.md)** - Planned features and roadmap
+- 📋 **[Smart Force Push Strategy](./docs/EDIT_FLOWS_INTEGRATION.md)** - How PR history is preserved
+- 🚀 **[Upcoming Features](./docs/UPCOMING.md)** - Planned features and roadmap
 
 ---
 
