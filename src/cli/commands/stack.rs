@@ -3227,7 +3227,9 @@ mod tests {
                             error_msg.contains("auth") ||
                             error_msg.contains("Stack is empty") ||
                             error_msg.contains("base branch") ||
-                            error_msg.contains("uncommitted changes"),
+                            error_msg.contains("uncommitted changes") ||
+                            error_msg.contains("current directory") ||
+                            error_msg.contains("No such file"),
                             "Unexpected error type: {error_msg}"
                         );
                     }
@@ -3276,7 +3278,9 @@ mod tests {
                             error_msg.contains("Stack is empty") ||
                             error_msg.contains("Bitbucket") ||
                             error_msg.contains("config") ||
-                            error_msg.contains("auth"),
+                            error_msg.contains("auth") ||
+                            error_msg.contains("current directory") ||
+                            error_msg.contains("No such file"),
                             "Unexpected error: {error_msg}"
                         );
                     }

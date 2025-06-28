@@ -140,29 +140,29 @@ impl PullRequestManager {
         Ok(())
     }
 
-    /// Get enhanced pull request status with mergability information
+    /// Get comprehensive status information for a pull request
     pub async fn get_pull_request_status(&self, pr_id: u64) -> Result<PullRequestStatus> {
-        // Get basic PR
+        // Get the pull request
         let pr = self.get_pull_request(pr_id).await?;
 
-        // Get detailed participants (reviewers)
+        // Get detailed mergability information (includes all server-side checks)
+        let mergeable_details = self.check_mergeable_detailed(pr_id).await.ok();
+        let mergeable = mergeable_details.as_ref().map(|d| d.can_merge);
+
+        // Get participants and calculate review status
         let participants = self.get_pull_request_participants(pr_id).await?;
-
-        // Get build status
-        let build_status = self.get_build_status(pr_id).await.ok();
-
-        // Calculate review status
         let review_status = self.calculate_review_status(&participants)?;
 
-        // Check mergability
-        let mergeable = self.check_mergeable(pr_id).await.ok();
+        // Get build status (fallback gracefully if not available)
+        let build_status = self.get_build_status(pr_id).await.ok();
 
-        // Get conflict information
+        // Get conflicts (fallback gracefully if not available)
         let conflicts = self.get_conflicts(pr_id).await.ok();
 
         Ok(PullRequestStatus {
             pr,
             mergeable,
+            mergeable_details,
             participants,
             build_status,
             review_status,
@@ -177,18 +177,61 @@ impl PullRequestManager {
         Ok(response.values)
     }
 
-    /// Check if PR is mergeable (no conflicts)
-    pub async fn check_mergeable(&self, pr_id: u64) -> Result<bool> {
+    /// Check if PR is mergeable and get detailed blocking reasons
+    pub async fn check_mergeable_detailed(&self, pr_id: u64) -> Result<MergeabilityDetails> {
         let path = format!("pull-requests/{pr_id}/merge");
 
-        // This endpoint returns merge status
-        match self.client.get::<MergeabilityResponse>(&path).await {
-            Ok(response) => Ok(response.can_merge),
+        match self.client.get::<serde_json::Value>(&path).await {
+            Ok(response) => {
+                let can_merge = response.get("canMerge")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                
+                let conflicted = response.get("conflicted")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                
+                // Extract detailed veto reasons if present
+                let mut blocking_reasons = Vec::new();
+                
+                if let Some(vetoes) = response.get("vetoes").and_then(|v| v.as_array()) {
+                    for veto in vetoes {
+                        if let Some(summary) = veto.get("summaryMessage").and_then(|s| s.as_str()) {
+                            blocking_reasons.push(summary.to_string());
+                        } else if let Some(detailed) = veto.get("detailedMessage").and_then(|s| s.as_str()) {
+                            blocking_reasons.push(detailed.to_string());
+                        }
+                    }
+                }
+                
+                // Add conflict information
+                if conflicted {
+                    blocking_reasons.push("Pull request has merge conflicts".to_string());
+                }
+                
+                Ok(MergeabilityDetails {
+                    can_merge,
+                    conflicted,
+                    blocking_reasons,
+                    server_enforced: true, // This comes from Bitbucket's authoritative check
+                })
+            }
             Err(_) => {
-                // Fallback: assume mergeable if we can't check
-                Ok(true)
+                // Fallback: assume mergeable but note we couldn't check
+                Ok(MergeabilityDetails {
+                    can_merge: true,
+                    conflicted: false,
+                    blocking_reasons: vec!["Could not verify merge conditions".to_string()],
+                    server_enforced: false,
+                })
             }
         }
+    }
+
+    /// Check if PR is mergeable (legacy method - kept for backward compatibility)
+    pub async fn check_mergeable(&self, pr_id: u64) -> Result<bool> {
+        let details = self.check_mergeable_detailed(pr_id).await?;
+        Ok(details.can_merge)
     }
 
     /// Get build status for a PR
@@ -541,6 +584,7 @@ impl PullRequest {
 pub struct PullRequestStatus {
     pub pr: PullRequest,
     pub mergeable: Option<bool>,
+    pub mergeable_details: Option<MergeabilityDetails>,
     pub participants: Vec<Participant>,
     pub build_status: Option<BuildStatus>,
     pub review_status: ReviewStatus,
@@ -669,47 +713,84 @@ impl PullRequestStatus {
             )
     }
 
-    /// Get blocking reasons if not ready to land
+    /// Get detailed reasons why PR cannot be merged
     pub fn get_blocking_reasons(&self) -> Vec<String> {
         let mut reasons = Vec::new();
 
-        if self.pr.state != PullRequestState::Open {
-            reasons.push(format!("PR is {}", self.pr.state.as_str()));
-            return reasons; // If not open, other checks don't matter
+        // 🎯 SERVER-SIDE MERGE CHECKS (Most Important)
+        // These are authoritative from Bitbucket Server and include:
+        // - Required approvals, build checks, branch permissions
+        // - Code Insights, required builds, custom merge checks  
+        // - Task completion, default reviewers, etc.
+        if let Some(mergeable_details) = &self.mergeable_details {
+            if !mergeable_details.can_merge {
+                // Add specific server-side blocking reasons
+                for reason in &mergeable_details.blocking_reasons {
+                    reasons.push(format!("🔒 Server Check: {reason}"));
+                }
+                
+                // If no specific reasons but still not mergeable
+                if mergeable_details.blocking_reasons.is_empty() {
+                    reasons.push("🔒 Server Check: Merge blocked by repository policy".to_string());
+                }
+            }
+        } else if self.mergeable == Some(false) {
+            // Fallback if we don't have detailed info
+            reasons.push("🔒 Server Check: Merge blocked by repository policy".to_string());
         }
 
-        // Check reviews
+        // ❌ PR State Check
+        if !self.pr.is_open() {
+            reasons.push(format!("❌ PR Status: Pull request is {}", self.pr.state.as_str()));
+        }
+
+        // 🔄 Build Status Check  
+        if let Some(build_status) = &self.build_status {
+            match build_status.state {
+                BuildState::Failed => reasons.push("❌ Build Status: Build failed".to_string()),
+                BuildState::InProgress => reasons.push("⏳ Build Status: Build in progress".to_string()),
+                BuildState::Cancelled => reasons.push("❌ Build Status: Build cancelled".to_string()),
+                BuildState::Unknown => reasons.push("❓ Build Status: Build status unknown".to_string()),
+                BuildState::Successful => {} // No blocking reason
+            }
+        }
+
+        // 👥 Review Status Check (supplementary to server checks)
         if !self.review_status.can_merge {
+            if self.review_status.current_approvals < self.review_status.required_approvals {
+                reasons.push(format!(
+                    "👥 Review Status: Need {} more approval{} ({}/{})",
+                    self.review_status.required_approvals - self.review_status.current_approvals,
+                    if self.review_status.required_approvals - self.review_status.current_approvals == 1 { "" } else { "s" },
+                    self.review_status.current_approvals,
+                    self.review_status.required_approvals
+                ));
+            }
+
             if self.review_status.needs_work_count > 0 {
                 reasons.push(format!(
-                    "{} reviewers requested changes",
-                    self.review_status.needs_work_count
+                    "👥 Review Status: {} reviewer{} requested changes",
+                    self.review_status.needs_work_count,
+                    if self.review_status.needs_work_count == 1 { "" } else { "s" }
                 ));
             }
-            if self.review_status.current_approvals < self.review_status.required_approvals {
-                let needed =
-                    self.review_status.required_approvals - self.review_status.current_approvals;
+
+            if !self.review_status.missing_reviewers.is_empty() {
                 reasons.push(format!(
-                    "Needs {} more approval{}",
-                    needed,
-                    if needed == 1 { "" } else { "s" }
+                    "👥 Review Status: Missing approval from: {}",
+                    self.review_status.missing_reviewers.join(", ")
                 ));
             }
         }
 
-        // Check builds
-        if let Some(build) = &self.build_status {
-            match build.state {
-                BuildState::Failed => reasons.push("Build failed".to_string()),
-                BuildState::InProgress => reasons.push("Build in progress".to_string()),
-                BuildState::Cancelled => reasons.push("Build cancelled".to_string()),
-                _ => {}
+        // ⚠️ Merge Conflicts Check
+        if let Some(conflicts) = &self.conflicts {
+            if !conflicts.is_empty() {
+                reasons.push(format!("⚠️ Merge Conflicts: {} file{} with conflicts", 
+                    conflicts.len(),
+                    if conflicts.len() == 1 { "" } else { "s" }
+                ));
             }
-        }
-
-        // Check conflicts
-        if let Some(false) = self.mergeable {
-            reasons.push("Has merge conflicts".to_string());
         }
 
         reasons
@@ -803,6 +884,15 @@ struct MergePullRequestRequest {
     message: Option<String>,
     #[serde(rename = "strategy")]
     strategy: MergeStrategy,
+}
+
+/// Mergeability details
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MergeabilityDetails {
+    pub can_merge: bool,
+    pub conflicted: bool,
+    pub blocking_reasons: Vec<String>,
+    pub server_enforced: bool,
 }
 
 #[cfg(test)]
@@ -995,6 +1085,7 @@ mod tests {
         let status = PullRequestStatus {
             pr,
             mergeable: Some(true),
+            mergeable_details: None,
             participants,
             build_status: Some(create_test_build_status(BuildState::Successful)),
             review_status,
@@ -1022,6 +1113,7 @@ mod tests {
         let status = PullRequestStatus {
             pr,
             mergeable: Some(false),
+            mergeable_details: None,
             participants,
             build_status: Some(create_test_build_status(BuildState::Failed)),
             review_status,
@@ -1037,6 +1129,7 @@ mod tests {
         let pr_status = PullRequestStatus {
             pr: create_test_pull_request(1, PullRequestState::Open),
             mergeable: Some(true),
+            mergeable_details: None,
             participants: vec![create_test_participant(
                 ParticipantRole::Author,
                 ParticipantStatus::Approved,
@@ -1082,6 +1175,7 @@ mod tests {
         let status = PullRequestStatus {
             pr,
             mergeable: Some(true),
+            mergeable_details: None,
             participants,
             build_status: Some(create_test_build_status(BuildState::Successful)),
             review_status,
