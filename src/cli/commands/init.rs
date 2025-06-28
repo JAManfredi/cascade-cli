@@ -100,13 +100,17 @@ mod tests {
         // Test the core functionality directly using internal functions
         // This verifies initialization logic without environment-dependent directory changes
         assert!(is_git_repository(&repo_path));
-        
+
         // Initialize using internal function
-        crate::config::initialize_repo(&repo_path, Some("https://bitbucket.example.com".to_string())).unwrap();
-        
+        crate::config::initialize_repo(
+            &repo_path,
+            Some("https://bitbucket.example.com".to_string()),
+        )
+        .unwrap();
+
         // Verify it was initialized successfully
         assert!(is_repo_initialized(&repo_path));
-        
+
         println!("✅ Cascade initialization in Git repository tested successfully");
     }
 
@@ -117,11 +121,11 @@ mod tests {
 
         // Test validation logic directly - non-git directories should be detected
         assert!(!is_git_repository(non_git_path));
-        
+
         // Attempting to find repository root should fail in non-git directory
         let result = find_repository_root(non_git_path);
         assert!(result.is_err());
-        
+
         println!("✅ Non-Git directory correctly detected - initialization would be rejected");
     }
 

@@ -1,41 +1,25 @@
 <svg width="1200" height="400" viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Main gradient background -->
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#1e293b;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#334155;stop-opacity:1" />
+    <!-- Gradient for main background -->
+    <linearGradient id="mainBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#111111;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1c1c1c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#111111;stop-opacity:1" />
     </linearGradient>
     
-    <!-- Wave gradient -->
-    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:0.8" />
-      <stop offset="30%" style="stop-color:#0891b2;stop-opacity:0.9" />
-      <stop offset="70%" style="stop-color:#0e7490;stop-opacity:0.8" />
-      <stop offset="100%" style="stop-color:#155e75;stop-opacity:0.7" />
+    <!-- Gradient for cards -->
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#262626;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1c1c1c;stop-opacity:1" />
     </linearGradient>
     
-    <!-- Secondary wave gradient -->
-    <linearGradient id="wave2Gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:0.6" />
-      <stop offset="50%" style="stop-color:#06b6d4;stop-opacity:0.7" />
-      <stop offset="100%" style="stop-color:#0891b2;stop-opacity:0.5" />
+    <!-- Sage green gradient for accents -->
+    <linearGradient id="sageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22e55d;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1db954;stop-opacity:1" />
     </linearGradient>
     
-    <!-- Text gradient -->
-    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#f0f9ff;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#e0f7fa;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#b2ebf2;stop-opacity:1" />
-    </linearGradient>
-    
-    <!-- Accent gradient for icons -->
-    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
-    </linearGradient>
-    
-    <!-- Glow filter -->
+    <!-- Subtle glow effect -->
     <filter id="glow">
       <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
       <feMerge> 
@@ -43,90 +27,137 @@
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
+    
+    <!-- Drop shadow for cards -->
+    <filter id="cardShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
   </defs>
-
-  <!-- Background -->
-  <rect width="1200" height="400" fill="url(#bgGradient)"/>
   
-  <!-- Wave patterns -->
-  <path d="M0,250 Q300,200 600,230 T1200,220 L1200,400 L0,400 Z" fill="url(#waveGradient)" opacity="0.8"/>
-  <path d="M0,280 Q400,240 800,270 T1200,260 L1200,400 L0,400 Z" fill="url(#wave2Gradient)" opacity="0.6"/>
+  <!-- Main background -->
+  <rect width="1200" height="400" fill="url(#mainBg)"/>
+  
+  <!-- Subtle grid pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#262626" stroke-width="0.5" opacity="0.3"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="400" fill="url(#grid)"/>
+  
+  <!-- Floating code cards (left side) -->
+  <g id="codeCards" opacity="0.8">
+    <!-- Card 1 (back) -->
+    <rect x="80" y="120" width="180" height="100" rx="12" fill="url(#cardGrad)" filter="url(#cardShadow)" transform="rotate(-8 170 170)"/>
+    <text x="90" y="145" fill="#5e5e5e" font-family="SF Mono, Monaco, monospace" font-size="11" transform="rotate(-8 170 170)">
+      <tspan x="90" dy="0">fn cascade_build() {</tspan>
+      <tspan x="100" dy="14">  stack.optimize();</tspan>
+      <tspan x="100" dy="14">  git.branch();</tspan>
+      <tspan x="90" dy="14">}</tspan>
+    </text>
+    
+    <!-- Card 2 (middle) -->
+    <rect x="90" y="100" width="180" height="100" rx="12" fill="url(#cardGrad)" filter="url(#cardShadow)" transform="rotate(-4 180 150)"/>
+    <text x="100" y="125" fill="#ffffff" font-family="SF Mono, Monaco, monospace" font-size="11" transform="rotate(-4 180 150)">
+      <tspan x="100" dy="0">+ stack.push()</tspan>
+      <tspan x="100" dy="14">+ conflict.resolve()</tspan>
+      <tspan x="100" dy="14">+ git.optimize()</tspan>
+      <tspan x="100" dy="14">+ bitbucket.sync()</tspan>
+    </text>
+    
+    <!-- Card 3 (front) -->
+    <rect x="100" y="80" width="180" height="100" rx="12" fill="url(#cardGrad)" filter="url(#cardShadow)"/>
+    <rect x="105" y="85" width="170" height="8" rx="4" fill="url(#sageGrad)"/>
+    <text x="110" y="105" fill="#22e55d" font-family="SF Mono, Monaco, monospace" font-size="11" font-weight="600">
+      <tspan x="110" dy="0">cascade stack create</tspan>
+      <tspan x="110" dy="14" fill="#ffffff">--base main feature-auth</tspan>
+      <tspan x="110" dy="14" fill="#5e5e5e">✓ Stack created</tspan>
+      <tspan x="110" dy="14" fill="#5e5e5e">✓ Ready for commits</tspan>
+    </text>
+  </g>
+  
+  <!-- Main title -->
+  <g id="title" filter="url(#glow)">
+    <text x="600" y="180" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, system-ui, sans-serif" font-size="72" font-weight="300" text-anchor="middle" letter-spacing="-2px">
+      Cascade CLI
+    </text>
+    <text x="600" y="220" fill="#5e5e5e" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, system-ui, sans-serif" font-size="24" font-weight="400" text-anchor="middle" letter-spacing="1px">
+      Professional Git Stack Management
+    </text>
+    <text x="600" y="250" fill="#3a3a3a" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, system-ui, sans-serif" font-size="16" font-weight="400" text-anchor="middle">
+      Transform your workflow with stacked diffs • Bitbucket integration • Smart conflict resolution
+    </text>
+  </g>
+  
+  <!-- Feature badges (properly sized to avoid cutoff) -->
+  <g id="badges">
+    <!-- Stacked Diffs -->
+    <rect x="350" y="290" width="120" height="32" rx="16" fill="#262626" stroke="#22e55d" stroke-width="1"/>
+    <circle cx="365" cy="306" r="4" fill="#22e55d"/>
+    <text x="375" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Stacked Diffs</text>
+    
+    <!-- Smart Rebase -->
+    <rect x="480" y="290" width="115" height="32" rx="16" fill="#262626" stroke="#22e55d" stroke-width="1"/>
+    <circle cx="495" cy="306" r="4" fill="#22e55d"/>
+    <text x="505" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Smart Rebase</text>
+    
+    <!-- Enterprise Ready -->
+    <rect x="605" y="290" width="130" height="32" rx="16" fill="#262626" stroke="#22e55d" stroke-width="1"/>
+    <circle cx="620" cy="306" r="4" fill="#22e55d"/>
+    <text x="630" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Enterprise Ready</text>
+    
+    <!-- Rust Powered -->
+    <rect x="745" y="290" width="115" height="32" rx="16" fill="#262626" stroke="#22e55d" stroke-width="1"/>
+    <circle cx="760" cy="306" r="4" fill="#22e55d"/>
+    <text x="770" y="310" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif" font-size="12" font-weight="500">Rust Powered</text>
+  </g>
+  
+  <!-- Git branch visualization (right side) -->
+  <g id="gitViz" opacity="0.6">
+    <!-- Main branch line -->
+    <line x1="950" y1="80" x2="950" y2="320" stroke="#262626" stroke-width="3"/>
+    
+    <!-- Feature branches -->
+    <g stroke="#22e55d" stroke-width="2" fill="none">
+      <!-- Branch 1 -->
+      <path d="M950 120 Q970 120 980 140 L980 180 Q980 200 970 200 L950 200"/>
+      <circle cx="980" cy="160" r="3" fill="#22e55d"/>
+      
+      <!-- Branch 2 -->
+      <path d="M950 160 Q990 160 1000 180 L1000 220 Q1000 240 990 240 L950 240"/>
+      <circle cx="1000" cy="200" r="3" fill="#22e55d"/>
+      
+      <!-- Branch 3 -->
+      <path d="M950 200 Q1010 200 1020 220 L1020 260 Q1020 280 1010 280 L950 280"/>
+      <circle cx="1020" cy="240" r="3" fill="#22e55d"/>
+    </g>
+    
+    <!-- Main branch commits -->
+    <circle cx="950" cy="100" r="4" fill="#ffffff"/>
+    <circle cx="950" cy="140" r="4" fill="#ffffff"/>
+    <circle cx="950" cy="180" r="4" fill="#ffffff"/>
+    <circle cx="950" cy="220" r="4" fill="#ffffff"/>
+    <circle cx="950" cy="260" r="4" fill="#ffffff"/>
+    <circle cx="950" cy="300" r="4" fill="#ffffff"/>
+  </g>
   
   <!-- Floating particles -->
-  <circle cx="100" cy="100" r="2" fill="#22d3ee" opacity="0.6">
-    <animate attributeName="cy" values="100;120;100" dur="3s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="200" cy="150" r="1.5" fill="#06b6d4" opacity="0.7">
-    <animate attributeName="cy" values="150;170;150" dur="4s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="1050" cy="120" r="2.5" fill="#0891b2" opacity="0.5">
-    <animate attributeName="cy" values="120;140;120" dur="2.5s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="1150" cy="80" r="1.8" fill="#22d3ee" opacity="0.6">
-    <animate attributeName="cy" values="80;100;80" dur="3.5s" repeatCount="indefinite"/>
-  </circle>
-
-  <!-- Git branch icon (stylized) -->
-  <g transform="translate(80, 60)" fill="url(#accentGradient)" opacity="0.8">
-    <circle cx="0" cy="0" r="8"/>
-    <circle cx="40" cy="20" r="6"/>
-    <circle cx="40" cy="-20" r="6"/>
-    <path d="M8,0 L32,20" stroke="url(#accentGradient)" stroke-width="3" fill="none"/>
-    <path d="M8,0 L32,-20" stroke="url(#accentGradient)" stroke-width="3" fill="none"/>
+  <g id="particles" opacity="0.4">
+    <circle cx="200" cy="60" r="2" fill="#22e55d">
+      <animate attributeName="cy" values="60;80;60" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="850" cy="350" r="1.5" fill="#525252">
+      <animate attributeName="cy" values="350;330;350" dur="6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.3;0.7;0.3" dur="6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1100" cy="100" r="1" fill="#22e55d">
+      <animate attributeName="cy" values="100;120;100" dur="5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0.6;0.2" dur="5s" repeatCount="indefinite"/>
+    </circle>
   </g>
-
-  <!-- Stack visualization -->
-  <g transform="translate(1050, 80)" opacity="0.7">
-    <rect x="0" y="0" width="60" height="12" rx="2" fill="#22d3ee" opacity="0.9"/>
-    <rect x="5" y="15" width="60" height="12" rx="2" fill="#06b6d4" opacity="0.8"/>
-    <rect x="10" y="30" width="60" height="12" rx="2" fill="#0891b2" opacity="0.7"/>
-  </g>
-
-  <!-- Main title -->
-  <text x="600" y="140" font-family="Arial, sans-serif" font-size="72" font-weight="bold" 
-        text-anchor="middle" fill="url(#textGradient)" filter="url(#glow)">
-    🌊 Cascade CLI
-  </text>
   
-  <!-- Subtitle -->
-  <text x="600" y="180" font-family="Arial, sans-serif" font-size="24" font-weight="300" 
-        text-anchor="middle" fill="#e2e8f0" opacity="0.9">
-    Professional Git Stack Management
-  </text>
-  
-  <!-- Description -->
-  <text x="600" y="210" font-family="Arial, sans-serif" font-size="18" font-weight="300" 
-        text-anchor="middle" fill="#cbd5e1" opacity="0.8">
-    Transform your workflow with stacked diffs • Bitbucket integration • Smart conflict resolution
-  </text>
-
-  <!-- Feature badges -->
-  <g transform="translate(300, 250)">
-    <!-- Badge 1 -->
-    <rect x="0" y="0" width="120" height="30" rx="15" fill="#1e293b" stroke="#06b6d4" stroke-width="1" opacity="0.8"/>
-    <text x="60" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="500" 
-          text-anchor="middle" fill="#22d3ee">🔄 Stacked Diffs</text>
-    
-    <!-- Badge 2 -->
-    <rect x="140" y="0" width="100" height="30" rx="15" fill="#1e293b" stroke="#06b6d4" stroke-width="1" opacity="0.8"/>
-    <text x="190" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="500" 
-          text-anchor="middle" fill="#22d3ee">🤖 Smart Rebase</text>
-    
-    <!-- Badge 3 -->
-    <rect x="260" y="0" width="120" height="30" rx="15" fill="#1e293b" stroke="#06b6d4" stroke-width="1" opacity="0.8"/>
-    <text x="320" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="500" 
-          text-anchor="middle" fill="#22d3ee">🏢 Enterprise Ready</text>
-    
-    <!-- Badge 4 -->
-    <rect x="400" y="0" width="100" height="30" rx="15" fill="#1e293b" stroke="#06b6d4" stroke-width="1" opacity="0.8"/>
-    <text x="450" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="500" 
-          text-anchor="middle" fill="#22d3ee">🦀 Rust Powered</text>
-  </g>
-
-  <!-- GitHub corner link indicator -->
-  <g transform="translate(1120, 20)">
-    <path d="M0,0 L60,0 L60,60 Z" fill="#06b6d4" opacity="0.1"/>
-    <text x="40" y="35" font-family="Arial, sans-serif" font-size="24" 
-          text-anchor="middle" fill="#22d3ee" opacity="0.7">⭐</text>
-  </g>
+  <!-- Subtle corner accent -->
+  <path d="M0 0 L60 0 L0 60 Z" fill="url(#sageGrad)" opacity="0.1"/>
+  <path d="M1200 400 L1140 400 L1200 340 Z" fill="url(#sageGrad)" opacity="0.1"/>
 </svg> 
