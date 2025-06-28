@@ -885,6 +885,42 @@ See [Release Guide](./docs/RELEASING.md) for maintainer instructions.
 
 ---
 
+## 🔧 **Development**
+
+### **Quick Development Setup**
+
+```bash
+# Clone and build
+git clone https://github.com/jared/cascade-cli.git
+cd cascade-cli
+cargo build
+```
+
+### **Pre-Push Validation**
+
+**Always validate before pushing to GitHub!** Run our comprehensive check script:
+
+```bash
+./scripts/pre-push-check.sh
+```
+
+This runs all the same checks as CI:
+- ✅ Code formatting and linting
+- ✅ Unit and integration tests  
+- ✅ Documentation generation
+- ✅ Binary compilation
+
+**💡 Pro Tip**: Set up a git hook to run this automatically:
+```bash
+# Add to .git/hooks/pre-push
+#!/bin/sh
+./scripts/pre-push-check.sh
+```
+
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for complete development guidelines, testing strategies, and contribution workflows.
+
+---
+
 ## 📜 **License**
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
