@@ -292,7 +292,7 @@ impl GitRepository {
     }
 
     /// Get the HEAD commit object
-    pub fn get_head_commit(&self) -> Result<git2::Commit> {
+    pub fn get_head_commit(&self) -> Result<git2::Commit<'_>> {
         let head = self
             .repo
             .head()
@@ -302,7 +302,7 @@ impl GitRepository {
     }
 
     /// Get a commit object by hash
-    pub fn get_commit(&self, commit_hash: &str) -> Result<git2::Commit> {
+    pub fn get_commit(&self, commit_hash: &str) -> Result<git2::Commit<'_>> {
         let oid = Oid::from_str(commit_hash).map_err(CascadeError::Git)?;
 
         self.repo.find_commit(oid).map_err(CascadeError::Git)
@@ -327,7 +327,7 @@ impl GitRepository {
     }
 
     /// Get a signature for commits
-    fn get_signature(&self) -> Result<Signature> {
+    fn get_signature(&self) -> Result<Signature<'_>> {
         // Try to get signature from Git config
         if let Ok(config) = self.repo.config() {
             if let (Ok(name), Ok(email)) = (
@@ -350,7 +350,7 @@ impl GitRepository {
     }
 
     /// Get repository status
-    pub fn get_status(&self) -> Result<git2::Statuses> {
+    pub fn get_status(&self) -> Result<git2::Statuses<'_>> {
         self.repo.statuses(None).map_err(CascadeError::Git)
     }
 
@@ -609,7 +609,7 @@ impl GitRepository {
     }
 
     /// Get commits between two references
-    pub fn get_commits_between(&self, from: &str, to: &str) -> Result<Vec<git2::Commit>> {
+    pub fn get_commits_between(&self, from: &str, to: &str) -> Result<Vec<git2::Commit<'_>>> {
         let from_oid = self
             .repo
             .refname_to_id(&format!("refs/heads/{from}"))
@@ -714,7 +714,7 @@ impl GitRepository {
     }
 
     /// Resolve a reference (branch name, tag, or commit hash) to a commit
-    pub fn resolve_reference(&self, reference: &str) -> Result<git2::Commit> {
+    pub fn resolve_reference(&self, reference: &str) -> Result<git2::Commit<'_>> {
         // Try to parse as commit hash first
         if let Ok(oid) = Oid::from_str(reference) {
             if let Ok(commit) = self.repo.find_commit(oid) {
