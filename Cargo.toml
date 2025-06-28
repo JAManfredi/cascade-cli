@@ -16,7 +16,7 @@ dialoguer = "0.11"
 indicatif = "0.17"
 ratatui = "0.25"
 crossterm = "0.27"
-git2 = "0.18"
+git2 = { version = "0.18", default-features = false, features = ["vendored-libgit2"] }
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -35,3 +35,5 @@ url = "2.4"
 [dev-dependencies]
 tempfile = "3.0"
 tokio-test = "0.4"
+mockito = "1.0"
+serde_json = "1.0"

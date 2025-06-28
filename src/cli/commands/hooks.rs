@@ -727,4 +727,171 @@ pub async fn uninstall_hook(hook_name: &str) -> Result<()> {
     };
     
     hooks_manager.uninstall_hook(&hook_type)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use std::process::Command;
+
+    fn create_test_repo() -> (TempDir, std::path::PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_path_buf();
+
+        // Initialize git repository
+        Command::new("git").args(&["init"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["config", "user.name", "Test"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["config", "user.email", "test@test.com"]).current_dir(&repo_path).output().unwrap();
+
+        // Create initial commit
+        std::fs::write(repo_path.join("README.md"), "# Test").unwrap();
+        Command::new("git").args(&["add", "."]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["commit", "-m", "Initial"]).current_dir(&repo_path).output().unwrap();
+
+        // Initialize cascade
+        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
+
+        (temp_dir, repo_path)
+    }
+
+    #[test]
+    fn test_hooks_manager_creation() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        assert_eq!(manager.repo_path, repo_path);
+        assert_eq!(manager.hooks_dir, repo_path.join(".git/hooks"));
+    }
+
+    #[test]
+    fn test_hook_installation() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Test installing post-commit hook
+        let hook_type = HookType::PostCommit;
+        let result = manager.install_hook(&hook_type);
+        assert!(result.is_ok());
+        
+        // Verify hook file exists
+        let hook_path = repo_path.join(".git/hooks/post-commit");
+        assert!(hook_path.exists());
+        
+        // Verify hook is executable
+        let metadata = std::fs::metadata(&hook_path).unwrap();
+        let permissions = metadata.permissions();
+        
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert!(permissions.mode() & 0o111 != 0); // Check executable bit
+        }
+    }
+
+    #[test]
+    fn test_hook_detection() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Check if hook files exist (simplified test)
+        let post_commit_path = repo_path.join(".git/hooks/post-commit");
+        let pre_push_path = repo_path.join(".git/hooks/pre-push");
+        let commit_msg_path = repo_path.join(".git/hooks/commit-msg");
+        
+        // Initially no hooks should be installed
+        assert!(!post_commit_path.exists());
+        assert!(!pre_push_path.exists());
+        assert!(!commit_msg_path.exists());
+    }
+
+    #[test]
+    fn test_hook_validation() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Test with valid Bitbucket repository (has cascade config)
+        let validation = manager.validate_prerequisites();
+        assert!(validation.is_ok());
+        
+        // Test branch validation
+        let branch_validation = manager.validate_branch_suitability();
+        assert!(branch_validation.is_ok()); // Should be on main/master which is allowed
+    }
+
+    #[test]
+    fn test_hook_uninstallation() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Install then uninstall hook
+        let hook_type = HookType::PostCommit;
+        manager.install_hook(&hook_type).unwrap();
+        
+        let hook_path = repo_path.join(".git/hooks/post-commit");
+        assert!(hook_path.exists());
+        
+        let result = manager.uninstall_hook(&hook_type);
+        assert!(result.is_ok());
+        assert!(!hook_path.exists());
+    }
+
+    #[test]
+    fn test_hook_content_generation() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Test post-commit hook generation
+        let post_commit_content = manager.generate_post_commit_hook("cc");
+        assert!(post_commit_content.contains("#!/bin/sh"));
+        assert!(post_commit_content.contains("cc"));
+        
+        // Test pre-push hook generation
+        let pre_push_content = manager.generate_pre_push_hook("cc");
+        assert!(pre_push_content.contains("#!/bin/sh"));
+        assert!(pre_push_content.contains("cc"));
+        
+        // Test commit-msg hook generation
+        let commit_msg_content = manager.generate_commit_msg_hook("cc");
+        assert!(commit_msg_content.contains("#!/bin/sh"));
+        assert!(commit_msg_content.contains("cc"));
+    }
+
+    #[test]
+    fn test_hook_status_reporting() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Check repository type detection
+        let repo_type = manager.detect_repository_type().unwrap();
+        assert_eq!(repo_type, RepositoryType::Bitbucket); // Since we init with bitbucket URL
+        
+        // Check branch type detection
+        let branch_type = manager.detect_branch_type().unwrap();
+        assert_eq!(branch_type, BranchType::Main); // Should be on main/master initially
+    }
+
+    #[test]
+    fn test_force_installation() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+        
+        // Create a fake existing hook
+        let hook_path = repo_path.join(".git/hooks/post-commit");
+        std::fs::write(&hook_path, "#!/bin/sh\necho 'existing hook'").unwrap();
+        
+        // Install hook (should backup and replace existing)
+        let hook_type = HookType::PostCommit;
+        let result = manager.install_hook(&hook_type);
+        assert!(result.is_ok());
+        
+        // Verify new content replaced old content
+        let content = std::fs::read_to_string(&hook_path).unwrap();
+        assert!(content.contains("Cascade CLI Hook"));
+        assert!(!content.contains("existing hook"));
+        
+        // Verify backup was created
+        let backup_path = hook_path.with_extension("cascade-backup");
+        assert!(backup_path.exists());
+    }
 } 

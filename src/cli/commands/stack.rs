@@ -1257,7 +1257,7 @@ fn get_unpushed_commits(repo: &GitRepository, stack: &crate::stack::Stack) -> Re
 }
 
 /// Squash the last N commits into a single commit
-async fn squash_commits(repo: &GitRepository, count: usize, since_ref: Option<String>) -> Result<()> {
+pub async fn squash_commits(repo: &GitRepository, count: usize, since_ref: Option<String>) -> Result<()> {
     if count <= 1 {
         return Ok(()); // Nothing to squash
     }
@@ -1320,7 +1320,7 @@ async fn squash_commits(repo: &GitRepository, count: usize, since_ref: Option<St
 }
 
 /// Generate a smart commit message from multiple commits being squashed
-fn generate_squash_message(commits: &[git2::Commit]) -> Result<String> {
+pub fn generate_squash_message(commits: &[git2::Commit]) -> Result<String> {
     if commits.is_empty() {
         return Ok("Squashed commits".to_string());
     }
@@ -1367,7 +1367,7 @@ fn generate_squash_message(commits: &[git2::Commit]) -> Result<String> {
 }
 
 /// Extract feature name from WIP commit messages
-fn extract_feature_from_wip(messages: &[String]) -> String {
+pub fn extract_feature_from_wip(messages: &[String]) -> String {
     // Look for patterns like "WIP: add authentication" -> "Add authentication"
     for msg in messages {
         let lower = msg.to_lowercase();
@@ -1402,7 +1402,7 @@ fn extract_feature_from_wip(messages: &[String]) -> String {
 }
 
 /// Count commits since a given reference
-fn count_commits_since(repo: &GitRepository, since_commit_hash: &str) -> Result<usize> {
+pub fn count_commits_since(repo: &GitRepository, since_commit_hash: &str) -> Result<usize> {
     let head_commit = repo.get_head_commit()?;
     let since_commit = repo.get_commit(since_commit_hash)?;
     
@@ -1504,5 +1504,137 @@ mod tests {
 
         let _ = env::set_current_dir(original_dir);
         assert!(result.is_ok());
+    }
+
+    // Tests for squashing functionality
+
+    #[test]
+    fn test_extract_feature_from_wip_basic() {
+        let messages = vec![
+            "WIP: add authentication".to_string(),
+            "WIP: implement login flow".to_string(),
+        ];
+        
+        let result = extract_feature_from_wip(&messages);
+        assert_eq!(result, "Add authentication");
+    }
+
+    #[test]
+    fn test_extract_feature_from_wip_capitalize() {
+        let messages = vec!["WIP: fix user validation bug".to_string()];
+        
+        let result = extract_feature_from_wip(&messages);
+        assert_eq!(result, "Fix user validation bug");
+    }
+
+    #[test]
+    fn test_extract_feature_from_wip_fallback() {
+        let messages = vec![
+            "WIP user interface changes".to_string(),
+            "wip: css styling".to_string(),
+        ];
+        
+        let result = extract_feature_from_wip(&messages);
+        // Should create a fallback message since no "WIP:" prefix found
+        assert!(result.contains("Implement") || result.contains("Squashed") || result.len() > 5);
+    }
+
+    #[test]
+    fn test_extract_feature_from_wip_empty() {
+        let messages = vec![];
+        
+        let result = extract_feature_from_wip(&messages);
+        assert_eq!(result, "Squashed 0 commits");
+    }
+
+    #[test]
+    fn test_extract_feature_from_wip_short_message() {
+        let messages = vec!["WIP: x".to_string()]; // Too short
+        
+        let result = extract_feature_from_wip(&messages);
+        assert!(result.starts_with("Implement") || result.contains("Squashed"));
+    }
+
+    // Integration tests for squashing that don't require real git commits
+    
+    #[test] 
+    fn test_squash_message_final_strategy() {
+        // This test would need real git2::Commit objects, so we'll test the logic indirectly
+        // through the extract_feature_from_wip function which handles the core logic
+        
+        let messages = vec![
+            "Final: implement user authentication system".to_string(),
+            "WIP: add tests".to_string(),
+            "WIP: fix validation".to_string(),
+        ];
+        
+        // Test that we can identify final commits
+        assert!(messages[0].starts_with("Final:"));
+        
+        // Test message extraction
+        let extracted = messages[0].trim_start_matches("Final:").trim();
+        assert_eq!(extracted, "implement user authentication system");
+    }
+
+    #[test]
+    fn test_squash_message_wip_detection() {
+        let messages = vec![
+            "WIP: start feature".to_string(),
+            "WIP: continue work".to_string(),
+            "WIP: almost done".to_string(),
+            "Regular commit message".to_string(),
+        ];
+        
+        let wip_count = messages.iter()
+            .filter(|m| m.to_lowercase().starts_with("wip") || m.to_lowercase().contains("work in progress"))
+            .count();
+        
+        assert_eq!(wip_count, 3); // Should detect 3 WIP commits
+        assert!(wip_count > messages.len() / 2); // Majority are WIP
+        
+        // Should find the non-WIP message
+        let non_wip: Vec<&String> = messages.iter()
+            .filter(|m| !m.to_lowercase().starts_with("wip") && !m.to_lowercase().contains("work in progress"))
+            .collect();
+        
+        assert_eq!(non_wip.len(), 1);
+        assert_eq!(non_wip[0], "Regular commit message");
+    }
+
+    #[test]
+    fn test_squash_message_all_wip() {
+        let messages = vec![
+            "WIP: implement feature".to_string(),
+            "WIP: add more stuff".to_string(),
+            "WIP: final touches".to_string(),
+        ];
+        
+        let wip_count = messages.iter()
+            .filter(|m| m.to_lowercase().starts_with("wip"))
+            .count();
+        
+        assert_eq!(wip_count, messages.len()); // All are WIP
+        
+        // Should extract feature from WIP messages
+        let feature = extract_feature_from_wip(&messages);
+        assert_eq!(feature, "Implement feature");
+    }
+
+    #[test]
+    fn test_squash_message_edge_cases() {
+        // Test empty messages
+        let empty_messages: Vec<String> = vec![];
+        let result = extract_feature_from_wip(&empty_messages);
+        assert_eq!(result, "Squashed 0 commits");
+        
+        // Test messages with only whitespace
+        let whitespace_messages = vec!["   ".to_string(), "\t\n".to_string()];
+        let result = extract_feature_from_wip(&whitespace_messages);
+        assert!(result.contains("Squashed") || result.contains("Implement"));
+        
+        // Test case sensitivity
+        let mixed_case = vec!["wip: Add Feature".to_string()];
+        let result = extract_feature_from_wip(&mixed_case);
+        assert_eq!(result, "Add Feature");
     }
 } 

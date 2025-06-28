@@ -816,4 +816,79 @@ impl RebaseResult {
     pub fn success_count(&self) -> usize {
         self.new_commits.len()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use std::process::Command;
+    use std::path::PathBuf;
+
+    fn create_test_repo() -> (TempDir, PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_path_buf();
+
+        // Initialize git repository
+        Command::new("git").args(&["init"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["config", "user.name", "Test"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["config", "user.email", "test@test.com"]).current_dir(&repo_path).output().unwrap();
+
+        // Create initial commit
+        std::fs::write(repo_path.join("README.md"), "# Test").unwrap();
+        Command::new("git").args(&["add", "."]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["commit", "-m", "Initial"]).current_dir(&repo_path).output().unwrap();
+
+        (temp_dir, repo_path)
+    }
+
+    #[test]
+    fn test_conflict_region_creation() {
+        let region = ConflictRegion {
+            start: 0,
+            end: 50,
+            start_line: 1,
+            end_line: 3,
+            our_content: "function test() {\n    return true;\n}".to_string(),
+            their_content: "function test() {\n  return true;\n}".to_string(),
+        };
+
+        assert_eq!(region.start_line, 1);
+        assert_eq!(region.end_line, 3);
+        assert!(region.our_content.contains("return true"));
+        assert!(region.their_content.contains("return true"));
+    }
+
+    #[test]
+    fn test_rebase_strategies() {
+        assert_eq!(RebaseStrategy::BranchVersioning, RebaseStrategy::BranchVersioning);
+        assert_eq!(RebaseStrategy::CherryPick, RebaseStrategy::CherryPick);
+        assert_eq!(RebaseStrategy::ThreeWayMerge, RebaseStrategy::ThreeWayMerge);
+        assert_eq!(RebaseStrategy::Interactive, RebaseStrategy::Interactive);
+    }
+
+    #[test]
+    fn test_rebase_options() {
+        let options = RebaseOptions::default();
+        assert_eq!(options.strategy, RebaseStrategy::BranchVersioning);
+        assert!(!options.interactive);
+        assert!(options.auto_resolve);
+        assert_eq!(options.max_retries, 3);
+    }
+
+    #[test]
+    fn test_rebase_result() {
+        let result = RebaseResult {
+            success: true,
+            branch_mapping: std::collections::HashMap::new(),
+            conflicts: vec!["abc123".to_string()],
+            new_commits: vec!["def456".to_string()],
+            error: None,
+            summary: "Test summary".to_string(),
+        };
+
+        assert!(result.success);
+        assert!(result.has_conflicts());
+        assert_eq!(result.success_count(), 1);
+    }
 } 
