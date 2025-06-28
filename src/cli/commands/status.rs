@@ -162,14 +162,17 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
                 println!("  Run 'cc stacks create \"Stack Name\"' to create your first stack");
             } else {
                 println!("  Total stacks: {}", stacks.len());
-                
+
                 // Show each stack with detailed status
                 for stack in &stacks {
-                    let is_active = active_stack.as_ref().map(|a| a.name == stack.name).unwrap_or(false);
+                    let is_active = active_stack
+                        .as_ref()
+                        .map(|a| a.name == stack.name)
+                        .unwrap_or(false);
                     let active_marker = if is_active { "◉" } else { "◯" };
-                    
+
                     let submitted = stack.entries.iter().filter(|e| e.is_submitted).count();
-                    
+
                     let status_info = if submitted > 0 {
                         format!("{}/{} submitted", submitted, stack.entries.len())
                     } else if !stack.entries.is_empty() {
@@ -177,18 +180,24 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
                     } else {
                         "empty".to_string()
                     };
-                    
+
                     println!("  {} {} - {}", active_marker, stack.name, status_info);
-                    
+
                     // Show additional details for active stack
                     if is_active && !stack.entries.is_empty() {
-                        let first_branch = stack.entries.first().map(|e| e.branch.as_str()).unwrap_or("unknown");
+                        let first_branch = stack
+                            .entries
+                            .first()
+                            .map(|e| e.branch.as_str())
+                            .unwrap_or("unknown");
                         println!("    Base: {} → {}", stack.base_branch, first_branch);
                     }
                 }
-                
+
                 if active_stack.is_none() && !stacks.is_empty() {
-                    println!("\n  💡 No active stack. Use 'cc stacks switch <name>' to activate one");
+                    println!(
+                        "\n  💡 No active stack. Use 'cc stacks switch <name>' to activate one"
+                    );
                 }
             }
         }

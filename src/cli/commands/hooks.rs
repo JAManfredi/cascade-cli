@@ -551,7 +551,9 @@ fi
                 println!("💡 Azure Pipelines can be configured to work with Cascade workflows");
             }
             RepositoryType::Unknown => {
-                println!("ℹ️ Unknown repository type - hooks will still work for local Git operations");
+                println!(
+                    "ℹ️ Unknown repository type - hooks will still work for local Git operations"
+                );
             }
         }
 
@@ -654,7 +656,7 @@ fi
         println!("• Validate commit messages");
         println!("• Prevent force pushes that break stack integrity");
         println!("• Add stack context to commit messages");
-        
+
         println!("\n✨ With hooks + new defaults, your workflow becomes:");
         println!("  git commit       → Auto-added to stack");
         println!("  cc push          → Pushes all by default");

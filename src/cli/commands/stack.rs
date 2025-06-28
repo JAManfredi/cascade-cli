@@ -284,12 +284,16 @@ pub enum StackAction {
 
 pub async fn run(action: StackAction) -> Result<()> {
     match action {
-        StackAction::Create { name, base, description } => {
-            create_stack(name, base, description).await
-        }
-        StackAction::List { verbose, active, format } => {
-            list_stacks(verbose, active, format).await
-        }
+        StackAction::Create {
+            name,
+            base,
+            description,
+        } => create_stack(name, base, description).await,
+        StackAction::List {
+            verbose,
+            active,
+            format,
+        } => list_stacks(verbose, active, format).await,
         StackAction::Switch { name } => switch_stack(name).await,
         StackAction::Deactivate { force } => deactivate_stack(force).await,
         StackAction::Show { verbose, mergeable } => show_stack(verbose, mergeable).await,
@@ -421,7 +425,16 @@ pub async fn land(
     strategy: Option<MergeStrategyArg>,
     build_timeout: u64,
 ) -> Result<()> {
-    land_stack(entry, force, dry_run, auto, wait_for_builds, strategy, build_timeout).await
+    land_stack(
+        entry,
+        force,
+        dry_run,
+        auto,
+        wait_for_builds,
+        strategy,
+        build_timeout,
+    )
+    .await
 }
 
 pub async fn autoland(
@@ -561,25 +574,25 @@ async fn deactivate_stack(force: bool) -> Result<()> {
     let mut manager = StackManager::new(&current_dir)?;
 
     let active_stack = manager.get_active_stack();
-    
+
     if active_stack.is_none() {
         println!("ℹ️  No active stack to deactivate");
         return Ok(());
     }
 
     let stack_name = active_stack.unwrap().name.clone();
-    
+
     if !force {
-        println!("⚠️  This will deactivate stack '{}' and return to normal Git workflow", stack_name);
-        println!("   You can reactivate it later with 'cc stacks switch {}'", stack_name);
+        println!("⚠️  This will deactivate stack '{stack_name}' and return to normal Git workflow");
+        println!("   You can reactivate it later with 'cc stacks switch {stack_name}'");
         print!("   Continue? (y/N): ");
-        
+
         use std::io::{self, Write};
         io::stdout().flush().unwrap();
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
-        
+
         if !input.trim().to_lowercase().starts_with('y') {
             println!("Cancelled deactivation");
             return Ok(());
@@ -588,11 +601,11 @@ async fn deactivate_stack(force: bool) -> Result<()> {
 
     // Deactivate the stack
     manager.set_active_stack(None)?;
-    
-    println!("✅ Deactivated stack '{}'", stack_name);
+
+    println!("✅ Deactivated stack '{stack_name}'");
     println!("   Stack management is now OFF - you can use normal Git workflow");
-    println!("   To reactivate: cc stacks switch {}", stack_name);
-    
+    println!("   To reactivate: cc stacks switch {stack_name}");
+
     Ok(())
 }
 
@@ -635,11 +648,14 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         let entry_num = i + 1;
         let short_hash = entry.short_hash();
         let short_msg = entry.short_message(50);
-        
+
         // Get source branch information if available
         let metadata = stack_manager.get_repository_metadata();
-        let source_branch_info = if let Some(commit_meta) = metadata.get_commit(&entry.commit_hash) {
-            if commit_meta.source_branch != commit_meta.branch && !commit_meta.source_branch.is_empty() {
+        let source_branch_info = if let Some(commit_meta) = metadata.get_commit(&entry.commit_hash)
+        {
+            if commit_meta.source_branch != commit_meta.branch
+                && !commit_meta.source_branch.is_empty()
+            {
                 format!(" (from {})", commit_meta.source_branch)
             } else {
                 String::new()
@@ -809,7 +825,11 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                         };
                         println!(
                             "   {} PR #{}: {} ({} -> {})",
-                            state_icon, pr.id, pr.title, pr.from_ref.display_id, pr.to_ref.display_id
+                            state_icon,
+                            pr.id,
+                            pr.title,
+                            pr.from_ref.display_id,
+                            pr.to_ref.display_id
                         );
                         if let Some(url) = pr.web_url() {
                             println!("      URL: {url}");
@@ -859,31 +879,31 @@ async fn push_to_stack(
     // 🛡️ BASE BRANCH PROTECTION
     let current_branch = repo.get_current_branch()?;
     let base_branch = &active_stack.base_branch;
-    
+
     if current_branch == *base_branch {
         println!("🚨 WARNING: You're currently on the base branch '{base_branch}'");
         println!("   Making commits directly on the base branch is not recommended.");
         println!("   This can pollute the base branch with work-in-progress commits.");
-        
+
         // Check if user explicitly allowed base branch work
         if allow_base_branch {
             println!("   ⚠️  Proceeding anyway due to --allow-base-branch flag");
         } else {
             // Check if we have uncommitted changes
             let has_changes = repo.is_dirty()?;
-            
+
             if has_changes {
                 if auto_branch {
                     // Auto-create branch and commit changes
                     let feature_branch = format!("feature/{}-work", active_stack.name);
                     println!("🚀 Auto-creating feature branch '{feature_branch}'...");
-                    
+
                     repo.create_branch(&feature_branch, None)?;
                     repo.checkout_branch(&feature_branch)?;
-                    
+
                     println!("✅ Created and switched to '{feature_branch}'");
                     println!("   You can now commit and push your changes safely");
-                    
+
                     // Continue with normal flow
                 } else {
                     println!("\n💡 You have uncommitted changes. Here are your options:");
@@ -895,7 +915,7 @@ async fn push_to_stack(
                     println!("      cc push --auto-branch");
                     println!("\n   3. Force push to base branch (dangerous):");
                     println!("      cc push --allow-base-branch");
-                    
+
                     return Err(CascadeError::config(
                         "Refusing to push uncommitted changes from base branch. Use one of the options above."
                     ));
@@ -903,7 +923,10 @@ async fn push_to_stack(
             } else {
                 // Check if there are existing commits to push
                 let commits_to_check = if let Some(commits_str) = &commits {
-                    commits_str.split(',').map(|s| s.trim().to_string()).collect::<Vec<String>>()
+                    commits_str
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect::<Vec<String>>()
                 } else if let Some(since_ref) = &since {
                     let since_commit = repo.resolve_reference(since_ref)?;
                     let head_commit = repo.get_head_commit()?;
@@ -936,29 +959,36 @@ async fn push_to_stack(
                             break;
                         }
                     }
-                    
+
                     unpushed.reverse();
                     unpushed
                 } else {
                     vec![repo.get_head_commit()?.id().to_string()]
                 };
-                
+
                 if !commits_to_check.is_empty() {
                     if auto_branch {
                         // Auto-create feature branch and cherry-pick commits
                         let feature_branch = format!("feature/{}-work", active_stack.name);
                         println!("🚀 Auto-creating feature branch '{feature_branch}'...");
-                        
+
                         repo.create_branch(&feature_branch, Some(base_branch))?;
                         repo.checkout_branch(&feature_branch)?;
-                        
+
                         // Cherry-pick the commits to the new branch
-                        println!("🍒 Cherry-picking {} commit(s) to new branch...", commits_to_check.len());
+                        println!(
+                            "🍒 Cherry-picking {} commit(s) to new branch...",
+                            commits_to_check.len()
+                        );
                         for commit_hash in &commits_to_check {
                             match repo.cherry_pick(commit_hash) {
                                 Ok(_) => println!("   ✅ Cherry-picked {}", &commit_hash[..8]),
                                 Err(e) => {
-                                    println!("   ❌ Failed to cherry-pick {}: {}", &commit_hash[..8], e);
+                                    println!(
+                                        "   ❌ Failed to cherry-pick {}: {}",
+                                        &commit_hash[..8],
+                                        e
+                                    );
                                     println!("   💡 You may need to resolve conflicts manually");
                                     return Err(CascadeError::branch(format!(
                                         "Failed to cherry-pick commit {commit_hash}: {e}"
@@ -966,13 +996,21 @@ async fn push_to_stack(
                                 }
                             }
                         }
-                        
-                        println!("✅ Successfully moved {} commit(s) to '{feature_branch}'", commits_to_check.len());
-                        println!("   You're now on the feature branch and can continue with 'cc push'");
-                        
+
+                        println!(
+                            "✅ Successfully moved {} commit(s) to '{feature_branch}'",
+                            commits_to_check.len()
+                        );
+                        println!(
+                            "   You're now on the feature branch and can continue with 'cc push'"
+                        );
+
                         // Continue with normal flow
                     } else {
-                        println!("\n💡 Found {} commit(s) to push from base branch '{base_branch}'", commits_to_check.len());
+                        println!(
+                            "\n💡 Found {} commit(s) to push from base branch '{base_branch}'",
+                            commits_to_check.len()
+                        );
                         println!("   These commits are currently ON the base branch, which may not be intended.");
                         println!("\n   Options:");
                         println!("   1. Auto-create feature branch and cherry-pick commits:");
@@ -982,7 +1020,7 @@ async fn push_to_stack(
                         println!("      cc push");
                         println!("\n   3. Force push from base branch (not recommended):");
                         println!("      cc push --allow-base-branch");
-                        
+
                         return Err(CascadeError::config(
                             "Refusing to push commits from base branch. Use --auto-branch or create a feature branch manually."
                         ));
@@ -997,19 +1035,21 @@ async fn push_to_stack(
         if squash_count == 0 {
             // User used --squash without specifying count, auto-detect unpushed commits
             let active_stack = manager.get_active_stack().ok_or_else(|| {
-                CascadeError::config("No active stack. Create a stack first with 'cc stacks create'")
+                CascadeError::config(
+                    "No active stack. Create a stack first with 'cc stacks create'",
+                )
             })?;
-            
-            let unpushed_count = get_unpushed_commits(&repo, &active_stack)?.len();
-            
+
+            let unpushed_count = get_unpushed_commits(&repo, active_stack)?.len();
+
             if unpushed_count == 0 {
                 println!("ℹ️  No unpushed commits to squash");
             } else if unpushed_count == 1 {
                 println!("ℹ️  Only 1 unpushed commit, no squashing needed");
             } else {
-                println!("🔄 Auto-detected {} unpushed commits, squashing...", unpushed_count);
+                println!("🔄 Auto-detected {unpushed_count} unpushed commits, squashing...");
                 squash_commits(&repo, unpushed_count, None).await?;
-                println!("✅ Squashed {} unpushed commits into one", unpushed_count);
+                println!("✅ Squashed {unpushed_count} unpushed commits into one");
             }
         } else {
             println!("🔄 Squashing last {squash_count} commits...");
@@ -1089,13 +1129,14 @@ async fn push_to_stack(
     // Push each commit to the stack
     let mut pushed_count = 0;
     let mut source_branches = std::collections::HashSet::new();
-    
+
     for (i, commit_hash) in commits_to_push.iter().enumerate() {
         let commit_obj = repo.get_commit(commit_hash)?;
         let commit_msg = commit_obj.message().unwrap_or("").to_string();
 
         // Check which branch this commit belongs to
-        let commit_source_branch = repo.find_branch_containing_commit(commit_hash)
+        let commit_source_branch = repo
+            .find_branch_containing_commit(commit_hash)
             .unwrap_or_else(|_| current_branch.clone());
         source_branches.insert(commit_source_branch.clone());
 
@@ -1143,7 +1184,10 @@ async fn push_to_stack(
     // 🚨 SCATTERED COMMIT WARNING
     if source_branches.len() > 1 {
         println!("⚠️  WARNING: Scattered Commit Detection");
-        println!("   You've pushed commits from {} different Git branches:", source_branches.len());
+        println!(
+            "   You've pushed commits from {} different Git branches:",
+            source_branches.len()
+        );
         for branch in &source_branches {
             println!("   • {branch}");
         }
@@ -1658,9 +1702,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
             if let Some(updated_stack) = updated_stack_manager.get_stack(&stack_id) {
                 match &updated_stack.status {
                     crate::stack::StackStatus::NeedsSync => {
-                        println!(
-                            "   🔄 Stack needs rebase due to new commits on '{base_branch}'"
-                        );
+                        println!("   🔄 Stack needs rebase due to new commits on '{base_branch}'");
 
                         // Step 3: Rebase the stack
                         println!("🔀 Rebasing stack onto updated '{base_branch}'...");
@@ -1759,9 +1801,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         }
         Err(e) => {
             if force {
-                println!(
-                    "   ⚠️  Failed to check stack status: {e} (continuing due to --force)"
-                );
+                println!("   ⚠️  Failed to check stack status: {e} (continuing due to --force)");
             } else {
                 return Err(e);
             }
@@ -2473,9 +2513,7 @@ async fn land_stack(
 
     if ready_prs.is_empty() {
         if let Some(entry_num) = entry {
-            println!(
-                "❌ Entry {entry_num} is not ready to land or doesn't exist"
-            );
+            println!("❌ Entry {entry_num} is not ready to land or doesn't exist");
         } else {
             println!("❌ No pull requests are ready to land");
         }
@@ -3218,21 +3256,21 @@ mod tests {
     #[test]
     fn test_scattered_commit_detection() {
         use std::collections::HashSet;
-        
+
         // Test scattered commit detection logic
         let mut source_branches = HashSet::new();
         source_branches.insert("feature-branch-1".to_string());
         source_branches.insert("feature-branch-2".to_string());
         source_branches.insert("feature-branch-3".to_string());
-        
+
         // Single branch should not trigger warning
         let single_branch = HashSet::from(["main".to_string()]);
         assert_eq!(single_branch.len(), 1);
-        
+
         // Multiple branches should trigger warning
         assert!(source_branches.len() > 1);
         assert_eq!(source_branches.len(), 3);
-        
+
         // Verify branch names are preserved correctly
         assert!(source_branches.contains("feature-branch-1"));
         assert!(source_branches.contains("feature-branch-2"));
@@ -3242,38 +3280,43 @@ mod tests {
     #[test]
     fn test_source_branch_tracking() {
         // Test that source branch tracking correctly handles different scenarios
-        
+
         // Same branch should be consistent
         let branch_a = "feature-work";
         let branch_b = "feature-work";
         assert_eq!(branch_a, branch_b);
-        
+
         // Different branches should be detected
         let branch_1 = "feature-ui";
         let branch_2 = "feature-api";
         assert_ne!(branch_1, branch_2);
-        
+
         // Branch naming patterns
         assert!(branch_1.starts_with("feature-"));
         assert!(branch_2.starts_with("feature-"));
     }
 
     // Tests for new default behavior (removing --all flag)
-    
+
     #[tokio::test]
     async fn test_push_default_behavior() {
         // Test that push without arguments operates on all unpushed commits
         let (_temp_dir, repo_path) = create_test_repo().await;
-        
+
         // Try to change to the test repo directory, but handle failure gracefully
         let original_dir = env::current_dir();
         if let (Ok(orig), Ok(_)) = (original_dir, env::set_current_dir(&repo_path)) {
             // Initialize cascade if we successfully changed directory
-            if crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).is_ok() {
+            if crate::config::initialize_repo(
+                &repo_path,
+                Some("https://test.bitbucket.com".to_string()),
+            )
+            .is_ok()
+            {
                 // Create a stack
                 let result = create_stack("test-stack".to_string(), None, None).await;
                 assert!(result.is_ok());
-                
+
                 // Create additional test commits
                 if std::fs::write(repo_path.join("test2.txt"), "test content 2").is_ok() {
                     let _ = std::process::Command::new("git")
@@ -3285,20 +3328,21 @@ mod tests {
                         .current_dir(&repo_path)
                         .output();
                 }
-                
+
                 // Test default push behavior (should handle multiple commits)
                 let result = push_to_stack(
-                    None,    // branch
-                    None,    // message
-                    None,    // commit
-                    None,    // since
-                    None,    // commits
-                    None,    // squash
-                    None,    // squash_since
-                    false,   // auto_branch
-                    false,   // allow_base_branch
-                ).await;
-                
+                    None,  // branch
+                    None,  // message
+                    None,  // commit
+                    None,  // since
+                    None,  // commits
+                    None,  // squash
+                    None,  // squash_since
+                    false, // auto_branch
+                    false, // allow_base_branch
+                )
+                .await;
+
                 // Should handle the default behavior gracefully
                 match result {
                     Ok(_) => {
@@ -3308,21 +3352,21 @@ mod tests {
                         // Expected failures due to test environment limitations
                         let error_msg = e.to_string();
                         assert!(
-                            error_msg.contains("Bitbucket") || 
-                            error_msg.contains("config") ||
-                            error_msg.contains("remote") ||
-                            error_msg.contains("auth") ||
-                            error_msg.contains("Stack is empty") ||
-                            error_msg.contains("base branch") ||
-                            error_msg.contains("uncommitted changes") ||
-                            error_msg.contains("current directory") ||
-                            error_msg.contains("No such file"),
+                            error_msg.contains("Bitbucket")
+                                || error_msg.contains("config")
+                                || error_msg.contains("remote")
+                                || error_msg.contains("auth")
+                                || error_msg.contains("Stack is empty")
+                                || error_msg.contains("base branch")
+                                || error_msg.contains("uncommitted changes")
+                                || error_msg.contains("current directory")
+                                || error_msg.contains("No such file"),
                             "Unexpected error type: {error_msg}"
                         );
                     }
                 }
             }
-            
+
             // Restore original directory
             let _ = env::set_current_dir(orig);
         } else {
@@ -3335,24 +3379,30 @@ mod tests {
     async fn test_submit_default_behavior() {
         // Test that submit without arguments operates on all unsubmitted entries
         let (_temp_dir, repo_path) = create_test_repo().await;
-        
+
         let original_dir = env::current_dir();
         if let (Ok(orig), Ok(_)) = (original_dir, env::set_current_dir(&repo_path)) {
             // Initialize cascade if we successfully changed directory
-            if crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).is_ok() {
+            if crate::config::initialize_repo(
+                &repo_path,
+                Some("https://test.bitbucket.com".to_string()),
+            )
+            .is_ok()
+            {
                 // Create stack
                 let result = create_stack("test-stack".to_string(), None, None).await;
                 assert!(result.is_ok());
-                
+
                 // Test default submit behavior
                 let result = submit_entry(
-                    None,    // entry (should default to all unsubmitted)
-                    None,    // title
-                    None,    // description
-                    None,    // range
-                    false,   // draft
-                ).await;
-                
+                    None,  // entry (should default to all unsubmitted)
+                    None,  // title
+                    None,  // description
+                    None,  // range
+                    false, // draft
+                )
+                .await;
+
                 // Should handle the default "all unsubmitted" behavior
                 match result {
                     Ok(_) => {
@@ -3362,21 +3412,21 @@ mod tests {
                         // Expected failures in test environment
                         let error_msg = e.to_string();
                         assert!(
-                            error_msg.contains("Stack is empty") ||
-                            error_msg.contains("Bitbucket") ||
-                            error_msg.contains("config") ||
-                            error_msg.contains("auth") ||
-                            error_msg.contains("current directory") ||
-                            error_msg.contains("No such file"),
+                            error_msg.contains("Stack is empty")
+                                || error_msg.contains("Bitbucket")
+                                || error_msg.contains("config")
+                                || error_msg.contains("auth")
+                                || error_msg.contains("current directory")
+                                || error_msg.contains("No such file"),
                             "Unexpected error: {error_msg}"
                         );
                     }
                 }
             }
-            
+
             let _ = env::set_current_dir(orig);
         } else {
-            // If we can't change directories, just test that the function exists 
+            // If we can't change directories, just test that the function exists
             println!("Skipping test due to directory access restrictions in test environment");
         }
     }
@@ -3384,7 +3434,7 @@ mod tests {
     #[test]
     fn test_targeting_options_still_work() {
         // Test that specific targeting options still work correctly
-        
+
         // Test commit list parsing
         let commits = "abc123,def456,ghi789";
         let parsed: Vec<&str> = commits.split(',').map(|s| s.trim()).collect();
@@ -3392,13 +3442,13 @@ mod tests {
         assert_eq!(parsed[0], "abc123");
         assert_eq!(parsed[1], "def456");
         assert_eq!(parsed[2], "ghi789");
-        
+
         // Test range parsing would work
         let range = "1-3";
         assert!(range.contains('-'));
         let parts: Vec<&str> = range.split('-').collect();
         assert_eq!(parts.len(), 2);
-        
+
         // Test since reference pattern
         let since_ref = "HEAD~3";
         assert!(since_ref.starts_with("HEAD"));
@@ -3408,26 +3458,49 @@ mod tests {
     #[test]
     fn test_command_flow_logic() {
         // These just test the command structure exists
-        assert!(matches!(StackAction::Push { 
-            branch: None, message: None, commit: None, since: None, commits: None,
-            squash: None, squash_since: None, auto_branch: false, allow_base_branch: false 
-        }, StackAction::Push { .. }));
-        
-        assert!(matches!(StackAction::Submit { 
-            entry: None, title: None, description: None, range: None, draft: false 
-        }, StackAction::Submit { .. }));
+        assert!(matches!(
+            StackAction::Push {
+                branch: None,
+                message: None,
+                commit: None,
+                since: None,
+                commits: None,
+                squash: None,
+                squash_since: None,
+                auto_branch: false,
+                allow_base_branch: false
+            },
+            StackAction::Push { .. }
+        ));
+
+        assert!(matches!(
+            StackAction::Submit {
+                entry: None,
+                title: None,
+                description: None,
+                range: None,
+                draft: false
+            },
+            StackAction::Submit { .. }
+        ));
     }
 
     #[tokio::test]
     async fn test_deactivate_command_structure() {
         // Test that deactivate command structure exists and can be constructed
         let deactivate_action = StackAction::Deactivate { force: false };
-        
+
         // Verify it matches the expected pattern
-        assert!(matches!(deactivate_action, StackAction::Deactivate { force: false }));
-        
+        assert!(matches!(
+            deactivate_action,
+            StackAction::Deactivate { force: false }
+        ));
+
         // Test with force flag
         let force_deactivate = StackAction::Deactivate { force: true };
-        assert!(matches!(force_deactivate, StackAction::Deactivate { force: true }));
+        assert!(matches!(
+            force_deactivate,
+            StackAction::Deactivate { force: true }
+        ));
     }
 }

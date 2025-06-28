@@ -183,32 +183,36 @@ impl PullRequestManager {
 
         match self.client.get::<serde_json::Value>(&path).await {
             Ok(response) => {
-                let can_merge = response.get("canMerge")
+                let can_merge = response
+                    .get("canMerge")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                
-                let conflicted = response.get("conflicted")
+
+                let conflicted = response
+                    .get("conflicted")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                
+
                 // Extract detailed veto reasons if present
                 let mut blocking_reasons = Vec::new();
-                
+
                 if let Some(vetoes) = response.get("vetoes").and_then(|v| v.as_array()) {
                     for veto in vetoes {
                         if let Some(summary) = veto.get("summaryMessage").and_then(|s| s.as_str()) {
                             blocking_reasons.push(summary.to_string());
-                        } else if let Some(detailed) = veto.get("detailedMessage").and_then(|s| s.as_str()) {
+                        } else if let Some(detailed) =
+                            veto.get("detailedMessage").and_then(|s| s.as_str())
+                        {
                             blocking_reasons.push(detailed.to_string());
                         }
                     }
                 }
-                
+
                 // Add conflict information
                 if conflicted {
                     blocking_reasons.push("Pull request has merge conflicts".to_string());
                 }
-                
+
                 Ok(MergeabilityDetails {
                     can_merge,
                     conflicted,
@@ -720,7 +724,7 @@ impl PullRequestStatus {
         // 🎯 SERVER-SIDE MERGE CHECKS (Most Important)
         // These are authoritative from Bitbucket Server and include:
         // - Required approvals, build checks, branch permissions
-        // - Code Insights, required builds, custom merge checks  
+        // - Code Insights, required builds, custom merge checks
         // - Task completion, default reviewers, etc.
         if let Some(mergeable_details) = &self.mergeable_details {
             if !mergeable_details.can_merge {
@@ -728,7 +732,7 @@ impl PullRequestStatus {
                 for reason in &mergeable_details.blocking_reasons {
                     reasons.push(format!("🔒 Server Check: {reason}"));
                 }
-                
+
                 // If no specific reasons but still not mergeable
                 if mergeable_details.blocking_reasons.is_empty() {
                     reasons.push("🔒 Server Check: Merge blocked by repository policy".to_string());
@@ -741,16 +745,25 @@ impl PullRequestStatus {
 
         // ❌ PR State Check
         if !self.pr.is_open() {
-            reasons.push(format!("❌ PR Status: Pull request is {}", self.pr.state.as_str()));
+            reasons.push(format!(
+                "❌ PR Status: Pull request is {}",
+                self.pr.state.as_str()
+            ));
         }
 
-        // 🔄 Build Status Check  
+        // 🔄 Build Status Check
         if let Some(build_status) = &self.build_status {
             match build_status.state {
                 BuildState::Failed => reasons.push("❌ Build Status: Build failed".to_string()),
-                BuildState::InProgress => reasons.push("⏳ Build Status: Build in progress".to_string()),
-                BuildState::Cancelled => reasons.push("❌ Build Status: Build cancelled".to_string()),
-                BuildState::Unknown => reasons.push("❓ Build Status: Build status unknown".to_string()),
+                BuildState::InProgress => {
+                    reasons.push("⏳ Build Status: Build in progress".to_string())
+                }
+                BuildState::Cancelled => {
+                    reasons.push("❌ Build Status: Build cancelled".to_string())
+                }
+                BuildState::Unknown => {
+                    reasons.push("❓ Build Status: Build status unknown".to_string())
+                }
                 BuildState::Successful => {} // No blocking reason
             }
         }
@@ -761,7 +774,13 @@ impl PullRequestStatus {
                 reasons.push(format!(
                     "👥 Review Status: Need {} more approval{} ({}/{})",
                     self.review_status.required_approvals - self.review_status.current_approvals,
-                    if self.review_status.required_approvals - self.review_status.current_approvals == 1 { "" } else { "s" },
+                    if self.review_status.required_approvals - self.review_status.current_approvals
+                        == 1
+                    {
+                        ""
+                    } else {
+                        "s"
+                    },
                     self.review_status.current_approvals,
                     self.review_status.required_approvals
                 ));
@@ -771,7 +790,11 @@ impl PullRequestStatus {
                 reasons.push(format!(
                     "👥 Review Status: {} reviewer{} requested changes",
                     self.review_status.needs_work_count,
-                    if self.review_status.needs_work_count == 1 { "" } else { "s" }
+                    if self.review_status.needs_work_count == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
                 ));
             }
 
@@ -786,7 +809,8 @@ impl PullRequestStatus {
         // ⚠️ Merge Conflicts Check
         if let Some(conflicts) = &self.conflicts {
             if !conflicts.is_empty() {
-                reasons.push(format!("⚠️ Merge Conflicts: {} file{} with conflicts", 
+                reasons.push(format!(
+                    "⚠️ Merge Conflicts: {} file{} with conflicts",
                     conflicts.len(),
                     if conflicts.len() == 1 { "" } else { "s" }
                 ));

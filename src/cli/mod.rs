@@ -447,7 +447,9 @@ impl Cli {
                 }
             },
 
-            Commands::Stack { verbose, mergeable } => commands::stack::show(verbose, mergeable).await,
+            Commands::Stack { verbose, mergeable } => {
+                commands::stack::show(verbose, mergeable).await
+            }
 
             Commands::Push {
                 branch,
@@ -459,7 +461,20 @@ impl Cli {
                 squash_since,
                 auto_branch,
                 allow_base_branch,
-            } => commands::stack::push(branch, message, commit, since, commits, squash, squash_since, auto_branch, allow_base_branch).await,
+            } => {
+                commands::stack::push(
+                    branch,
+                    message,
+                    commit,
+                    since,
+                    commits,
+                    squash,
+                    squash_since,
+                    auto_branch,
+                    allow_base_branch,
+                )
+                .await
+            }
 
             Commands::Pop { keep_branch } => commands::stack::pop(keep_branch).await,
 
@@ -471,7 +486,18 @@ impl Cli {
                 wait_for_builds,
                 strategy,
                 build_timeout,
-            } => commands::stack::land(entry, force, dry_run, auto, wait_for_builds, strategy, build_timeout).await,
+            } => {
+                commands::stack::land(
+                    entry,
+                    force,
+                    dry_run,
+                    auto,
+                    wait_for_builds,
+                    strategy,
+                    build_timeout,
+                )
+                .await
+            }
 
             Commands::Autoland {
                 force,
@@ -479,7 +505,10 @@ impl Cli {
                 wait_for_builds,
                 strategy,
                 build_timeout,
-            } => commands::stack::autoland(force, dry_run, wait_for_builds, strategy, build_timeout).await,
+            } => {
+                commands::stack::autoland(force, dry_run, wait_for_builds, strategy, build_timeout)
+                    .await
+            }
 
             Commands::Sync {
                 force,

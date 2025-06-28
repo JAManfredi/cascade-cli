@@ -9,7 +9,7 @@
 
 </div>
 
-Cascade CLI imporoves Git workflows by enabling **stacked diffs** for Bitbucket Server - a powerful technique for managing chains of related commits as separate, reviewable pull requests. Perfect for feature development, bug fixes, and complex changes that benefit from incremental review.
+Cascade CLI improves Git workflows by enabling **stacked diffs** for Bitbucket Server - a powerful technique for managing chains of related commits as separate, reviewable pull requests. Perfect for feature development, bug fixes, and complex changes that benefit from incremental review.
 
 ## 📋 Table of Contents
 
@@ -25,12 +25,6 @@ Cascade CLI imporoves Git workflows by enabling **stacked diffs** for Bitbucket 
 - [🔧 Git Hooks (Recommended)](#git-hooks-recommended)
 - [📖 Command Reference](#command-reference)
 - [🤖 Smart Conflict Resolution](#smart-conflict-resolution)
-- [🎯 Core Workflow](#core-workflow)
-  - [🛡️ Safe Development Flow (Recommended)](#safe-development-flow-recommended)
-  - [🚀 Auto-Branch Creation (Even Safer)](#auto-branch-creation-even-safer)
-  - [🔍 Scattered Commit Detection](#scattered-commit-detection)
-  - [📝 Smart PR Creation](#smart-pr-creation)
-  - [Daily Development Flow](#daily-development-flow)
 - [🔧 Configuration](#configuration)
 - [🎨 Advanced Features](#advanced-features)
 - [📝 Documentation](#documentation)
@@ -411,7 +405,8 @@ cc submit --draft
 # Custom titles and descriptions:
 cc submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
 
-# Default behavior (auto-generated):\ncc submit  # Creates well-structured PRs
+# Default behavior (auto-generated):
+cc submit  # Creates well-structured PRs
 ```
 
 **How PR Content is Generated:**
@@ -499,123 +494,6 @@ cc config set conflicts.auto_resolve true
 cc config set conflicts.file_types "js,ts,py,rs"
 cc config set conflicts.backup_on_resolve true
 ```
-
----
-
-## 🎯 **Core Workflow**
-
-**💡 First time using stacked diffs?** Read about [Git Branches vs Stacks](docs/WORKFLOWS.md#understanding-git-branches-vs-stacks) to understand how they work together.
-
-### **🛡️ Safe Development Flow (Recommended)**
-
-Cascade CLI protects against accidentally polluting your base branch:
-
-```bash
-# ✅ SAFE: Start on base branch, but work on feature branches
-git checkout main
-cc stacks create my-feature --base main
-
-# Make your changes
-git checkout -b feature/auth-system  # Create feature branch
-git commit -am "Add user authentication"
-git commit -am "Add password validation"
-
-# Push to stack (automatically tracks source branch)
-cc push  # Adds commits to stack with source tracking
-```
-
-### **🚀 Auto-Branch Creation (Even Safer)**
-
-Let Cascade CLI handle branch creation automatically:
-
-```bash
-# If you accidentally work on main...
-git checkout main
-# (make commits directly on main - oops!)
-
-# Cascade CLI will protect you:
-cc push --auto-branch  # Creates feature branch & moves commits safely
-```
-
-### **🔍 Scattered Commit Detection**
-
-Cascade CLI detects when you're adding commits from different Git branches to the same stack and warns you:
-
-```bash
-# This creates a "scattered commit" problem:
-git checkout feature-branch-1
-git commit -m "Add user auth"
-git checkout feature-branch-2  
-git commit -m "Add admin panel"
-git checkout main
-
-# When you push both to the same stack:
-cc push
-
-# ⚠️  WARNING: Scattered Commit Detection
-#    You've pushed commits from different branches:
-#    - feature-branch-1 (1 commit)
-#    - feature-branch-2 (1 commit)
-#    
-#    This makes branch cleanup confusing after merge.
-#    Consider organizing commits into separate stacks instead.
-```
-
-### **📝 Smart PR Creation**
-
-Cascade CLI automatically generates meaningful pull request titles and descriptions:
-
-```bash
-# Create draft PRs for review:
-cc submit --draft
-
-# Each PR gets intelligent metadata:
-# ┌─ PR Title: Generated from commit messages
-# ├─ Description: Combines commit details & context  
-# ├─ Branch: Auto-created with semantic naming
-# └─ Target: Points to previous stack entry or base
-
-# Custom titles and descriptions:
-cc submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
-
-# Default behavior (auto-generated):\ncc submit  # Creates well-structured PRs
-```
-
-**How PR Content is Generated:**
-- **Title**: Uses your commit message or most significant change
-- **Description**: Includes commit details, file changes, and stack context
-- **Branch Context**: Shows relationship to previous entries
-- **Target Branch**: Automatically set to build on previous stack entry
-
-### **Daily Development Flow**
-
-Cascade CLI follows a simple, powerful workflow optimized for modern development:
-
-```bash
-# 1. Create & Develop
-cc stacks create feature-name --base main
-git commit -m "Add core functionality"
-git commit -m "Add comprehensive tests"
-
-# 2. Push & Submit (with modern shortcuts)
-cc push --squash 2    # Combine commits into reviewable unit
-cc submit            # Create PR with automatic dependency tracking
-
-# 3. Auto-Land (set and forget)
-cc autoland          # Monitors and merges when approved + tests pass
-
-# 4. Iterate (if review feedback)
-git commit --amend   # Update based on feedback
-cc sync              # Update all dependent PRs automatically
-```
-
-**🔄 Advanced Workflows**: See our comprehensive [**Workflows Guide**](./docs/WORKFLOWS.md) for complex scenarios including:
-- Multi-commit stacks with dependencies
-- Handling review feedback on middle commits  
-- Managing emergency hotfixes during feature development
-- Cross-team collaboration patterns
-- Base branch updates with smart force push
-- Modern WIP-to-clean commit workflows
 
 ---
 
@@ -919,25 +797,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   <strong>📚 Transform your Git workflow with Cascade CLI</strong><br>
   <em>Stack management for modern development teams</em>
 </p>
-
-### Daily Workflow Commands
-
-```bash
-# Check if your stack needs syncing (read-only status check)
-cc stacks check
-
-# Sync with remote changes (pull + rebase + cleanup)  
-cc stacks sync
-
-# Make changes and push to stack
-cc stacks push --message "Add feature X"
-
-# Submit for review
-cc stacks submit
-
-# Land completed PRs with auto-retargeting
-cc stacks land
-```
-
-# 🔄 INTELLIGENT BRANCH SWITCHING - Never lose track of your stacks!\ncc stacks deactivate           # Turn off stack mode (use normal Git workflow)\ncc stacks switch other-stack   # Switch to different stack\n\n# AUTOMATIC DETECTION - Cascade detects when you switch branches\n# and prompts you to:\n# 1. Continue with current stack on new branch\n# 2. Deactivate stack (normal Git workflow)\n# 3. Switch to different stack\n# 4. Cancel operation
 
