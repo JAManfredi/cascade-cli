@@ -193,12 +193,13 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (show)
 _arguments "${_arguments_options[@]}" : \
-'-v[Enable verbose logging]' \
-'--verbose[Enable verbose logging]' \
+'-v[Show detailed pull request information]' \
+'--verbose[Show detailed pull request information]' \
+'-m[Show mergability status for all PRs]' \
+'--mergeable[Show mergability status for all PRs]' \
 '--no-color[Disable colored output]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'::name -- Name of the stack (defaults to active stack):_default' \
 && ret=0
 ;;
 (push)
@@ -212,7 +213,6 @@ _arguments "${_arguments_options[@]}" : \
 '--commits=[Push multiple specific commits (comma-separated)]:COMMITS:_default' \
 '--squash=[Squash last N commits into one before pushing]:SQUASH:_default' \
 '--squash-since=[Squash all commits since this reference (e.g., HEAD~5)]:SQUASH_SINCE:_default' \
-'--all[Push all unpushed commits since last stack push]' \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
 '--no-color[Disable colored output]' \
@@ -237,7 +237,7 @@ _arguments "${_arguments_options[@]}" : \
 '-d+[Pull request description]:DESCRIPTION:_default' \
 '--description=[Pull request description]:DESCRIPTION:_default' \
 '--range=[Submit range of entries (e.g., "1-3" or "2,4,6")]:RANGE:_default' \
-'--all[Submit all unsubmitted entries]' \
+'--draft[Create draft pull requests (can be edited later)]' \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
 '--no-color[Disable colored output]' \
@@ -266,9 +266,22 @@ _arguments "${_arguments_options[@]}" : \
 '--help[Print help]' \
 && ret=0
 ;;
+(check)
+_arguments "${_arguments_options[@]}" : \
+'--force[Force check even if there are issues]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
 (sync)
 _arguments "${_arguments_options[@]}" : \
 '--force[Force sync even if there are conflicts]' \
+'--skip-cleanup[Skip cleanup of merged branches]' \
+'-i[Interactive mode for conflict resolution]' \
+'--interactive[Interactive mode for conflict resolution]' \
 '-v[Enable verbose logging]' \
 '--verbose[Enable verbose logging]' \
 '--no-color[Disable colored output]' \
@@ -340,6 +353,82 @@ _arguments "${_arguments_options[@]}" : \
 '::name -- Name of the stack (defaults to active stack):_default' \
 && ret=0
 ;;
+(land)
+_arguments "${_arguments_options[@]}" : \
+'--strategy=[Merge strategy to use]:STRATEGY:((merge\:"Create a merge commit"
+squash\:"Squash all commits into one"
+fast-forward\:"Fast-forward merge when possible"))' \
+'--build-timeout=[Maximum time to wait for builds (seconds)]:BUILD_TIMEOUT:_default' \
+'-f[Force land even with blocking issues (dangerous)]' \
+'--force[Force land even with blocking issues (dangerous)]' \
+'-d[Dry run - show what would be landed without doing it]' \
+'--dry-run[Dry run - show what would be landed without doing it]' \
+'--auto[Use server-side validation (safer, checks approvals/builds)]' \
+'--wait-for-builds[Wait for builds to complete before merging]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::entry -- Stack entry number to land (1-based index, optional):_default' \
+&& ret=0
+;;
+(auto-land)
+_arguments "${_arguments_options[@]}" : \
+'--strategy=[Merge strategy to use]:STRATEGY:((merge\:"Create a merge commit"
+squash\:"Squash all commits into one"
+fast-forward\:"Fast-forward merge when possible"))' \
+'--build-timeout=[Maximum time to wait for builds (seconds)]:BUILD_TIMEOUT:_default' \
+'-f[Force land even with blocking issues (dangerous)]' \
+'--force[Force land even with blocking issues (dangerous)]' \
+'-d[Dry run - show what would be landed without doing it]' \
+'--dry-run[Dry run - show what would be landed without doing it]' \
+'--wait-for-builds[Wait for builds to complete before merging]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(list-prs)
+_arguments "${_arguments_options[@]}" : \
+'-s+[Filter by state (open, merged, declined)]:STATE:_default' \
+'--state=[Filter by state (open, merged, declined)]:STATE:_default' \
+'-v[Show detailed information]' \
+'--verbose[Show detailed information]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(continue-land)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(abort-land)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(land-status)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_cc__stack__help_commands" \
@@ -388,6 +477,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(check)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (sync)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -413,6 +506,30 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (validate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(auto-land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list-prs)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(continue-land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(abort-land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(land-status)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -837,6 +954,112 @@ esac
     ;;
 esac
 ;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'-v[Show detailed pull request information]' \
+'--verbose[Show detailed pull request information]' \
+'-m[Show mergability status for all PRs]' \
+'--mergeable[Show mergability status for all PRs]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(push)
+_arguments "${_arguments_options[@]}" : \
+'-b+[Branch name for this commit]:BRANCH:_default' \
+'--branch=[Branch name for this commit]:BRANCH:_default' \
+'-m+[Commit message (if creating a new commit)]:MESSAGE:_default' \
+'--message=[Commit message (if creating a new commit)]:MESSAGE:_default' \
+'--commit=[Use specific commit hash instead of HEAD]:COMMIT:_default' \
+'--since=[Push commits since this reference (e.g., HEAD~3)]:SINCE:_default' \
+'--commits=[Push multiple specific commits (comma-separated)]:COMMITS:_default' \
+'--squash=[Squash last N commits into one before pushing]:SQUASH:_default' \
+'--squash-since=[Squash all commits since this reference (e.g., HEAD~5)]:SQUASH_SINCE:_default' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(pop)
+_arguments "${_arguments_options[@]}" : \
+'--keep-branch[Keep the branch (don'\''t delete it)]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(land)
+_arguments "${_arguments_options[@]}" : \
+'--strategy=[Merge strategy to use]:STRATEGY:((merge\:"Create a merge commit"
+squash\:"Squash all commits into one"
+fast-forward\:"Fast-forward merge when possible"))' \
+'--build-timeout=[Maximum time to wait for builds (seconds)]:BUILD_TIMEOUT:_default' \
+'-f[Force land even with blocking issues (dangerous)]' \
+'--force[Force land even with blocking issues (dangerous)]' \
+'-d[Dry run - show what would be landed without doing it]' \
+'--dry-run[Dry run - show what would be landed without doing it]' \
+'--auto[Use server-side validation (safer, checks approvals/builds)]' \
+'--wait-for-builds[Wait for builds to complete before merging]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::entry -- Stack entry number to land (1-based index, optional):_default' \
+&& ret=0
+;;
+(autoland)
+_arguments "${_arguments_options[@]}" : \
+'--strategy=[Merge strategy to use]:STRATEGY:((merge\:"Create a merge commit"
+squash\:"Squash all commits into one"
+fast-forward\:"Fast-forward merge when possible"))' \
+'--build-timeout=[Maximum time to wait for builds (seconds)]:BUILD_TIMEOUT:_default' \
+'-f[Force land even with blocking issues (dangerous)]' \
+'--force[Force land even with blocking issues (dangerous)]' \
+'-d[Dry run - show what would be landed without doing it]' \
+'--dry-run[Dry run - show what would be landed without doing it]' \
+'--wait-for-builds[Wait for builds to complete before merging]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" : \
+'--force[Force sync even if there are conflicts]' \
+'--skip-cleanup[Skip cleanup of merged branches]' \
+'-i[Interactive mode for conflict resolution]' \
+'--interactive[Interactive mode for conflict resolution]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(rebase)
+_arguments "${_arguments_options[@]}" : \
+'--onto=[Target base branch (defaults to stack'\''s base branch)]:ONTO:_default' \
+'--strategy=[Rebase strategy to use]:STRATEGY:((branch-versioning\:"Create new branches with version suffixes"
+cherry-pick\:"Use cherry-pick to apply commits"
+three-way-merge\:"Create merge commits"
+interactive\:"Interactive rebase"))' \
+'-i[Interactive rebase]' \
+'--interactive[Interactive rebase]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_cc__help_commands" \
@@ -933,6 +1156,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(check)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (sync)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -958,6 +1185,30 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (validate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(auto-land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list-prs)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(continue-land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(abort-land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(land-status)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -1101,6 +1352,34 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(push)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(pop)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(land)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(autoland)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -1129,9 +1408,21 @@ _cc_commands() {
 'tui:Launch interactive TUI for stack management' \
 'hooks:Git hooks management' \
 'viz:Visualize stacks and dependencies' \
+'show:Show the current stack status (shortcut for '\''stack show'\'')' \
+'push:Push current commit to the top of the stack (shortcut for '\''stack push'\'')' \
+'pop:Pop the top commit from the stack (shortcut for '\''stack pop'\'')' \
+'land:Land (merge) approved stack entries (shortcut for '\''stack land'\'')' \
+'autoland:Auto-land all ready PRs (shortcut for '\''stack autoland'\'')' \
+'sync:Sync stack with remote repository (shortcut for '\''stack sync'\'')' \
+'rebase:Rebase stack on updated base branch (shortcut for '\''stack rebase'\'')' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'cc commands' commands "$@"
+}
+(( $+functions[_cc__autoland_commands] )) ||
+_cc__autoland_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc autoland commands' commands "$@"
 }
 (( $+functions[_cc__completions_commands] )) ||
 _cc__completions_commands() {
@@ -1330,9 +1621,21 @@ _cc__help_commands() {
 'tui:Launch interactive TUI for stack management' \
 'hooks:Git hooks management' \
 'viz:Visualize stacks and dependencies' \
+'show:Show the current stack status (shortcut for '\''stack show'\'')' \
+'push:Push current commit to the top of the stack (shortcut for '\''stack push'\'')' \
+'pop:Pop the top commit from the stack (shortcut for '\''stack pop'\'')' \
+'land:Land (merge) approved stack entries (shortcut for '\''stack land'\'')' \
+'autoland:Auto-land all ready PRs (shortcut for '\''stack autoland'\'')' \
+'sync:Sync stack with remote repository (shortcut for '\''stack sync'\'')' \
+'rebase:Rebase stack on updated base branch (shortcut for '\''stack rebase'\'')' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'cc help commands' commands "$@"
+}
+(( $+functions[_cc__help__autoland_commands] )) ||
+_cc__help__autoland_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help autoland commands' commands "$@"
 }
 (( $+functions[_cc__help__completions_commands] )) ||
 _cc__help__completions_commands() {
@@ -1463,10 +1766,35 @@ _cc__help__init_commands() {
     local commands; commands=()
     _describe -t commands 'cc help init commands' commands "$@"
 }
+(( $+functions[_cc__help__land_commands] )) ||
+_cc__help__land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help land commands' commands "$@"
+}
+(( $+functions[_cc__help__pop_commands] )) ||
+_cc__help__pop_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help pop commands' commands "$@"
+}
+(( $+functions[_cc__help__push_commands] )) ||
+_cc__help__push_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help push commands' commands "$@"
+}
+(( $+functions[_cc__help__rebase_commands] )) ||
+_cc__help__rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help rebase commands' commands "$@"
+}
 (( $+functions[_cc__help__setup_commands] )) ||
 _cc__help__setup_commands() {
     local commands; commands=()
     _describe -t commands 'cc help setup commands' commands "$@"
+}
+(( $+functions[_cc__help__show_commands] )) ||
+_cc__help__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help show commands' commands "$@"
 }
 (( $+functions[_cc__help__stack_commands] )) ||
 _cc__help__stack_commands() {
@@ -1474,26 +1802,53 @@ _cc__help__stack_commands() {
 'create:Create a new stack' \
 'list:List all stacks' \
 'switch:Switch to a different stack' \
-'show:Show detailed information about a stack' \
+'show:Show the current stack status' \
 'push:Push current commit to the top of the stack' \
 'pop:Pop the top commit from the stack' \
 'submit:Submit a stack entry for review' \
 'status:Check status of all pull requests in a stack' \
 'prs:List all pull requests for the repository' \
-'sync:Sync stack with remote repository' \
+'check:Check stack status with remote repository (read-only)' \
+'sync:Sync stack with remote repository (pull + rebase + cleanup)' \
 'rebase:Rebase stack on updated base branch' \
 'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
 'abort-rebase:Abort an in-progress rebase' \
 'rebase-status:Show rebase status and conflict resolution guidance' \
 'delete:Delete a stack' \
 'validate:Validate stack integrity' \
+'land:Land (merge) approved stack entries' \
+'auto-land:Auto-land all ready PRs (shorthand for land --auto)' \
+'list-prs:List pull requests from Bitbucket' \
+'continue-land:Continue an in-progress land operation after resolving conflicts' \
+'abort-land:Abort an in-progress land operation' \
+'land-status:Show status of in-progress land operation' \
     )
     _describe -t commands 'cc help stack commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__abort-land_commands] )) ||
+_cc__help__stack__abort-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack abort-land commands' commands "$@"
 }
 (( $+functions[_cc__help__stack__abort-rebase_commands] )) ||
 _cc__help__stack__abort-rebase_commands() {
     local commands; commands=()
     _describe -t commands 'cc help stack abort-rebase commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__auto-land_commands] )) ||
+_cc__help__stack__auto-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack auto-land commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__check_commands] )) ||
+_cc__help__stack__check_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack check commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__continue-land_commands] )) ||
+_cc__help__stack__continue-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack continue-land commands' commands "$@"
 }
 (( $+functions[_cc__help__stack__continue-rebase_commands] )) ||
 _cc__help__stack__continue-rebase_commands() {
@@ -1510,10 +1865,25 @@ _cc__help__stack__delete_commands() {
     local commands; commands=()
     _describe -t commands 'cc help stack delete commands' commands "$@"
 }
+(( $+functions[_cc__help__stack__land_commands] )) ||
+_cc__help__stack__land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack land commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__land-status_commands] )) ||
+_cc__help__stack__land-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack land-status commands' commands "$@"
+}
 (( $+functions[_cc__help__stack__list_commands] )) ||
 _cc__help__stack__list_commands() {
     local commands; commands=()
     _describe -t commands 'cc help stack list commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__list-prs_commands] )) ||
+_cc__help__stack__list-prs_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack list-prs commands' commands "$@"
 }
 (( $+functions[_cc__help__stack__pop_commands] )) ||
 _cc__help__stack__pop_commands() {
@@ -1574,6 +1944,11 @@ _cc__help__stack__validate_commands() {
 _cc__help__status_commands() {
     local commands; commands=()
     _describe -t commands 'cc help status commands' commands "$@"
+}
+(( $+functions[_cc__help__sync_commands] )) ||
+_cc__help__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help sync commands' commands "$@"
 }
 (( $+functions[_cc__help__tui_commands] )) ||
 _cc__help__tui_commands() {
@@ -1687,10 +2062,35 @@ _cc__init_commands() {
     local commands; commands=()
     _describe -t commands 'cc init commands' commands "$@"
 }
+(( $+functions[_cc__land_commands] )) ||
+_cc__land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc land commands' commands "$@"
+}
+(( $+functions[_cc__pop_commands] )) ||
+_cc__pop_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc pop commands' commands "$@"
+}
+(( $+functions[_cc__push_commands] )) ||
+_cc__push_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc push commands' commands "$@"
+}
+(( $+functions[_cc__rebase_commands] )) ||
+_cc__rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc rebase commands' commands "$@"
+}
 (( $+functions[_cc__setup_commands] )) ||
 _cc__setup_commands() {
     local commands; commands=()
     _describe -t commands 'cc setup commands' commands "$@"
+}
+(( $+functions[_cc__show_commands] )) ||
+_cc__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc show commands' commands "$@"
 }
 (( $+functions[_cc__stack_commands] )) ||
 _cc__stack_commands() {
@@ -1698,27 +2098,54 @@ _cc__stack_commands() {
 'create:Create a new stack' \
 'list:List all stacks' \
 'switch:Switch to a different stack' \
-'show:Show detailed information about a stack' \
+'show:Show the current stack status' \
 'push:Push current commit to the top of the stack' \
 'pop:Pop the top commit from the stack' \
 'submit:Submit a stack entry for review' \
 'status:Check status of all pull requests in a stack' \
 'prs:List all pull requests for the repository' \
-'sync:Sync stack with remote repository' \
+'check:Check stack status with remote repository (read-only)' \
+'sync:Sync stack with remote repository (pull + rebase + cleanup)' \
 'rebase:Rebase stack on updated base branch' \
 'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
 'abort-rebase:Abort an in-progress rebase' \
 'rebase-status:Show rebase status and conflict resolution guidance' \
 'delete:Delete a stack' \
 'validate:Validate stack integrity' \
+'land:Land (merge) approved stack entries' \
+'auto-land:Auto-land all ready PRs (shorthand for land --auto)' \
+'list-prs:List pull requests from Bitbucket' \
+'continue-land:Continue an in-progress land operation after resolving conflicts' \
+'abort-land:Abort an in-progress land operation' \
+'land-status:Show status of in-progress land operation' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'cc stack commands' commands "$@"
+}
+(( $+functions[_cc__stack__abort-land_commands] )) ||
+_cc__stack__abort-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack abort-land commands' commands "$@"
 }
 (( $+functions[_cc__stack__abort-rebase_commands] )) ||
 _cc__stack__abort-rebase_commands() {
     local commands; commands=()
     _describe -t commands 'cc stack abort-rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__auto-land_commands] )) ||
+_cc__stack__auto-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack auto-land commands' commands "$@"
+}
+(( $+functions[_cc__stack__check_commands] )) ||
+_cc__stack__check_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack check commands' commands "$@"
+}
+(( $+functions[_cc__stack__continue-land_commands] )) ||
+_cc__stack__continue-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack continue-land commands' commands "$@"
 }
 (( $+functions[_cc__stack__continue-rebase_commands] )) ||
 _cc__stack__continue-rebase_commands() {
@@ -1741,27 +2168,54 @@ _cc__stack__help_commands() {
 'create:Create a new stack' \
 'list:List all stacks' \
 'switch:Switch to a different stack' \
-'show:Show detailed information about a stack' \
+'show:Show the current stack status' \
 'push:Push current commit to the top of the stack' \
 'pop:Pop the top commit from the stack' \
 'submit:Submit a stack entry for review' \
 'status:Check status of all pull requests in a stack' \
 'prs:List all pull requests for the repository' \
-'sync:Sync stack with remote repository' \
+'check:Check stack status with remote repository (read-only)' \
+'sync:Sync stack with remote repository (pull + rebase + cleanup)' \
 'rebase:Rebase stack on updated base branch' \
 'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
 'abort-rebase:Abort an in-progress rebase' \
 'rebase-status:Show rebase status and conflict resolution guidance' \
 'delete:Delete a stack' \
 'validate:Validate stack integrity' \
+'land:Land (merge) approved stack entries' \
+'auto-land:Auto-land all ready PRs (shorthand for land --auto)' \
+'list-prs:List pull requests from Bitbucket' \
+'continue-land:Continue an in-progress land operation after resolving conflicts' \
+'abort-land:Abort an in-progress land operation' \
+'land-status:Show status of in-progress land operation' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'cc stack help commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__abort-land_commands] )) ||
+_cc__stack__help__abort-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help abort-land commands' commands "$@"
 }
 (( $+functions[_cc__stack__help__abort-rebase_commands] )) ||
 _cc__stack__help__abort-rebase_commands() {
     local commands; commands=()
     _describe -t commands 'cc stack help abort-rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__auto-land_commands] )) ||
+_cc__stack__help__auto-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help auto-land commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__check_commands] )) ||
+_cc__stack__help__check_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help check commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__continue-land_commands] )) ||
+_cc__stack__help__continue-land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help continue-land commands' commands "$@"
 }
 (( $+functions[_cc__stack__help__continue-rebase_commands] )) ||
 _cc__stack__help__continue-rebase_commands() {
@@ -1783,10 +2237,25 @@ _cc__stack__help__help_commands() {
     local commands; commands=()
     _describe -t commands 'cc stack help help commands' commands "$@"
 }
+(( $+functions[_cc__stack__help__land_commands] )) ||
+_cc__stack__help__land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help land commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__land-status_commands] )) ||
+_cc__stack__help__land-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help land-status commands' commands "$@"
+}
 (( $+functions[_cc__stack__help__list_commands] )) ||
 _cc__stack__help__list_commands() {
     local commands; commands=()
     _describe -t commands 'cc stack help list commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__list-prs_commands] )) ||
+_cc__stack__help__list-prs_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help list-prs commands' commands "$@"
 }
 (( $+functions[_cc__stack__help__pop_commands] )) ||
 _cc__stack__help__pop_commands() {
@@ -1843,10 +2312,25 @@ _cc__stack__help__validate_commands() {
     local commands; commands=()
     _describe -t commands 'cc stack help validate commands' commands "$@"
 }
+(( $+functions[_cc__stack__land_commands] )) ||
+_cc__stack__land_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack land commands' commands "$@"
+}
+(( $+functions[_cc__stack__land-status_commands] )) ||
+_cc__stack__land-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack land-status commands' commands "$@"
+}
 (( $+functions[_cc__stack__list_commands] )) ||
 _cc__stack__list_commands() {
     local commands; commands=()
     _describe -t commands 'cc stack list commands' commands "$@"
+}
+(( $+functions[_cc__stack__list-prs_commands] )) ||
+_cc__stack__list-prs_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack list-prs commands' commands "$@"
 }
 (( $+functions[_cc__stack__pop_commands] )) ||
 _cc__stack__pop_commands() {
@@ -1907,6 +2391,11 @@ _cc__stack__validate_commands() {
 _cc__status_commands() {
     local commands; commands=()
     _describe -t commands 'cc status commands' commands "$@"
+}
+(( $+functions[_cc__sync_commands] )) ||
+_cc__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc sync commands' commands "$@"
 }
 (( $+functions[_cc__tui_commands] )) ||
 _cc__tui_commands() {

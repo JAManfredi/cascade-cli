@@ -202,12 +202,13 @@ impl StackManager {
         Ok(stack)
     }
 
-    /// Push a new commit to the top of the active stack
+    /// Push a commit to a stack
     pub fn push_to_stack(
         &mut self,
         branch: String,
         commit_hash: String,
         message: String,
+        source_branch: String,
     ) -> Result<Uuid> {
         let stack_id = self
             .metadata
@@ -236,6 +237,7 @@ impl StackManager {
             entry_id,
             stack_id,
             branch.clone(),
+            source_branch,
         );
 
         // Update repository metadata

@@ -734,17 +734,50 @@ impl GitRepository {
         })
     }
 
-    /// Soft reset to a specific reference (keeps changes in staging area)
+    /// Reset HEAD to a specific reference (soft reset)
     pub fn reset_soft(&self, target_ref: &str) -> Result<()> {
         let target_commit = self.resolve_reference(target_ref)?;
-        let target_object = target_commit.as_object();
-
+        
         self.repo
-            .reset(target_object, git2::ResetType::Soft, None)
+            .reset(target_commit.as_object(), git2::ResetType::Soft, None)
             .map_err(CascadeError::Git)?;
-
-        tracing::debug!("Soft reset to {}", target_ref);
+            
         Ok(())
+    }
+
+    /// Find which branch contains a specific commit
+    pub fn find_branch_containing_commit(&self, commit_hash: &str) -> Result<String> {
+        let oid = Oid::from_str(commit_hash)
+            .map_err(|e| CascadeError::branch(format!("Invalid commit hash '{commit_hash}': {e}")))?;
+        
+        // Get all local branches
+        let branches = self.repo.branches(Some(git2::BranchType::Local))
+            .map_err(CascadeError::Git)?;
+            
+        for branch_result in branches {
+            let (branch, _) = branch_result.map_err(CascadeError::Git)?;
+            
+            if let Some(branch_name) = branch.name().map_err(CascadeError::Git)? {
+                // Check if this branch contains the commit
+                if let Ok(branch_head) = branch.get().peel_to_commit() {
+                    // Walk the commit history from this branch's HEAD
+                    let mut revwalk = self.repo.revwalk().map_err(CascadeError::Git)?;
+                    revwalk.push(branch_head.id()).map_err(CascadeError::Git)?;
+                    
+                    for commit_oid in revwalk {
+                        let commit_oid = commit_oid.map_err(CascadeError::Git)?;
+                        if commit_oid == oid {
+                            return Ok(branch_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If not found in any branch, might be on current HEAD
+        Err(CascadeError::branch(format!(
+            "Commit {commit_hash} not found in any local branch"
+        )))
     }
 }
 

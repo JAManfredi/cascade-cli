@@ -196,8 +196,8 @@ cc stack delete feature-x --keep-branches
 
 ### **📤 Stack Operations**
 
-#### **`cc stack push`** - Add Commit to Stack
-Add the current commit (HEAD) to the active stack.
+#### **`cc stack push`** - Add Commits to Stack
+Add commits to the active stack. By default, pushes all unpushed commits.
 
 ```bash
 cc stack push [OPTIONS]
@@ -206,12 +206,13 @@ cc stack push [OPTIONS]
 --branch <NAME>         # Custom branch name for this commit
 --message <MSG>         # Commit message (if creating new commit)
 --commit <HASH>         # Use specific commit instead of HEAD
---all                   # Push all unpushed commits since last stack push
 --since <REF>           # Push commits since reference (e.g., HEAD~3)
 --commits <HASHES>      # Push specific commits (comma-separated)
 --squash <N>            # 🎉 Squash last N commits into 1 clean commit
 --squash-since <REF>    # 🎉 Squash all commits since reference
 ```
+
+**Default Behavior:** When no specific targeting options are provided, `cc stack push` pushes **all unpushed commits** since the last stack push.
 
 **Squash Workflow Examples:**
 ```bash
@@ -251,15 +252,28 @@ cc stack push --squash 3  # Result: "Refactor cleanup" (uses last commit)
 
 **Examples:**
 ```bash
-# Add current commit
+# Push all unpushed commits (default behavior)
 git commit -m "Add user authentication"
-cc stack push
+git commit -m "Add password validation"
+cc stack push  # Pushes both commits as separate stack entries
 
-# Push with custom PR message
-cc stack push --message "Implement OAuth2 login flow"
+# Push specific commit only
+cc stack push --commit abc123
 
-# Push without creating PR
-cc stack push --no-pr
+# Push commits since specific reference
+cc stack push --since HEAD~3
+
+# Push specific commits
+cc stack push --commits abc123,def456,ghi789
+
+# Push with custom branch name
+cc stack push --branch custom-auth-branch
+
+# Squash multiple commits before pushing
+cc stack push --squash 3  # Squashes last 3 commits into one
+
+# Squash commits since reference
+cc stack push --squash-since HEAD~5
 ```
 
 #### **`cc stack pop`** - Remove Entry from Stack
@@ -285,34 +299,43 @@ cc stack pop --keep-branch
 cc stack pop --force
 ```
 
-#### **`cc stack submit`** - Create Pull Request
-Submit a stack entry as a pull request.
+#### **`cc stack submit`** - Create Pull Requests
+Submit stack entries as pull requests. By default, submits all unsubmitted entries.
 
 ```bash
 cc stack submit [ENTRY] [OPTIONS]
 
 # Arguments:
-[ENTRY]                 # Entry index (default: top entry)
+[ENTRY]                 # Entry index (defaults to all unsubmitted entries)
 
 # Options:
 --title <TITLE>         # PR title override
 --description <DESC>    # PR description
+--range <RANGE>         # Submit range of entries (e.g., "1-3" or "2,4,6")
 --draft                 # Create as draft PR
 --reviewers <USERS>     # Comma-separated reviewer list
 ```
 
+**Default Behavior:** When no specific entry is provided, `cc stack submit` submits **all unsubmitted entries** as separate pull requests.
+
 **Examples:**
 ```bash
-# Submit top entry
+# Submit all unsubmitted entries (default behavior)
 cc stack submit
 
 # Submit specific entry
 cc stack submit 2
 
+# Submit range of entries
+cc stack submit --range 1-3
+
+# Submit specific entries 
+cc stack submit --range 2,4,6
+
 # Submit with custom details
 cc stack submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
 
-# Create draft PR
+# Create draft PRs
 cc stack submit --draft
 
 # Add reviewers

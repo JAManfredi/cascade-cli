@@ -42,6 +42,7 @@ impl BitbucketIntegration {
         entry_id: &Uuid,
         title: Option<String>,
         description: Option<String>,
+        draft: bool,
     ) -> Result<PullRequest> {
         let stack = self
             .stack_manager
@@ -59,7 +60,7 @@ impl BitbucketIntegration {
 
         // Create pull request
         let pr_request =
-            self.create_pr_request(stack, entry, &target_branch, title, description)?;
+            self.create_pr_request(stack, entry, &target_branch, title, description, draft)?;
         let pr = self.pr_manager.create_pull_request(pr_request).await?;
 
         // Update stack manager with PR information
@@ -85,6 +86,7 @@ impl BitbucketIntegration {
             merged_prs: 0,
             declined_prs: 0,
             pull_requests: Vec::new(),
+            enhanced_statuses: Vec::new(),
         };
 
         for entry in &stack.entries {
@@ -151,6 +153,7 @@ impl BitbucketIntegration {
         target_branch: &str,
         title: Option<String>,
         description: Option<String>,
+        draft: bool,
     ) -> Result<CreatePullRequestRequest> {
         let bitbucket_config = self.config.bitbucket.as_ref().unwrap();
 
@@ -202,6 +205,7 @@ impl BitbucketIntegration {
             description,
             from_ref,
             to_ref,
+            draft: if draft { Some(true) } else { None },
         })
     }
 
@@ -321,9 +325,77 @@ impl BitbucketIntegration {
 
         Ok(updated_branches)
     }
+
+    /// Check the enhanced status of all pull requests in a stack
+    pub async fn check_enhanced_stack_status(
+        &self,
+        stack_id: &Uuid,
+    ) -> Result<StackSubmissionStatus> {
+        let stack = self
+            .stack_manager
+            .get_stack(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        let mut status = StackSubmissionStatus {
+            stack_name: stack.name.clone(),
+            total_entries: stack.entries.len(),
+            submitted_entries: 0,
+            open_prs: 0,
+            merged_prs: 0,
+            declined_prs: 0,
+            pull_requests: Vec::new(),
+            enhanced_statuses: Vec::new(),
+        };
+
+        for entry in &stack.entries {
+            if let Some(pr_id_str) = &entry.pull_request_id {
+                status.submitted_entries += 1;
+
+                if let Ok(pr_id) = pr_id_str.parse::<u64>() {
+                    // Get enhanced status instead of basic PR
+                    match self.pr_manager.get_pull_request_status(pr_id).await {
+                        Ok(enhanced_status) => {
+                            match enhanced_status.pr.state {
+                                crate::bitbucket::pull_request::PullRequestState::Open => {
+                                    status.open_prs += 1
+                                }
+                                crate::bitbucket::pull_request::PullRequestState::Merged => {
+                                    status.merged_prs += 1
+                                }
+                                crate::bitbucket::pull_request::PullRequestState::Declined => {
+                                    status.declined_prs += 1
+                                }
+                            }
+                            status.pull_requests.push(enhanced_status.pr.clone());
+                            status.enhanced_statuses.push(enhanced_status);
+                        }
+                        Err(e) => {
+                            warn!("Failed to get enhanced status for PR #{}: {}", pr_id, e);
+                            // Fallback to basic PR info
+                            match self.pr_manager.get_pull_request(pr_id).await {
+                                Ok(pr) => {
+                                    match pr.state {
+                                        crate::bitbucket::pull_request::PullRequestState::Open => status.open_prs += 1,
+                                        crate::bitbucket::pull_request::PullRequestState::Merged => status.merged_prs += 1,
+                                        crate::bitbucket::pull_request::PullRequestState::Declined => status.declined_prs += 1,
+                                    }
+                                    status.pull_requests.push(pr);
+                                }
+                                Err(e2) => {
+                                    warn!("Failed to get basic PR #{}: {}", pr_id, e2);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(status)
+    }
 }
 
-/// Status of stack submission
+/// Status of stack submission with enhanced mergability information
 #[derive(Debug)]
 pub struct StackSubmissionStatus {
     pub stack_name: String,
@@ -333,6 +405,7 @@ pub struct StackSubmissionStatus {
     pub merged_prs: usize,
     pub declined_prs: usize,
     pub pull_requests: Vec<PullRequest>,
+    pub enhanced_statuses: Vec<crate::bitbucket::pull_request::PullRequestStatus>,
 }
 
 impl StackSubmissionStatus {

@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use clap_complete::Shell;
 use commands::entry::EntryAction;
 use commands::stack::StackAction;
+use commands::{MergeStrategyArg, RebaseStrategyArg};
 
 #[derive(Parser)]
 #[command(name = "cc")]
@@ -89,6 +90,124 @@ pub enum Commands {
     Viz {
         #[command(subcommand)]
         action: VizAction,
+    },
+
+    // Stack command shortcuts for commonly used operations
+    /// Show the current stack status (shortcut for 'stack show')
+    Show {
+        /// Show detailed pull request information
+        #[arg(short, long)]
+        verbose: bool,
+        /// Show mergability status for all PRs
+        #[arg(short, long)]
+        mergeable: bool,
+    },
+
+    /// Push current commit to the top of the stack (shortcut for 'stack push')
+    Push {
+        /// Branch name for this commit
+        #[arg(long, short)]
+        branch: Option<String>,
+        /// Commit message (if creating a new commit)
+        #[arg(long, short)]
+        message: Option<String>,
+        /// Use specific commit hash instead of HEAD
+        #[arg(long)]
+        commit: Option<String>,
+        /// Push commits since this reference (e.g., HEAD~3)
+        #[arg(long)]
+        since: Option<String>,
+        /// Push multiple specific commits (comma-separated)
+        #[arg(long)]
+        commits: Option<String>,
+        /// Squash last N commits into one before pushing
+        #[arg(long)]
+        squash: Option<usize>,
+        /// Squash all commits since this reference (e.g., HEAD~5)
+        #[arg(long)]
+        squash_since: Option<String>,
+        /// Auto-create feature branch when pushing from base branch
+        #[arg(long)]
+        auto_branch: bool,
+        /// Allow pushing commits from base branch (not recommended)
+        #[arg(long)]
+        allow_base_branch: bool,
+    },
+
+    /// Pop the top commit from the stack (shortcut for 'stack pop')
+    Pop {
+        /// Keep the branch (don't delete it)
+        #[arg(long)]
+        keep_branch: bool,
+    },
+
+    /// Land (merge) approved stack entries (shortcut for 'stack land')
+    Land {
+        /// Stack entry number to land (1-based index, optional)
+        entry: Option<usize>,
+        /// Force land even with blocking issues (dangerous)
+        #[arg(short, long)]
+        force: bool,
+        /// Dry run - show what would be landed without doing it
+        #[arg(short, long)]
+        dry_run: bool,
+        /// Use server-side validation (safer, checks approvals/builds)
+        #[arg(long)]
+        auto: bool,
+        /// Wait for builds to complete before merging
+        #[arg(long)]
+        wait_for_builds: bool,
+        /// Merge strategy to use
+        #[arg(long, value_enum, default_value = "squash")]
+        strategy: Option<MergeStrategyArg>,
+        /// Maximum time to wait for builds (seconds)
+        #[arg(long, default_value = "1800")]
+        build_timeout: u64,
+    },
+
+    /// Auto-land all ready PRs (shortcut for 'stack autoland')
+    Autoland {
+        /// Force land even with blocking issues (dangerous)
+        #[arg(short, long)]
+        force: bool,
+        /// Dry run - show what would be landed without doing it
+        #[arg(short, long)]
+        dry_run: bool,
+        /// Wait for builds to complete before merging
+        #[arg(long)]
+        wait_for_builds: bool,
+        /// Merge strategy to use
+        #[arg(long, value_enum, default_value = "squash")]
+        strategy: Option<MergeStrategyArg>,
+        /// Maximum time to wait for builds (seconds)
+        #[arg(long, default_value = "1800")]
+        build_timeout: u64,
+    },
+
+    /// Sync stack with remote repository (shortcut for 'stack sync')
+    Sync {
+        /// Force sync even if there are conflicts
+        #[arg(long)]
+        force: bool,
+        /// Skip cleanup of merged branches
+        #[arg(long)]
+        skip_cleanup: bool,
+        /// Interactive mode for conflict resolution
+        #[arg(long, short)]
+        interactive: bool,
+    },
+
+    /// Rebase stack on updated base branch (shortcut for 'stack rebase')
+    Rebase {
+        /// Interactive rebase
+        #[arg(long, short)]
+        interactive: bool,
+        /// Target base branch (defaults to stack's base branch)
+        #[arg(long)]
+        onto: Option<String>,
+        /// Rebase strategy to use
+        #[arg(long, value_enum)]
+        strategy: Option<RebaseStrategyArg>,
     },
 }
 
@@ -314,6 +433,52 @@ impl Cli {
                     .await
                 }
             },
+
+            Commands::Show { verbose, mergeable } => commands::stack::show(verbose, mergeable).await,
+
+            Commands::Push {
+                branch,
+                message,
+                commit,
+                since,
+                commits,
+                squash,
+                squash_since,
+                auto_branch,
+                allow_base_branch,
+            } => commands::stack::push(branch, message, commit, since, commits, squash, squash_since, auto_branch, allow_base_branch).await,
+
+            Commands::Pop { keep_branch } => commands::stack::pop(keep_branch).await,
+
+            Commands::Land {
+                entry,
+                force,
+                dry_run,
+                auto,
+                wait_for_builds,
+                strategy,
+                build_timeout,
+            } => commands::stack::land(entry, force, dry_run, auto, wait_for_builds, strategy, build_timeout).await,
+
+            Commands::Autoland {
+                force,
+                dry_run,
+                wait_for_builds,
+                strategy,
+                build_timeout,
+            } => commands::stack::autoland(force, dry_run, wait_for_builds, strategy, build_timeout).await,
+
+            Commands::Sync {
+                force,
+                skip_cleanup,
+                interactive,
+            } => commands::stack::sync(force, skip_cleanup, interactive).await,
+
+            Commands::Rebase {
+                interactive,
+                onto,
+                strategy,
+            } => commands::stack::rebase(interactive, onto, strategy).await,
         }
     }
 

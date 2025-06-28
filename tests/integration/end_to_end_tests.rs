@@ -21,7 +21,7 @@ async fn test_complete_stack_workflow() {
     
     // Test stack push
     let output = Command::new("cargo")
-        .args(&["run", "--", "stack", "push", "--all"])
+        .args(&["run", "--", "stack", "push"])
         .current_dir(&repo_path)
         .output()
         .expect("Failed to push stack");

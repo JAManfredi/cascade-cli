@@ -114,7 +114,6 @@ complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -l commits -d 'Push multiple specific commits (comma-separated)' -r
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -l squash -d 'Squash last N commits into one before pushing' -r
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -l squash-since -d 'Squash all commits since this reference (e.g., HEAD~5)' -r
-complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -l all -d 'Push all unpushed commits since last stack push'
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -s v -l verbose -d 'Enable verbose logging'
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -l no-color -d 'Disable colored output'
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from push" -s h -l help -d 'Print help'
@@ -125,7 +124,7 @@ complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -s t -l title -d 'Pull request title' -r
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -s d -l description -d 'Pull request description' -r
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -l range -d 'Submit range of entries (e.g., "1-3" or "2,4,6")' -r
-complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -l all -d 'Submit all unsubmitted entries'
+complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -l draft -d 'Create draft pull requests (can be edited later)'
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -s v -l verbose -d 'Enable verbose logging'
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -l no-color -d 'Disable colored output'
 complete -c cc -n "__fish_cc_using_subcommand stack; and __fish_seen_subcommand_from submit" -s h -l help -d 'Print help'

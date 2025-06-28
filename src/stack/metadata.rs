@@ -16,6 +16,8 @@ pub struct CommitMetadata {
     pub stack_id: Uuid,
     /// Branch name where this commit lives
     pub branch: String,
+    /// Original local branch where this commit was made
+    pub source_branch: String,
     /// Dependent commit hashes (commits this one depends on)
     pub dependencies: Vec<String>,
     /// Commits that depend on this one
@@ -75,6 +77,7 @@ impl CommitMetadata {
         stack_entry_id: Uuid,
         stack_id: Uuid,
         branch: String,
+        source_branch: String,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -83,6 +86,7 @@ impl CommitMetadata {
             stack_entry_id,
             stack_id,
             branch,
+            source_branch,
             dependencies: Vec::new(),
             dependents: Vec::new(),
             is_pushed: false,
@@ -411,6 +415,7 @@ mod tests {
             entry_id,
             stack_id,
             "feature-branch".to_string(),
+            "main".to_string(),
         );
 
         assert_eq!(commit.hash, "abc123");

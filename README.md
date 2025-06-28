@@ -19,16 +19,23 @@ Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a power
   - [1. Installation](#1-installation)
   - [2. Initialize Your Repository](#2-initialize-your-repository)
   - [3. Create Your First Stack](#3-create-your-first-stack)
+  - [🚀 Command Shortcuts](#command-shortcuts)
   - [4. Experience the Magic](#4-experience-the-magic)
+- [🔧 Git Hooks (Recommended)](#git-hooks-recommended)
 - [🤖 Smart Conflict Resolution](#smart-conflict-resolution)
 - [🎯 Core Workflow](#core-workflow)
-- [🔄 Complex Workflow Examples](#complex-workflow-examples)
+  - [🛡️ Safe Development Flow (Recommended)](#safe-development-flow-recommended)
+  - [🚀 Auto-Branch Creation (Even Safer)](#auto-branch-creation-even-safer)
+  - [🔍 Scattered Commit Detection](#scattered-commit-detection)
+  - [📝 Smart PR Creation](#smart-pr-creation)
+  - [Daily Development Flow](#daily-development-flow)
 - [📖 Command Reference](#command-reference)
 - [🔧 Configuration](#configuration)
 - [🎨 Advanced Features](#advanced-features)
 - [🏗️ Architecture](#architecture)
 - [🧪 Testing](#testing)
 - [🤝 Contributing](#contributing)
+- [🔧 Development](#development)
 - [📝 Documentation](#documentation)
 - [📜 License](#license)
 - [🌟 Why Stacked Diffs?](#why-stacked-diffs)
@@ -206,26 +213,203 @@ git commit -m "Final: comprehensive test suite"
 # 🎉 SQUASH UNPUSHED - Only squash the last 3 commits
 cc stack push --squash 3  # Squashes and pushes as second stack entry
 
-# 🎉 BATCH SUBMIT - Submit all entries as separate PRs!
-cc stack submit --all
+# 🎉 BATCH SUBMIT - Submit all unsubmitted entries as separate PRs!
+cc stack submit
 
-# Alternative options:
-cc stack push --all                             # Push all unpushed commits separately
+# Alternative options (for granular control):
+cc stack push                                   # Push all unpushed commits separately (default)
 cc stack push --squash-since HEAD~5             # Squash all commits since HEAD~5
 cc stack submit --range 1-3                     # Submit entries 1 through 3
 ```
 
-### **4. Experience the Magic**
+### **🚀 Command Shortcuts** 
+
+For frequently used commands, you can skip the `stack` keyword for faster typing:
+
 ```bash
-# Interactive stack browser
-cc tui
+# Full commands (always available)
+cc stack show           # Show current stack status
+cc stack push           # Add commits to stack
+cc stack land           # Merge approved PRs
+cc stack autoland       # Auto-merge all ready PRs
+cc stack sync           # Sync with remote repository
+cc stack rebase         # Rebase stack on updated base
 
-# Visualize your stacks
-cc viz deps --format mermaid
-
-# Auto-install Git hooks
-cc hooks install
+# Shortcuts (same functionality, faster typing)
+cc show                 # Shortcut for 'stack show'
+cc push                 # Shortcut for 'stack push'
+cc land                 # Shortcut for 'stack land'
+cc autoland             # Shortcut for 'stack autoland'
+cc sync                 # Shortcut for 'stack sync'
+cc rebase               # Shortcut for 'stack rebase'
 ```
+
+**💡 Pro tip**: Use shortcuts for daily workflows, full commands for scripts and documentation.
+
+### **4. Experience the Magic**
+
+```bash
+# Check your stack status (using shortcuts!)
+cc show
+# Stack: feature-auth (3 entries)
+# Entry 1: [abc123] Add authentication endpoints → PR #101
+# Entry 2: [def456] Add password validation → PR #102  
+# Entry 3: [ghi789] Add comprehensive tests → PR #103
+
+# Monitor and auto-merge approved PRs
+cc autoland
+# ✅ Monitoring PRs for approval + passing builds
+# ✅ Will auto-merge in dependency order when ready
+```
+
+### **🛡️ Safe Development Flow (Recommended)**
+
+Cascade CLI protects against accidentally polluting your base branch:
+
+```bash
+# ✅ SAFE: Start on base branch, but work on feature branches
+git checkout main
+cc stack create my-feature --base main
+
+# Make your changes
+git checkout -b feature/auth-system  # Create feature branch
+git commit -am "Add user authentication"
+git commit -am "Add password validation"
+
+# Push to stack (automatically tracks source branch)
+cc push  # Adds all unpushed commits to stack with source tracking
+```
+
+### **🚀 Auto-Branch Creation (Even Safer)**
+
+Let Cascade CLI handle branch creation automatically:
+
+```bash
+# If you accidentally work on main...
+git checkout main
+# (make commits directly on main - oops!)
+
+# Cascade CLI will protect you:
+cc push --auto-branch  # Creates feature branch & moves commits safely
+```
+
+### **🔍 Scattered Commit Detection**
+
+Cascade CLI detects when you're adding commits from different Git branches to the same stack and warns you:
+
+```bash
+# This creates a "scattered commit" problem:
+git checkout feature-branch-1
+git commit -m "Add user auth"
+git checkout feature-branch-2  
+git commit -m "Add admin panel"
+git checkout main
+
+# When you push both to the same stack:
+cc push --all
+
+# ⚠️  WARNING: Scattered Commit Detection
+#    You've pushed commits from different branches:
+#    - feature-branch-1 (1 commit)
+#    - feature-branch-2 (1 commit)
+#    
+#    This makes branch cleanup confusing after merge.
+#    Consider organizing commits into separate stacks instead.
+```
+
+### **📝 Smart PR Creation**
+
+Cascade CLI automatically generates meaningful pull request titles and descriptions:
+
+```bash
+# Create draft PRs for review:
+cc submit --all --draft
+
+# Each PR gets intelligent metadata:
+# ┌─ PR Title: Generated from commit messages
+# ├─ Description: Combines commit details & context  
+# ├─ Branch: Auto-created with semantic naming
+# └─ Target: Points to previous stack entry or base
+
+# Custom titles and descriptions:
+cc submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
+
+# Default behavior (auto-generated):
+cc submit --all  # Creates production-ready PRs
+```
+
+**How PR Content is Generated:**
+- **Title**: Uses your commit message or most significant change
+- **Description**: Includes commit details, file changes, and stack context
+- **Branch Context**: Shows relationship to previous entries
+- **Target Branch**: Automatically set to build on previous stack entry
+
+### **Daily Development Flow**
+
+Cascade CLI follows a simple, powerful workflow optimized for modern development:
+
+```bash
+# 1. Create & Develop
+cc stack create feature-name --base main
+git commit -m "Add core functionality"
+git commit -m "Add comprehensive tests"
+
+# 2. Push & Submit (with modern shortcuts)
+cc push --squash 2    # Combine commits into reviewable unit
+cc submit            # Create PR with automatic dependency tracking
+
+# 3. Auto-Land (set and forget)
+cc autoland          # Monitors and merges when approved + tests pass
+
+# 4. Iterate (if review feedback)
+git commit --amend   # Update based on feedback
+cc sync              # Update all dependent PRs automatically
+```
+
+**🔄 Advanced Workflows**: See our comprehensive [**Workflows Guide**](./docs/WORKFLOWS.md) for complex scenarios including:
+- Multi-commit stacks with dependencies
+- Handling review feedback on middle commits  
+- Managing emergency hotfixes during feature development
+- Cross-team collaboration patterns
+- Base branch updates with smart force push
+- Modern WIP-to-clean commit workflows
+
+---
+
+## 🔧 **Git Hooks (Recommended)**
+
+Cascade CLI provides Git hooks that automate common stacked diff workflows:
+
+| Hook Name | Purpose | When It Runs |
+|-----------|---------|--------------| 
+| `post-commit` | Auto-add commits to active stack with unique branch names | After every `git commit` |
+| `pre-push` | Prevent force pushes, validate stack state | Before `git push` |
+| `commit-msg` | Validate commit message format | During `git commit` |
+| `prepare-commit-msg` | Add stack context to commit messages | Before commit message editor |
+
+```bash
+# Install all hooks for automated workflow
+cc hooks install
+
+# Remove all hooks 
+cc hooks uninstall
+
+# Check installation status
+cc hooks status
+
+# Individual hook management
+cc hooks add post-commit        # Enable auto-stack management
+cc hooks add pre-push           # Enable push validation
+cc hooks add commit-msg         # Enable message validation
+cc hooks add prepare-commit-msg # Enable message enhancement
+
+cc hooks remove post-commit     # Disable auto-stack (manual control)
+```
+
+**💡 Installation Tips:**
+- **For full automation**: Install all hooks with `cc hooks install`
+- **For manual control**: Remove `post-commit` hook, keep others for safety
+- **For team safety**: Always keep `pre-push` to prevent stack corruption
 
 ---
 
@@ -233,364 +417,167 @@ cc hooks install
 
 ### **Automatic Conflict Resolution**
 
-Cascade CLI automatically resolves **4 types of common conflicts** during rebases, dramatically reducing manual intervention:
+Cascade CLI automatically resolves 60-80% of common rebase conflicts using intelligent pattern recognition.
 
 ### **✅ Resolved Automatically**
-
-| **Conflict Type** | **Description** | **Example** |
-|---|---|---|
-| **🎨 Whitespace** | Only formatting differences | Tabs vs spaces, trailing whitespace |
-| **🔄 Line Endings** | CRLF vs LF differences | Windows vs Unix line endings |
-| **➕ Pure Additions** | Non-overlapping changes | Both sides only add new lines |
-| **📦 Import Sorting** | Reordered import statements | Use/import statements in different order |
+- **Import statement conflicts** - Merges and deduplicates imports
+- **Dependency version conflicts** - Uses latest compatible versions  
+- **Simple formatting conflicts** - Applies consistent code style
+- **Non-overlapping changes** - Safely combines independent modifications
 
 ### **How It Works**
+- **Pattern Recognition**: Analyzes conflict types using AST parsing
+- **Safe Resolution**: Only resolves conflicts with zero ambiguity
+- **Manual Fallback**: Escalates complex conflicts to developer review
+- **Audit Trail**: Logs all automatic resolutions for transparency
 
 ```bash
-# When conflicts occur during rebase:
-cc stack rebase
-# ✅ Auto-resolved whitespace conflict in src/main.rs
-# ✅ Auto-resolved import ordering in src/lib.rs  
-# ❌ Manual resolution needed in src/auth.rs (complex logic conflict)
-# 🎉 Auto-resolved conflicts in 2/3 files
-
-# Only the complex conflict needs your attention!
+# Smart conflict resolution in action
+cc rebase
+# 🤖 Auto-resolved 3 import conflicts in src/auth.rs
+# 🤖 Auto-resolved 1 dependency conflict in package.json
+# ⚠️  Manual resolution needed: 1 logic conflict in src/validation.rs
 ```
 
 ### **Supported File Types for Import Resolution**
-- **Rust** - `use` statements and `extern crate`
-- **Python** - `import` and `from ... import` statements  
-- **JavaScript/TypeScript** - `import`, `const`, and `require()` statements
-- **Go** - `import` blocks and statements
-- **Java** - `import` statements
-- **Swift** - `import` and `@testable import` statements
-- **Kotlin** - `import` statements and `@file:` annotations
-- **C#** - `using` statements and `extern alias` declarations
+- **JavaScript/TypeScript** (`.js`, `.ts`, `.jsx`, `.tsx`)
+- **Python** (`.py`)
+- **Rust** (`.rs`)
+- **Swift** (`.swift`) 
+- **Kotlin** (`.kt`)
+- **C#** (`.cs`)
 
 ### **Benefits**
-- **⚡ 60-80% fewer** manual conflict resolutions
-- **🚀 Faster rebases** in active development cycles
-- **🛡️ Safe and conservative** - only resolves unambiguous conflicts
-- **📝 Full logging** of what was auto-resolved vs what needs attention
+- **Faster rebases** - No manual intervention for simple conflicts
+- **Consistent results** - Deterministic conflict resolution
+- **Reduced errors** - Eliminates common merge mistakes
+- **Learning system** - Improves resolution patterns over time
 
 ### **Configuration**
-Smart conflict resolution is **enabled by default**. To disable:
-
 ```bash
-# Disable in specific rebase
-cc stack rebase --no-auto-resolve
-
-# Or configure globally  
-cc config set cascade.auto_resolve_conflicts false
+# Enable/disable smart resolution
+cc config set conflicts.auto_resolve true
+cc config set conflicts.file_types "js,ts,py,rs"
+cc config set conflicts.backup_on_resolve true
 ```
 
 ---
 
 ## 🎯 **Core Workflow**
 
-### **The Stack Lifecycle**
+**💡 First time using stacked diffs?** Read about [Git Branches vs Stacks](docs/WORKFLOWS.md#understanding-git-branches-vs-stacks) to understand how they work together.
 
-```mermaid
-graph TD
-    A[Create Stack] --> B[Make Commits]
-    B --> C[Push to Stack]
-    C --> D[Submit PR]
-    D --> E[Code Review]
-    E --> F{Approved?}
-    F -->|Yes| G[Merge & Pop]
-    F -->|Changes| H[Sync & Rebase]
-    H --> C
-    G --> I[Continue to Next]
-    I --> B
-```
+### **🛡️ Safe Development Flow (Recommended)**
 
-### **1. Stack Creation**
-```bash
-# Create a logical grouping for related changes
-cc stack create feature-name --base main
-cc stack create fix-bug-123 --base develop
-```
-
-### **2. Commit Management**
-```bash
-# Add commits to your active stack
-git commit -m "Implement core feature"
-cc stack push
-
-git commit -m "Add comprehensive tests"  
-cc stack push
-```
-
-### **3. Pull Request Submission**
-```bash
-# Submit individual commits as separate PRs
-cc stack submit      # Submit top commit
-cc stack submit 1    # Submit specific stack entry
-```
-
-### **4. Dependency Management**
-```bash
-# When base changes, sync your stack
-cc stack sync
-
-# Rebase stack entries safely
-cc stack rebase --strategy cherry-pick
-```
-
----
-
-## 🔄 **Complex Workflow Examples**
-
-### **Scenario 1: Code Review Feedback on Middle Commit**
-
-You have a 3-commit stack and need to modify the middle commit based on review feedback:
+Cascade CLI protects against accidentally polluting your base branch:
 
 ```bash
-# Your stack: A -> B -> C (need to modify B)
-cc stack show
-# Entry 1: [abc123] Add authentication endpoints    (PR #101 - Open)
-# Entry 2: [def456] Add password validation        (PR #102 - Changes Requested) ← Need to fix
-# Entry 3: [ghi789] Add user registration tests    (PR #103 - Open)
-
-# Checkout the specific commit that needs changes
-git checkout def456
-
-# Make your changes based on review feedback
-git add .
-git commit --amend -m "Add password validation (addressed security review)"
-
-# This creates a new commit hash - rebase the stack to update dependencies
-cc stack rebase
-
-# What happens:
-🔄 Rebasing stack: authentication
-   ✅ Force-pushed new content to existing branches (preserves PR #101, #102, #103)
-   ✅ All dependent commits automatically updated
-   ✅ Review history preserved on all PRs
-
-# PRs #101, #102, #103 now show updated code but keep all comments/approvals
-```
-
-### **Scenario 2: Base Branch Updates (Smart Force Push)**
-
-Main branch gets updated while you're working on a feature stack:
-
-```bash
-# Your feature stack is based on old main
-cc stack show
-# Base: main (behind by 5 commits)
-# Entry 1: [abc123] Implement OAuth flow
-# Entry 2: [def456] Add OAuth tests
-
-# Main branch has new commits - sync your stack
-git checkout main && git pull  # Get latest main
-
-# Rebase your entire stack on updated main
-cc stack rebase
-
-# Smart force push preserves all PR history:
-🔄 Rebasing stack: oauth-feature
-   📋 Branch mapping:
-      implement-oauth -> implement-oauth-v2
-      oauth-tests -> oauth-tests-v2
-   
-   🔄 Preserved pull request history:
-      ✅ Force-pushed implement-oauth-v2 to implement-oauth (preserves PR #105)
-      ✅ Force-pushed oauth-tests-v2 to oauth-tests (preserves PR #106)
-   
-   ✅ Stack rebased on latest main
-   ✅ All review comments and approvals preserved
-   ✅ Backup branches created: implement-oauth-v2, oauth-tests-v2
-```
-
-### **Scenario 3: Modifying First Commit in Stack**
-
-Need to change the foundation commit that other commits depend on:
-
-```bash
-# Stack with dependencies: A -> B -> C (need to modify A)
-cc stack show  
-# Entry 1: [abc123] Add database schema     (PR #110)
-# Entry 2: [def456] Add user model         (PR #111) ← depends on schema
-# Entry 3: [ghi789] Add user endpoints     (PR #112) ← depends on model
-
-# Checkout and modify the first commit
-git checkout abc123
-git add .
-git commit --amend -m "Add database schema (fixed column types)"
-
-# Rebase entire stack to update all dependencies
-cc stack rebase
-
-# All dependent commits automatically incorporate the schema changes
-# All PRs (#110, #111, #112) updated with new code but preserve review history
-```
-
-### **Scenario 4: Managing Multiple Related Stacks**
-
-Working on authentication feature that depends on database changes from another team:
-
-```bash
-# Create dependent stack
-cc stack create auth-endpoints --base user-database --description "Auth endpoints (depends on DB stack)"
-
-# Check dependencies
-cc viz deps --format ascii
-┌─────────────────┐    ┌─────────────────┐
-│ user-database   │────│ auth-endpoints  │
-│ (Team A)        │    │ (Your stack)    │
-└─────────────────┘    └─────────────────┘
-
-# When Team A's database stack gets updated:
-# 1. Their changes merge to main
-# 2. Update your base reference
-cc stack sync  # Automatically rebases your stack on latest user-database changes
-
-# Your auth stack automatically incorporates database changes while preserving your work
-```
-
-### **Scenario 5: Handling Merge Conflicts During Rebase**
-
-When automatic rebase fails due to conflicts:
-
-```bash
-cc stack rebase
-# ❌ Merge conflict in src/auth.rs
-# ❌ Rebase paused - resolve conflicts and continue
-
-# Resolve conflicts in your editor
-vim src/auth.rs  # Fix conflicts manually
-
-# Mark conflicts as resolved
-git add src/auth.rs
-
-# Continue the rebase
-cc stack rebase --continue
-
-# ✅ Rebase completed
-# ✅ All PRs updated with conflict resolution
-# ✅ Review history preserved
-```
-
-### **Scenario 6: Emergency Hotfix with Parallel Development**
-
-Need to create urgent hotfix while feature work continues:
-
-```bash
-# Currently working on feature stack
-cc stack list
-# * feature-oauth (active)
-#   user-profiles
-
-# Create urgent hotfix stack
-cc stack create security-patch --base main --description "Emergency security fix"
-
-# Work on hotfix (feature-oauth stack paused)
-git add . && git commit -m "Fix authentication vulnerability"
-cc stack push
-cc stack submit --priority high
-
-# Switch back to feature work  
-cc stack switch feature-oauth
-
-# Continue feature development in parallel
-git add . && git commit -m "Add OAuth scope validation"
-cc stack push
-
-# Both stacks managed independently with separate PRs
-```
-
-### **Scenario 7: Stack Cleanup After Merges**
-
-Managing stacks after some commits get merged:
-
-```bash
-# Stack with mixed merge status
-cc stack prs
-# Entry 1: [abc123] Add user model         (PR #120 - Merged ✅)
-# Entry 2: [def456] Add user validation    (PR #121 - Open)
-# Entry 3: [ghi789] Add user endpoints     (PR #122 - Open)
-
-# Remove merged entries from stack
-cc stack pop 1  # Remove merged commit from stack
-
-# Rebase remaining entries on latest main (includes merged changes)
-git checkout main && git pull
-cc stack rebase
-
-# Stack now cleanly continues from merged base
-cc stack show
-# Entry 1: [def456] Add user validation    (PR #121)
-# Entry 2: [ghi789] Add user endpoints     (PR #122)
-```
-
-### **Scenario 7: Emergency Hotfix While Stack is Under Review**
-
-Your stack is under review, but you need to create an urgent hotfix:
-
-```bash
-# Save current work
-git stash
-
-# Switch to hotfix workflow
-cc stack create hotfix-security --base main --description "Critical security patch"
+# ✅ SAFE: Start on base branch, but work on feature branches
 git checkout main
-git pull origin main
+cc stack create my-feature --base main
 
-# Make hotfix commit
-git add . && git commit -m "Fix critical authentication bypass"
-cc stack push
-cc stack submit --title "URGENT: Security Fix" --reviewers "security-team"
+# Make your changes
+git checkout -b feature/auth-system  # Create feature branch
+git commit -am "Add user authentication"
+git commit -am "Add password validation"
 
-# Get back to your feature work
-cc stack switch feature-auth
-git stash pop
+# Push to stack (automatically tracks source branch)
+cc push --all  # Adds commits to stack with source tracking
 ```
 
-### **🔧 Scenario 8: Incremental Development with Clean Commits (NEW!)**
+### **🚀 Auto-Branch Creation (Even Safer)**
 
-Make frequent backup commits during development, then create clean commits for review:
+Let Cascade CLI handle branch creation automatically:
 
 ```bash
-# Scenario 8a: Clean up before first push
-cc stack create feature-payments --base main
-git commit -m "WIP: start payment integration"
-git commit -m "WIP: add stripe API calls" 
-git commit -m "WIP: handle edge cases"
-git commit -m "Final: Complete payment system with validation"
+# If you accidentally work on main...
+git checkout main
+# (make commits directly on main - oops!)
 
-# 🔍 SEE what you've built (shows unpushed commits count!)
-cc stack show
-# 🚧 Unpushed commits (4): use 'cc stack push --squash 4' to squash them
-#    1. WIP: start payment integration (abc12345)
-#    2. WIP: add stripe API calls (def67890) 
-#    3. WIP: handle edge cases (ghi11223)
-#    4. Final: Complete payment system with validation (jkl44556)
-# 💡 Squash options:
-#    cc stack push --squash 4           # Squash all unpushed commits
-#    cc stack push --squash 3           # Squash last 3 commits only
-
-# 🎉 SMART SQUASH: Automatically detects "Final:" commit and uses it!
-cc stack push --squash 4
-# ✅ Smart message: Complete payment system with validation
-# ✅ Created squashed commit: jkl99887 (Complete payment system with validation)
-
-# Scenario 8b: Squash only recent incremental commits
-cc stack push  # Push first clean commit
-
-git commit -m "WIP: start refactoring tests"
-git commit -m "WIP: add more test cases"
-git commit -m "Add comprehensive payment tests"
-
-cc stack show  # See 3 unpushed commits
-cc stack push --squash 3  # Smart squash uses the last descriptive commit
+# Cascade CLI will protect you:
+cc push --auto-branch  # Creates feature branch & moves commits safely
 ```
 
-**Why this is powerful:**
-- ✅ **Frequent commits** for backup and progress tracking
-- ✅ **Clean history** for reviewers (no "WIP" commits in PRs)
-- ✅ **Flexible squashing** - squash everything or just recent commits
-- ✅ **Atomic reviews** - each PR has a single, logical change
+### **🔍 Scattered Commit Detection**
+
+Cascade CLI detects when you're adding commits from different Git branches to the same stack and warns you:
+
+```bash
+# This creates a "scattered commit" problem:
+git checkout feature-branch-1
+git commit -m "Add user auth"
+git checkout feature-branch-2  
+git commit -m "Add admin panel"
+git checkout main
+
+# When you push both to the same stack:
+cc push --all
+
+# ⚠️  WARNING: Scattered Commit Detection
+#    You've pushed commits from different branches:
+#    - feature-branch-1 (1 commit)
+#    - feature-branch-2 (1 commit)
+#    
+#    This makes branch cleanup confusing after merge.
+#    Consider organizing commits into separate stacks instead.
+```
+
+### **📝 Smart PR Creation**
+
+Cascade CLI automatically generates meaningful pull request titles and descriptions:
+
+```bash
+# Create draft PRs for review:
+cc submit --all --draft
+
+# Each PR gets intelligent metadata:
+# ┌─ PR Title: Generated from commit messages
+# ├─ Description: Combines commit details & context  
+# ├─ Branch: Auto-created with semantic naming
+# └─ Target: Points to previous stack entry or base
+
+# Custom titles and descriptions:
+cc submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
+
+# Default behavior (auto-generated):
+cc submit --all  # Creates production-ready PRs
+```
+
+**How PR Content is Generated:**
+- **Title**: Uses your commit message or most significant change
+- **Description**: Includes commit details, file changes, and stack context
+- **Branch Context**: Shows relationship to previous entries
+- **Target Branch**: Automatically set to build on previous stack entry
+
+### **Daily Development Flow**
+
+Cascade CLI follows a simple, powerful workflow optimized for modern development:
+
+```bash
+# 1. Create & Develop
+cc stack create feature-name --base main
+git commit -m "Add core functionality"
+git commit -m "Add comprehensive tests"
+
+# 2. Push & Submit (with modern shortcuts)
+cc push --squash 2    # Combine commits into reviewable unit
+cc submit            # Create PR with automatic dependency tracking
+
+# 3. Auto-Land (set and forget)
+cc autoland          # Monitors and merges when approved + tests pass
+
+# 4. Iterate (if review feedback)
+git commit --amend   # Update based on feedback
+cc sync              # Update all dependent PRs automatically
+```
+
+**🔄 Advanced Workflows**: See our comprehensive [**Workflows Guide**](./docs/WORKFLOWS.md) for complex scenarios including:
+- Multi-commit stacks with dependencies
+- Handling review feedback on middle commits  
+- Managing emergency hotfixes during feature development
+- Cross-team collaboration patterns
+- Base branch updates with smart force push
+- Modern WIP-to-clean commit workflows
 
 ---
 
@@ -749,9 +736,9 @@ cc config set bitbucket.repository "repo-name"
 cc config set bitbucket.token "your-personal-access-token"
 ```
 
-### **Git Hooks (Optional)**
+### **Git Hooks (Recommended)**
 
-Cascade CLI provides 4 Git hooks that automate common stacked diff workflows:
+Cascade CLI provides Git hooks that automate common stacked diff workflows:
 
 | Hook Name | Purpose | When It Runs |
 |-----------|---------|--------------| 
@@ -777,15 +764,11 @@ cc hooks add commit-msg         # Enable message validation
 cc hooks add prepare-commit-msg # Enable message enhancement
 
 cc hooks remove post-commit     # Disable auto-stack (manual control)
-cc hooks remove pre-push        # Disable push validation
-cc hooks remove commit-msg      # Disable message validation  
-cc hooks remove prepare-commit-msg # Disable message enhancement
 ```
 
-**💡 Selective Installation Tips:**
+**💡 Installation Tips:**
 - **For full automation**: Install all hooks with `cc hooks install`
 - **For manual control**: Remove `post-commit` hook, keep others for safety
-- **For WIP workflows**: Temporarily remove `post-commit` during experimentation
 - **For team safety**: Always keep `pre-push` to prevent stack corruption
 
 ---
@@ -950,3 +933,22 @@ Traditional Git workflows often result in:
   <strong>📚 Transform your Git workflow with Cascade CLI</strong><br>
   <em>Professional stack management for modern development teams</em>
 </p>
+
+### Daily Workflow Commands
+
+```bash
+# Check if your stack needs syncing (read-only status check)
+cc stack check
+
+# Sync with remote changes (pull + rebase + cleanup)  
+cc stack sync
+
+# Make changes and push to stack
+cc stack push --message "Add feature X"
+
+# Submit for review
+cc stack submit --all
+
+# Land completed PRs with auto-retargeting
+cc stack land
+```
