@@ -1,17 +1,17 @@
 //! Stack management module
-//! 
+//!
 //! This module implements the core stacked diff functionality:
 //! - Stack data structures and metadata
 //! - Stack operations (create, push, pop, sync, rebase)
 //! - Branch relationship management
 //! - Commit tracking and dependencies
 
-pub mod stack;
 pub mod manager;
 pub mod metadata;
 pub mod rebase;
+pub mod stack;
 
-pub use stack::{Stack, StackEntry, StackStatus};
 pub use manager::StackManager;
-pub use metadata::{StackMetadata, CommitMetadata, EditModeState};
-pub use rebase::{RebaseStrategy, RebaseManager, RebaseOptions, RebaseResult};
+pub use metadata::{CommitMetadata, EditModeState, StackMetadata};
+pub use rebase::{RebaseManager, RebaseOptions, RebaseResult, RebaseStrategy};
+pub use stack::{Stack, StackEntry, StackStatus};

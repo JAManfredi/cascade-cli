@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 /// Represents a single entry in a stack
@@ -96,10 +96,10 @@ impl Stack {
     pub fn push_entry(&mut self, branch: String, commit_hash: String, message: String) -> Uuid {
         let now = Utc::now();
         let entry_id = Uuid::new_v4();
-        
+
         // Find the current top entry to set as parent
         let parent_id = self.entries.last().map(|entry| entry.id);
-        
+
         let entry = StackEntry {
             id: entry_id,
             branch,
@@ -134,14 +134,14 @@ impl Stack {
         if let Some(entry) = self.entries.pop() {
             let entry_id = entry.id;
             self.entry_map.remove(&entry_id);
-            
+
             // Update parent's children if exists
             if let Some(parent_id) = entry.parent_id {
                 if let Some(parent) = self.entry_map.get_mut(&parent_id) {
                     parent.children.retain(|&id| id != entry_id);
                 }
             }
-            
+
             self.updated_at = Utc::now();
             Some(entry)
         } else {
@@ -172,7 +172,9 @@ impl Stack {
     /// Get all entries that are children of the given entry
     pub fn get_children(&self, entry_id: &Uuid) -> Vec<&StackEntry> {
         if let Some(entry) = self.get_entry(entry_id) {
-            entry.children.iter()
+            entry
+                .children
+                .iter()
                 .filter_map(|id| self.get_entry(id))
                 .collect()
         } else {
@@ -183,7 +185,9 @@ impl Stack {
     /// Get the parent of the given entry
     pub fn get_parent(&self, entry_id: &Uuid) -> Option<&StackEntry> {
         if let Some(entry) = self.get_entry(entry_id) {
-            entry.parent_id.and_then(|parent_id| self.get_entry(&parent_id))
+            entry
+                .parent_id
+                .and_then(|parent_id| self.get_entry(&parent_id))
         } else {
             None
         }
@@ -238,7 +242,10 @@ impl Stack {
 
     /// Get all branch names in this stack
     pub fn get_branch_names(&self) -> Vec<String> {
-        self.entries.iter().map(|entry| entry.branch.clone()).collect()
+        self.entries
+            .iter()
+            .map(|entry| entry.branch.clone())
+            .collect()
     }
 
     /// Validate the stack structure
@@ -260,20 +267,32 @@ impl Stack {
             if let Some(parent_id) = entry.parent_id {
                 if let Some(parent) = self.entry_map.get(&parent_id) {
                     if !parent.children.contains(&entry.id) {
-                        return Err(format!("Parent {} doesn't reference child {}", parent_id, entry.id));
+                        return Err(format!(
+                            "Parent {} doesn't reference child {}",
+                            parent_id, entry.id
+                        ));
                     }
                 } else {
-                    return Err(format!("Parent {} not found for entry {}", parent_id, entry.id));
+                    return Err(format!(
+                        "Parent {} not found for entry {}",
+                        parent_id, entry.id
+                    ));
                 }
             }
 
             for child_id in &entry.children {
                 if let Some(child) = self.entry_map.get(child_id) {
                     if child.parent_id != Some(entry.id) {
-                        return Err(format!("Child {} doesn't reference parent {}", child_id, entry.id));
+                        return Err(format!(
+                            "Child {} doesn't reference parent {}",
+                            child_id, entry.id
+                        ));
                     }
                 } else {
-                    return Err(format!("Child {} not found for entry {}", child_id, entry.id));
+                    return Err(format!(
+                        "Child {} not found for entry {}",
+                        child_id, entry.id
+                    ));
                 }
             }
         }
@@ -316,12 +335,15 @@ mod tests {
         let stack = Stack::new(
             "test-stack".to_string(),
             "main".to_string(),
-            Some("Test stack description".to_string())
+            Some("Test stack description".to_string()),
         );
 
         assert_eq!(stack.name, "test-stack");
         assert_eq!(stack.base_branch, "main");
-        assert_eq!(stack.description, Some("Test stack description".to_string()));
+        assert_eq!(
+            stack.description,
+            Some("Test stack description".to_string())
+        );
         assert!(stack.is_empty());
         assert_eq!(stack.len(), 0);
         assert_eq!(stack.status, StackStatus::Clean);
@@ -336,12 +358,12 @@ mod tests {
         let entry1_id = stack.push_entry(
             "feature-1".to_string(),
             "abc123".to_string(),
-            "Add feature 1".to_string()
+            "Add feature 1".to_string(),
         );
 
         assert_eq!(stack.len(), 1);
         assert!(!stack.is_empty());
-        
+
         let entry1 = stack.get_entry(&entry1_id).unwrap();
         assert_eq!(entry1.branch, "feature-1");
         assert_eq!(entry1.commit_hash, "abc123");
@@ -353,11 +375,11 @@ mod tests {
         let entry2_id = stack.push_entry(
             "feature-2".to_string(),
             "def456".to_string(),
-            "Add feature 2".to_string()
+            "Add feature 2".to_string(),
         );
 
         assert_eq!(stack.len(), 2);
-        
+
         let entry2 = stack.get_entry(&entry2_id).unwrap();
         assert_eq!(entry2.parent_id, Some(entry1_id));
 
@@ -379,9 +401,21 @@ mod tests {
     fn test_stack_navigation() {
         let mut stack = Stack::new("test".to_string(), "main".to_string(), None);
 
-        let entry1_id = stack.push_entry("branch1".to_string(), "hash1".to_string(), "msg1".to_string());
-        let entry2_id = stack.push_entry("branch2".to_string(), "hash2".to_string(), "msg2".to_string());
-        let entry3_id = stack.push_entry("branch3".to_string(), "hash3".to_string(), "msg3".to_string());
+        let entry1_id = stack.push_entry(
+            "branch1".to_string(),
+            "hash1".to_string(),
+            "msg1".to_string(),
+        );
+        let entry2_id = stack.push_entry(
+            "branch2".to_string(),
+            "hash2".to_string(),
+            "msg2".to_string(),
+        );
+        let entry3_id = stack.push_entry(
+            "branch3".to_string(),
+            "hash3".to_string(),
+            "msg3".to_string(),
+        );
 
         // Test base and top
         assert_eq!(stack.get_base_entry().unwrap().id, entry1_id);
@@ -400,13 +434,21 @@ mod tests {
     #[test]
     fn test_stack_validation() {
         let mut stack = Stack::new("test".to_string(), "main".to_string(), None);
-        
+
         // Empty stack should be valid
         assert!(stack.validate().is_ok());
 
         // Add some entries
-        stack.push_entry("branch1".to_string(), "hash1".to_string(), "msg1".to_string());
-        stack.push_entry("branch2".to_string(), "hash2".to_string(), "msg2".to_string());
+        stack.push_entry(
+            "branch1".to_string(),
+            "hash1".to_string(),
+            "msg1".to_string(),
+        );
+        stack.push_entry(
+            "branch2".to_string(),
+            "hash2".to_string(),
+            "msg2".to_string(),
+        );
 
         // Valid stack should pass validation
         assert!(stack.validate().is_ok());
@@ -415,10 +457,18 @@ mod tests {
     #[test]
     fn test_mark_entry_submitted() {
         let mut stack = Stack::new("test".to_string(), "main".to_string(), None);
-        let entry_id = stack.push_entry("branch1".to_string(), "hash1".to_string(), "msg1".to_string());
+        let entry_id = stack.push_entry(
+            "branch1".to_string(),
+            "hash1".to_string(),
+            "msg1".to_string(),
+        );
 
         assert!(!stack.get_entry(&entry_id).unwrap().is_submitted);
-        assert!(stack.get_entry(&entry_id).unwrap().pull_request_id.is_none());
+        assert!(stack
+            .get_entry(&entry_id)
+            .unwrap()
+            .pull_request_id
+            .is_none());
 
         assert!(stack.mark_entry_submitted(&entry_id, "PR-123".to_string()));
 
@@ -430,13 +480,21 @@ mod tests {
     #[test]
     fn test_branch_names() {
         let mut stack = Stack::new("test".to_string(), "main".to_string(), None);
-        
+
         assert!(stack.get_branch_names().is_empty());
 
-        stack.push_entry("feature-1".to_string(), "hash1".to_string(), "msg1".to_string());
-        stack.push_entry("feature-2".to_string(), "hash2".to_string(), "msg2".to_string());
+        stack.push_entry(
+            "feature-1".to_string(),
+            "hash1".to_string(),
+            "msg1".to_string(),
+        );
+        stack.push_entry(
+            "feature-2".to_string(),
+            "hash2".to_string(),
+            "msg2".to_string(),
+        );
 
         let branches = stack.get_branch_names();
         assert_eq!(branches, vec!["feature-1", "feature-2"]);
     }
-} 
+}

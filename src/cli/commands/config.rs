@@ -1,6 +1,6 @@
 use crate::cli::ConfigAction;
-use crate::errors::{CascadeError, Result};
 use crate::config::{get_repo_config_dir, is_repo_initialized, Settings};
+use crate::errors::{CascadeError, Result};
 use crate::git::find_repository_root;
 use std::env;
 
@@ -9,32 +9,24 @@ pub async fn run(action: ConfigAction) -> Result<()> {
     // Find the repository root
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
-    
+
     let repo_root = find_repository_root(&current_dir)?;
-    
+
     // Check if repository is initialized
     if !is_repo_initialized(&repo_root) {
         return Err(CascadeError::not_initialized(
-            "Repository is not initialized for Cascade. Run 'cc init' first."
+            "Repository is not initialized for Cascade. Run 'cc init' first.",
         ));
     }
-    
+
     let config_dir = get_repo_config_dir(&repo_root)?;
     let config_file = config_dir.join("config.json");
-    
+
     match action {
-        ConfigAction::Set { key, value } => {
-            set_config_value(&config_file, &key, &value).await
-        }
-        ConfigAction::Get { key } => {
-            get_config_value(&config_file, &key).await
-        }
-        ConfigAction::List => {
-            list_config_values(&config_file).await
-        }
-        ConfigAction::Unset { key } => {
-            unset_config_value(&config_file, &key).await
-        }
+        ConfigAction::Set { key, value } => set_config_value(&config_file, &key, &value).await,
+        ConfigAction::Get { key } => get_config_value(&config_file, &key).await,
+        ConfigAction::List => list_config_values(&config_file).await,
+        ConfigAction::Unset { key } => unset_config_value(&config_file, &key).await,
     }
 }
 
@@ -43,9 +35,9 @@ async fn set_config_value(config_file: &std::path::Path, key: &str, value: &str)
     settings.set_value(key, value)?;
     settings.validate()?;
     settings.save_to_file(config_file)?;
-    
+
     println!("✅ Configuration updated: {} = {}", key, value);
-    
+
     // Provide contextual hints
     match key {
         "bitbucket.token" => {
@@ -59,14 +51,14 @@ async fn set_config_value(config_file: &std::path::Path, key: &str, value: &str)
         }
         _ => {}
     }
-    
+
     Ok(())
 }
 
 async fn get_config_value(config_file: &std::path::Path, key: &str) -> Result<()> {
     let settings = Settings::load_from_file(config_file)?;
     let value = settings.get_value(key)?;
-    
+
     // Mask sensitive values
     let display_value = if key.contains("token") || key.contains("password") {
         if value.is_empty() {
@@ -81,17 +73,17 @@ async fn get_config_value(config_file: &std::path::Path, key: &str) -> Result<()
             value
         }
     };
-    
+
     println!("{} = {}", key, display_value);
     Ok(())
 }
 
 async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     let settings = Settings::load_from_file(config_file)?;
-    
+
     println!("📋 Cascade Configuration:");
     println!();
-    
+
     // Bitbucket configuration
     println!("🔗 Bitbucket Server:");
     print_config_value(&settings, "  bitbucket.url")?;
@@ -99,7 +91,7 @@ async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     print_config_value(&settings, "  bitbucket.repo")?;
     print_config_value(&settings, "  bitbucket.token")?;
     println!();
-    
+
     // Git configuration
     println!("📦 Git:");
     print_config_value(&settings, "  git.default_branch")?;
@@ -108,7 +100,7 @@ async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     print_config_value(&settings, "  git.auto_cleanup_merged")?;
     print_config_value(&settings, "  git.prefer_rebase")?;
     println!();
-    
+
     // Cascade configuration
     println!("⚙️  Cascade:");
     print_config_value(&settings, "  cascade.api_port")?;
@@ -116,40 +108,41 @@ async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     print_config_value(&settings, "  cascade.default_sync_strategy")?;
     print_config_value(&settings, "  cascade.max_stack_size")?;
     print_config_value(&settings, "  cascade.enable_notifications")?;
-    
+
     Ok(())
 }
 
 fn print_config_value(settings: &Settings, key: &str) -> Result<()> {
     let key_without_spaces = key.trim();
     let value = settings.get_value(key_without_spaces)?;
-    
+
     // Mask sensitive values
-    let display_value = if key_without_spaces.contains("token") || key_without_spaces.contains("password") {
-        if value.is_empty() {
-            "(not set)".to_string()
+    let display_value =
+        if key_without_spaces.contains("token") || key_without_spaces.contains("password") {
+            if value.is_empty() {
+                "(not set)".to_string()
+            } else {
+                format!("{}***", &value[..std::cmp::min(4, value.len())])
+            }
         } else {
-            format!("{}***", &value[..std::cmp::min(4, value.len())])
-        }
-    } else {
-        if value.is_empty() {
-            "(not set)".to_string()
-        } else {
-            value
-        }
-    };
-    
+            if value.is_empty() {
+                "(not set)".to_string()
+            } else {
+                value
+            }
+        };
+
     println!("{} = {}", key, display_value);
     Ok(())
 }
 
 async fn unset_config_value(config_file: &std::path::Path, key: &str) -> Result<()> {
     let mut settings = Settings::load_from_file(config_file)?;
-    
+
     // Set the value to empty string to "unset" it
     settings.set_value(key, "")?;
     settings.save_to_file(config_file)?;
-    
+
     println!("✅ Configuration value unset: {}", key);
     Ok(())
 }
@@ -158,17 +151,17 @@ async fn unset_config_value(config_file: &std::path::Path, key: &str) -> Result<
 mod tests {
     use super::*;
     use crate::config::initialize_repo;
-    use tempfile::TempDir;
     use git2::{Repository, Signature};
     use std::env;
-    
+    use tempfile::TempDir;
+
     async fn create_initialized_repo() -> (TempDir, std::path::PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_path_buf();
-        
+
         // Initialize git repository
         let repo = Repository::init(&repo_path).unwrap();
-        
+
         // Create initial commit
         let signature = Signature::now("Test User", "test@example.com").unwrap();
         let tree_id = {
@@ -176,7 +169,7 @@ mod tests {
             index.write_tree().unwrap()
         };
         let tree = repo.find_tree(tree_id).unwrap();
-        
+
         repo.commit(
             Some("HEAD"),
             &signature,
@@ -184,18 +177,19 @@ mod tests {
             "Initial commit",
             &tree,
             &[],
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         // Initialize Cascade
         initialize_repo(&repo_path, None).unwrap();
-        
+
         (temp_dir, repo_path)
     }
-    
+
     #[tokio::test]
     async fn test_config_set_get() {
         let (_temp_dir, repo_path) = create_initialized_repo().await;
-        
+
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
         match env::set_current_dir(&repo_path) {
@@ -206,29 +200,29 @@ mod tests {
                     value: "https://test.bitbucket.com".to_string(),
                 };
                 run(set_action).await.unwrap();
-                
+
                 // Get the configuration value
                 let get_action = ConfigAction::Get {
                     key: "bitbucket.url".to_string(),
                 };
                 run(get_action).await.unwrap();
-                
+
                 // Restore original directory (best effort)
                 if let Ok(orig) = original_dir {
                     let _ = env::set_current_dir(orig);
                 }
-            },
+            }
             Err(_) => {
                 // Skip test if we can't change directories (CI environment issue)
                 println!("Skipping test due to directory access restrictions");
             }
         }
     }
-    
+
     #[tokio::test]
     async fn test_config_list() {
         let (_temp_dir, repo_path) = create_initialized_repo().await;
-        
+
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
         match env::set_current_dir(&repo_path) {
@@ -236,16 +230,16 @@ mod tests {
                 // List all configuration values
                 let list_action = ConfigAction::List;
                 run(list_action).await.unwrap();
-                
+
                 // Restore original directory (best effort)
                 if let Ok(orig) = original_dir {
                     let _ = env::set_current_dir(orig);
                 }
-            },
+            }
             Err(_) => {
                 // Skip test if we can't change directories (CI environment issue)
                 println!("Skipping test due to directory access restrictions");
             }
         }
     }
-} 
+}

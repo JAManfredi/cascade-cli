@@ -1,7 +1,7 @@
-use crate::errors::Result;
 use crate::bitbucket::client::BitbucketClient;
-use serde::{Deserialize, Serialize};
+use crate::errors::Result;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 /// Pull request manager for Bitbucket operations
@@ -16,11 +16,17 @@ impl PullRequestManager {
     }
 
     /// Create a new pull request
-    pub async fn create_pull_request(&self, request: CreatePullRequestRequest) -> Result<PullRequest> {
-        info!("Creating pull request: {} -> {}", request.from_ref.id, request.to_ref.id);
-        
+    pub async fn create_pull_request(
+        &self,
+        request: CreatePullRequestRequest,
+    ) -> Result<PullRequest> {
+        info!(
+            "Creating pull request: {} -> {}",
+            request.from_ref.id, request.to_ref.id
+        );
+
         let pr: PullRequest = self.client.post("pull-requests", &request).await?;
-        
+
         info!("Created pull request #{}: {}", pr.id, pr.title);
         Ok(pr)
     }
@@ -31,31 +37,45 @@ impl PullRequestManager {
     }
 
     /// List pull requests with optional filters
-    pub async fn list_pull_requests(&self, state: Option<PullRequestState>) -> Result<PullRequestPage> {
+    pub async fn list_pull_requests(
+        &self,
+        state: Option<PullRequestState>,
+    ) -> Result<PullRequestPage> {
         let mut path = "pull-requests".to_string();
-        
+
         if let Some(state) = state {
             path.push_str(&format!("?state={}", state.as_str()));
         }
-        
+
         self.client.get(&path).await
     }
 
     /// Update a pull request's source branch by closing the old PR and creating a new one
     /// This is needed because Bitbucket doesn't allow changing PR source branches
-    pub async fn update_source_branch(&self, old_pr_id: u64, new_request: CreatePullRequestRequest, close_reason: Option<String>) -> Result<PullRequest> {
-        info!("Updating PR #{} source branch: {} -> {}", old_pr_id, old_pr_id, new_request.from_ref.display_id);
-        
+    pub async fn update_source_branch(
+        &self,
+        old_pr_id: u64,
+        new_request: CreatePullRequestRequest,
+        close_reason: Option<String>,
+    ) -> Result<PullRequest> {
+        info!(
+            "Updating PR #{} source branch: {} -> {}",
+            old_pr_id, old_pr_id, new_request.from_ref.display_id
+        );
+
         // First, get the old PR to preserve information
         let old_pr = self.get_pull_request(old_pr_id).await?;
-        
+
         // Close/decline the old PR with a descriptive message
         let close_message = close_reason.unwrap_or_else(|| {
-            format!("Superseded by updated branch: {}", new_request.from_ref.display_id)
+            format!(
+                "Superseded by updated branch: {}",
+                new_request.from_ref.display_id
+            )
         });
-        
+
         self.decline_pull_request(old_pr_id, &close_message).await?;
-        
+
         // Create new PR with the same title/description but new branch
         let new_request = CreatePullRequestRequest {
             title: format!("{} (Updated)", old_pr.title),
@@ -63,9 +83,9 @@ impl PullRequestManager {
             from_ref: new_request.from_ref,
             to_ref: new_request.to_ref,
         };
-        
+
         let new_pr = self.create_pull_request(new_request).await?;
-        
+
         info!("Closed PR #{} and created new PR #{}", old_pr_id, new_pr.id);
         Ok(new_pr)
     }
@@ -73,27 +93,27 @@ impl PullRequestManager {
     /// Decline a pull request with a reason
     pub async fn decline_pull_request(&self, pr_id: u64, reason: &str) -> Result<()> {
         info!("Declining pull request #{}: {}", pr_id, reason);
-        
+
         #[derive(Serialize)]
         struct DeclineRequest {
             version: u64,
             #[serde(rename = "participantStatus")]
             participant_status: String,
         }
-        
+
         // First get the current PR to get its version
         let pr = self.get_pull_request(pr_id).await?;
-        
+
         let decline_body = DeclineRequest {
             version: pr.version,
             participant_status: "DECLINED".to_string(),
         };
-        
+
         let path = format!("pull-requests/{}/decline", pr_id);
-        
+
         // Use the client to make the decline request
         let _: serde_json::Value = self.client.post(&path, &decline_body).await?;
-        
+
         info!("Successfully declined pull request #{}", pr_id);
         Ok(())
     }
@@ -101,19 +121,19 @@ impl PullRequestManager {
     /// Add a comment to a pull request explaining the branch update
     pub async fn add_comment(&self, pr_id: u64, comment: &str) -> Result<()> {
         info!("Adding comment to PR #{}", pr_id);
-        
+
         #[derive(Serialize)]
         struct CommentRequest {
             text: String,
         }
-        
+
         let comment_body = CommentRequest {
             text: comment.to_string(),
         };
-        
+
         let path = format!("pull-requests/{}/comments", pr_id);
         let _: serde_json::Value = self.client.post(&path, &comment_body).await?;
-        
+
         info!("Added comment to PR #{}", pr_id);
         Ok(())
     }
@@ -239,7 +259,7 @@ impl PullRequestState {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Open => "OPEN",
-            Self::Merged => "MERGED", 
+            Self::Merged => "MERGED",
             Self::Declined => "DECLINED",
         }
     }
@@ -290,13 +310,11 @@ impl PullRequest {
 
     /// Get the created date as a DateTime
     pub fn created_at(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp(self.created_date as i64 / 1000, 0)
-            .unwrap_or_else(|| Utc::now())
+        DateTime::from_timestamp(self.created_date as i64 / 1000, 0).unwrap_or_else(|| Utc::now())
     }
 
     /// Get the updated date as a DateTime
     pub fn updated_at(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp(self.updated_date as i64 / 1000, 0)
-            .unwrap_or_else(|| Utc::now())
+        DateTime::from_timestamp(self.updated_date as i64 / 1000, 0).unwrap_or_else(|| Utc::now())
     }
 }

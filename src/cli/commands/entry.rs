@@ -1,8 +1,6 @@
 use crate::errors::{CascadeError, Result};
 use crate::stack::StackManager;
 use clap::Subcommand;
-use std::env;
-use tracing::{info, warn};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -10,15 +8,15 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Alignment},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, List, ListItem, ListState, Paragraph,
-    },
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Terminal,
 };
+use std::env;
 use std::io;
+use tracing::{info, warn};
 
 #[derive(Debug, Subcommand)]
 pub enum EntryAction {
@@ -53,44 +51,48 @@ pub async fn run(action: EntryAction) -> Result<()> {
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 
     match action {
-        EntryAction::Checkout { entry, direct, yes } => {
-            checkout_entry(entry, direct, yes).await
-        }
-        EntryAction::Status { quiet } => {
-            show_edit_status(quiet).await
-        }
-        EntryAction::List { verbose } => {
-            list_entries(verbose).await
-        }
+        EntryAction::Checkout { entry, direct, yes } => checkout_entry(entry, direct, yes).await,
+        EntryAction::Status { quiet } => show_edit_status(quiet).await,
+        EntryAction::List { verbose } => list_entries(verbose).await,
     }
 }
 
 /// Checkout a specific stack entry for editing
-async fn checkout_entry(entry_num: Option<usize>, direct: bool, skip_confirmation: bool) -> Result<()> {
+async fn checkout_entry(
+    entry_num: Option<usize>,
+    direct: bool,
+    skip_confirmation: bool,
+) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
 
     let mut manager = StackManager::new(&current_dir)?;
-    
+
     // Get active stack
-    let active_stack = manager.get_active_stack()
-        .ok_or_else(|| CascadeError::config("No active stack. Create a stack first with 'cc stack create'"))?;
+    let active_stack = manager.get_active_stack().ok_or_else(|| {
+        CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+    })?;
 
     if active_stack.entries.is_empty() {
-        return Err(CascadeError::config("Stack is empty. Push some commits first with 'cc stack push'"));
+        return Err(CascadeError::config(
+            "Stack is empty. Push some commits first with 'cc stack push'",
+        ));
     }
 
     // Determine which entry to checkout
     let target_entry_num = if let Some(num) = entry_num {
         if num == 0 || num > active_stack.entries.len() {
             return Err(CascadeError::config(format!(
-                "Invalid entry number: {}. Stack has {} entries", 
-                num, active_stack.entries.len()
+                "Invalid entry number: {}. Stack has {} entries",
+                num,
+                active_stack.entries.len()
             )));
         }
         num
     } else if direct {
-        return Err(CascadeError::config("Entry number required when using --direct flag"));
+        return Err(CascadeError::config(
+            "Entry number required when using --direct flag",
+        ));
     } else {
         // Show interactive picker
         show_entry_picker(&active_stack).await?
@@ -111,12 +113,16 @@ async fn checkout_entry(entry_num: Option<usize>, direct: bool, skip_confirmatio
     if manager.is_in_edit_mode() {
         let edit_info = manager.get_edit_mode_info().unwrap();
         warn!("Already in edit mode for entry in stack");
-        
+
         if !skip_confirmation {
             println!("⚠️  Already in edit mode!");
-            println!("   Current target: {} ({})", edit_info.original_commit_hash[..8].to_string(), "TODO: get commit message");
+            println!(
+                "   Current target: {} ({})",
+                edit_info.original_commit_hash[..8].to_string(),
+                "TODO: get commit message"
+            );
             println!("   Do you want to exit current edit mode and start a new one? [y/N]");
-            
+
             // TODO: Implement interactive confirmation
             // For now, just warn and exit
             return Err(CascadeError::config("Exit current edit mode first with 'cc entry status' and handle any pending changes"));
@@ -126,7 +132,10 @@ async fn checkout_entry(entry_num: Option<usize>, direct: bool, skip_confirmatio
     // Confirmation prompt
     if !skip_confirmation {
         println!("🎯 Checking out entry for editing:");
-        println!("   Entry #{}: {} ({})", target_entry_num, entry_short_hash, entry_short_message);
+        println!(
+            "   Entry #{}: {} ({})",
+            target_entry_num, entry_short_hash, entry_short_message
+        );
         println!("   Branch: {}", entry_branch);
         if let Some(pr_id) = &entry_pr_id {
             println!("   PR: #{}", pr_id);
@@ -134,7 +143,7 @@ async fn checkout_entry(entry_num: Option<usize>, direct: bool, skip_confirmatio
         println!("\n⚠️  This will checkout the commit and enter edit mode.");
         println!("   Any changes you make can be amended to this commit or create new entries.");
         println!("\nContinue? [y/N]");
-        
+
         // TODO: Implement interactive confirmation with dialoguer
         // For now, just proceed
         info!("Skipping confirmation for now - will implement interactive prompt in next step");
@@ -147,12 +156,15 @@ async fn checkout_entry(entry_num: Option<usize>, direct: bool, skip_confirmatio
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
     let repo = crate::git::GitRepository::open(&current_dir)?;
-    
+
     info!("Checking out commit: {}", entry_commit_hash);
     repo.checkout_commit(&entry_commit_hash)?;
 
     println!("✅ Entered edit mode for entry #{}", target_entry_num);
-    println!("   You are now on commit: {} ({})", entry_short_hash, entry_short_message);
+    println!(
+        "   You are now on commit: {} ({})",
+        entry_short_hash, entry_short_message
+    );
     println!("   Branch: {}", entry_branch);
     println!("\n📝 Make your changes and commit normally.");
     println!("   • Use 'cc entry status' to see edit mode info");
@@ -177,55 +189,70 @@ async fn show_entry_picker(stack: &crate::stack::Stack) -> Result<usize> {
     let result = loop {
         terminal.draw(|f| {
             let size = f.size();
-            
+
             // Create layout
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(2)
-                .constraints([
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(5),     // List
-                    Constraint::Length(3),  // Help
-                ].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(3), // Title
+                        Constraint::Min(5),    // List
+                        Constraint::Length(3), // Help
+                    ]
+                    .as_ref(),
+                )
                 .split(size);
 
             // Title
             let title = Paragraph::new(format!("📚 Select Entry from Stack: {}", stack.name))
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center)
                 .block(Block::default().borders(Borders::ALL));
             f.render_widget(title, chunks[0]);
 
             // Entry list
-            let items: Vec<ListItem> = stack.entries.iter().enumerate().map(|(i, entry)| {
-                let status_icon = if entry.is_submitted {
-                    if entry.pull_request_id.is_some() {
-                        "📤"
+            let items: Vec<ListItem> = stack
+                .entries
+                .iter()
+                .enumerate()
+                .map(|(i, entry)| {
+                    let status_icon = if entry.is_submitted {
+                        if entry.pull_request_id.is_some() {
+                            "📤"
+                        } else {
+                            "📝"
+                        }
                     } else {
-                        "📝"
-                    }
-                } else {
-                    "🔄"
-                };
+                        "🔄"
+                    };
 
-                let pr_text = if let Some(pr_id) = &entry.pull_request_id {
-                    format!(" PR: #{}", pr_id)
-                } else {
-                    "".to_string()
-                };
+                    let pr_text = if let Some(pr_id) = &entry.pull_request_id {
+                        format!(" PR: #{}", pr_id)
+                    } else {
+                        "".to_string()
+                    };
 
-                let line = Line::from(vec![
-                    Span::raw(format!("  {}. ", i + 1)),
-                    Span::raw(status_icon),
-                    Span::raw(" "),
-                    Span::styled(entry.short_message(40), Style::default().fg(Color::White)),
-                    Span::raw(" "),
-                    Span::styled(format!("({})", entry.short_hash()), Style::default().fg(Color::Yellow)),
-                    Span::styled(pr_text, Style::default().fg(Color::Green)),
-                ]);
+                    let line = Line::from(vec![
+                        Span::raw(format!("  {}. ", i + 1)),
+                        Span::raw(status_icon),
+                        Span::raw(" "),
+                        Span::styled(entry.short_message(40), Style::default().fg(Color::White)),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("({})", entry.short_hash()),
+                            Style::default().fg(Color::Yellow),
+                        ),
+                        Span::styled(pr_text, Style::default().fg(Color::Green)),
+                    ]);
 
-                ListItem::new(line)
-            }).collect();
+                    ListItem::new(line)
+                })
+                .collect();
 
             let list = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("Entries"))
@@ -308,7 +335,7 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
     }
 
     let edit_info = manager.get_edit_mode_info().unwrap();
-    
+
     if quiet {
         println!("active:{:?}", edit_info.target_entry_id);
         return Ok(());
@@ -316,17 +343,23 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
 
     println!("🎯 Currently in edit mode");
     println!("   Target entry: {:?}", edit_info.target_entry_id);
-    println!("   Original commit: {}", &edit_info.original_commit_hash[..8]);
-    println!("   Started: {}", edit_info.started_at.format("%Y-%m-%d %H:%M:%S"));
-    
+    println!(
+        "   Original commit: {}",
+        &edit_info.original_commit_hash[..8]
+    );
+    println!(
+        "   Started: {}",
+        edit_info.started_at.format("%Y-%m-%d %H:%M:%S")
+    );
+
     // Show current Git status
     println!("\n📋 Current state:");
-    
+
     // TODO: Add Git status information
     // - Current HEAD vs original commit
     // - Working directory status
     // - Staged changes
-    
+
     println!("   Use 'git status' for detailed working directory status");
     println!("   Use 'cc entry list' to see all entries");
 
@@ -339,8 +372,11 @@ async fn list_entries(verbose: bool) -> Result<()> {
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
     let manager = StackManager::new(&current_dir)?;
 
-    let active_stack = manager.get_active_stack()
-        .ok_or_else(|| CascadeError::config("No active stack. Create a stack first with 'cc stack create'".to_string()))?;
+    let active_stack = manager.get_active_stack().ok_or_else(|| {
+        CascadeError::config(
+            "No active stack. Create a stack first with 'cc stack create'".to_string(),
+        )
+    })?;
 
     if active_stack.entries.is_empty() {
         println!("📭 Active stack '{}' has no entries yet", active_stack.name);
@@ -348,13 +384,17 @@ async fn list_entries(verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("📚 Stack: {} ({} entries)", active_stack.name, active_stack.entries.len());
-    
+    println!(
+        "📚 Stack: {} ({} entries)",
+        active_stack.name,
+        active_stack.entries.len()
+    );
+
     let edit_mode_info = manager.get_edit_mode_info();
-    
+
     for (i, entry) in active_stack.entries.iter().enumerate() {
         let entry_num = i + 1;
-        
+
         // Status icon
         let status_icon = if entry.is_submitted {
             if entry.pull_request_id.is_some() {
@@ -367,18 +407,20 @@ async fn list_entries(verbose: bool) -> Result<()> {
         };
 
         // Edit mode indicator
-        let edit_indicator = if edit_mode_info.is_some() && 
-            edit_mode_info.unwrap().target_entry_id == Some(entry.id) {
+        let edit_indicator = if edit_mode_info.is_some()
+            && edit_mode_info.unwrap().target_entry_id == Some(entry.id)
+        {
             " 🎯"
         } else {
             ""
         };
 
         // Basic entry line
-        print!("   {}. {} {} ({})", 
-            entry_num, 
-            status_icon, 
-            entry.short_message(50), 
+        print!(
+            "   {}. {} {} ({})",
+            entry_num,
+            status_icon,
+            entry.short_message(50),
             entry.short_hash()
         );
 
@@ -393,7 +435,10 @@ async fn list_entries(verbose: bool) -> Result<()> {
         // Verbose information
         if verbose {
             println!("      Branch: {}", entry.branch);
-            println!("      Created: {}", entry.created_at.format("%Y-%m-%d %H:%M:%S"));
+            println!(
+                "      Created: {}",
+                entry.created_at.format("%Y-%m-%d %H:%M:%S")
+            );
             if entry.is_submitted {
                 println!("      Status: Submitted");
             } else {
@@ -410,4 +455,4 @@ async fn list_entries(verbose: bool) -> Result<()> {
     }
 
     Ok(())
-} 
+}

@@ -1,7 +1,7 @@
+use crate::config::{get_repo_config_dir, initialize_repo, Settings};
 use crate::errors::{CascadeError, Result};
-use crate::config::{initialize_repo, Settings, get_repo_config_dir};
 use crate::git::GitRepository;
-use dialoguer::{Input, Confirm, theme::ColorfulTheme};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input};
 use std::env;
 use tracing::{info, warn};
 
@@ -23,7 +23,7 @@ pub async fn run(force: bool) -> Result<()> {
         }
         Err(_) => {
             return Err(CascadeError::config(
-                "No Git repository found. Please run this command from within a Git repository."
+                "No Git repository found. Please run this command from within a Git repository.",
             ));
         }
     };
@@ -46,7 +46,7 @@ pub async fn run(force: bool) -> Result<()> {
     // Step 3: Detect Bitbucket from remotes
     println!("\n🔍 Step 2: Detecting Bitbucket configuration...");
     let auto_config = detect_bitbucket_config(&git_repo)?;
-    
+
     if let Some((url, project, repo)) = &auto_config {
         println!("   ✅ Detected Bitbucket configuration:");
         println!("      Server: {}", url);
@@ -67,12 +67,12 @@ pub async fn run(force: bool) -> Result<()> {
     // Step 6: Save configuration
     let config_path = config_dir.join("config.json");
     let mut settings = Settings::load_from_file(&config_path).unwrap_or_default();
-    
+
     settings.bitbucket.url = bitbucket_config.url;
     settings.bitbucket.project = bitbucket_config.project;
     settings.bitbucket.repo = bitbucket_config.repo;
     settings.bitbucket.token = bitbucket_config.token;
-    
+
     settings.save_to_file(&config_path)?;
 
     // Step 7: Test connection (optional)
@@ -172,24 +172,25 @@ fn parse_bitbucket_url(url: &str) -> Option<(String, String, String)> {
             }
         }
     }
-    
+
     // Handle HTTPS format: https://bitbucket.example.com/scm/PROJECT/repo.git
     if url.starts_with("https://") {
         if let Ok(parsed_url) = url::Url::parse(url) {
             if let Some(host) = parsed_url.host_str() {
                 let base_url = format!("{}://{}", parsed_url.scheme(), host);
                 let path = parsed_url.path();
-                
+
                 // Bitbucket Server format: /scm/PROJECT/repo.git
                 if path.starts_with("/scm/") {
-                    let path_parts: Vec<&str> = path.trim_start_matches("/scm/").split('/').collect();
+                    let path_parts: Vec<&str> =
+                        path.trim_start_matches("/scm/").split('/').collect();
                     if path_parts.len() >= 2 {
                         let project = path_parts[0];
                         let repo = path_parts[1].strip_suffix(".git").unwrap_or(path_parts[1]);
                         return Some((base_url, project.to_string(), repo.to_string()));
                     }
                 }
-                
+
                 // Generic format: /PROJECT/repo.git
                 let path_parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
                 if path_parts.len() >= 2 {
@@ -205,11 +206,16 @@ fn parse_bitbucket_url(url: &str) -> Option<(String, String, String)> {
 }
 
 /// Interactive Bitbucket configuration
-async fn configure_bitbucket_interactive(auto_config: Option<(String, String, String)>) -> Result<BitbucketConfig> {
+async fn configure_bitbucket_interactive(
+    auto_config: Option<(String, String, String)>,
+) -> Result<BitbucketConfig> {
     let theme = ColorfulTheme::default();
 
     // Server URL
-    let default_url = auto_config.as_ref().map(|(url, _, _)| url.as_str()).unwrap_or("");
+    let default_url = auto_config
+        .as_ref()
+        .map(|(url, _, _)| url.as_str())
+        .unwrap_or("");
     let url: String = Input::with_theme(&theme)
         .with_prompt("Bitbucket Server URL")
         .with_initial_text(default_url)
@@ -224,7 +230,10 @@ async fn configure_bitbucket_interactive(auto_config: Option<(String, String, St
         .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
 
     // Project key
-    let default_project = auto_config.as_ref().map(|(_, project, _)| project.as_str()).unwrap_or("");
+    let default_project = auto_config
+        .as_ref()
+        .map(|(_, project, _)| project.as_str())
+        .unwrap_or("");
     let project: String = Input::with_theme(&theme)
         .with_prompt("Project key (usually uppercase)")
         .with_initial_text(default_project)
@@ -239,7 +248,10 @@ async fn configure_bitbucket_interactive(auto_config: Option<(String, String, St
         .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
 
     // Repository slug
-    let default_repo = auto_config.as_ref().map(|(_, _, repo)| repo.as_str()).unwrap_or("");
+    let default_repo = auto_config
+        .as_ref()
+        .map(|(_, _, repo)| repo.as_str())
+        .unwrap_or("");
     let repo: String = Input::with_theme(&theme)
         .with_prompt("Repository slug")
         .with_initial_text(default_repo)
@@ -256,7 +268,10 @@ async fn configure_bitbucket_interactive(auto_config: Option<(String, String, St
     // Authentication token
     println!("\n🔐 Authentication Setup");
     println!("   Cascade needs a Personal Access Token to interact with Bitbucket.");
-    println!("   You can create one at: {}/plugins/servlet/access-tokens/manage", url);
+    println!(
+        "   You can create one at: {}/plugins/servlet/access-tokens/manage",
+        url
+    );
     println!("   Required permissions: Repository Read, Repository Write");
 
     let configure_token = Confirm::with_theme(&theme)
@@ -293,7 +308,7 @@ async fn configure_bitbucket_interactive(auto_config: Option<(String, String, St
 /// Test Bitbucket connection
 async fn test_bitbucket_connection(settings: &Settings) -> Result<()> {
     use crate::bitbucket::BitbucketClient;
-    
+
     let client = BitbucketClient::new(&settings.bitbucket)?;
 
     // Try to fetch repository info
@@ -302,9 +317,10 @@ async fn test_bitbucket_connection(settings: &Settings) -> Result<()> {
             info!("Successfully connected to Bitbucket");
             Ok(())
         }
-        Err(e) => {
-            Err(CascadeError::config(format!("Failed to connect to Bitbucket: {}", e)))
-        }
+        Err(e) => Err(CascadeError::config(format!(
+            "Failed to connect to Bitbucket: {}",
+            e
+        ))),
     }
 }
 
@@ -353,4 +369,4 @@ mod tests {
             ))
         );
     }
-} 
+}

@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::path::Path;
-use std::fs;
-use crate::errors::{CascadeError, Result};
 use crate::config::auth::AuthConfig;
+use crate::errors::{CascadeError, Result};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CascadeConfig {
@@ -142,40 +142,43 @@ impl Settings {
         }
         settings
     }
-    
+
     /// Load settings from a file
     pub fn load_from_file(path: &Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
         }
-        
+
         let content = fs::read_to_string(path)
             .map_err(|e| CascadeError::config(format!("Failed to read config file: {}", e)))?;
-        
+
         let settings: Settings = serde_json::from_str(&content)
             .map_err(|e| CascadeError::config(format!("Failed to parse config file: {}", e)))?;
-        
+
         Ok(settings)
     }
-    
+
     /// Save settings to a file
     pub fn save_to_file(&self, path: &Path) -> Result<()> {
         let content = serde_json::to_string_pretty(self)
             .map_err(|e| CascadeError::config(format!("Failed to serialize config: {}", e)))?;
-        
+
         fs::write(path, content)
             .map_err(|e| CascadeError::config(format!("Failed to write config file: {}", e)))?;
-        
+
         Ok(())
     }
-    
+
     /// Update a configuration value by key
     pub fn set_value(&mut self, key: &str, value: &str) -> Result<()> {
         let parts: Vec<&str> = key.split('.').collect();
         if parts.len() != 2 {
-            return Err(CascadeError::config(format!("Invalid config key format: {}", key)));
+            return Err(CascadeError::config(format!(
+                "Invalid config key format: {}",
+                key
+            )));
         }
-        
+
         match (parts[0], parts[1]) {
             ("bitbucket", "url") => self.bitbucket.url = value.to_string(),
             ("bitbucket", "project") => self.bitbucket.project = value.to_string(),
@@ -185,64 +188,77 @@ impl Settings {
             ("git", "author_name") => self.git.author_name = Some(value.to_string()),
             ("git", "author_email") => self.git.author_email = Some(value.to_string()),
             ("git", "auto_cleanup_merged") => {
-                self.git.auto_cleanup_merged = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.git.auto_cleanup_merged = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             ("git", "prefer_rebase") => {
-                self.git.prefer_rebase = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.git.prefer_rebase = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             ("cascade", "api_port") => {
-                self.cascade.api_port = value.parse()
+                self.cascade.api_port = value
+                    .parse()
                     .map_err(|_| CascadeError::config(format!("Invalid port number: {}", value)))?;
-            },
+            }
             ("cascade", "auto_cleanup") => {
-                self.cascade.auto_cleanup = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.cascade.auto_cleanup = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             ("cascade", "default_sync_strategy") => {
                 self.cascade.default_sync_strategy = value.to_string();
-            },
+            }
             ("cascade", "max_stack_size") => {
-                self.cascade.max_stack_size = value.parse()
+                self.cascade.max_stack_size = value
+                    .parse()
                     .map_err(|_| CascadeError::config(format!("Invalid number: {}", value)))?;
-            },
+            }
             ("cascade", "enable_notifications") => {
-                self.cascade.enable_notifications = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.cascade.enable_notifications = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             ("rebase", "auto_resolve_conflicts") => {
-                self.cascade.rebase.auto_resolve_conflicts = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.cascade.rebase.auto_resolve_conflicts = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             ("rebase", "max_retry_attempts") => {
-                self.cascade.rebase.max_retry_attempts = value.parse()
+                self.cascade.rebase.max_retry_attempts = value
+                    .parse()
                     .map_err(|_| CascadeError::config(format!("Invalid number: {}", value)))?;
-            },
+            }
             ("rebase", "preserve_merges") => {
-                self.cascade.rebase.preserve_merges = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.cascade.rebase.preserve_merges = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             ("rebase", "version_suffix_pattern") => {
                 self.cascade.rebase.version_suffix_pattern = value.to_string();
-            },
+            }
             ("rebase", "backup_before_rebase") => {
-                self.cascade.rebase.backup_before_rebase = value.parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {}", value)))?;
-            },
+                self.cascade.rebase.backup_before_rebase = value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {}", value))
+                })?;
+            }
             _ => return Err(CascadeError::config(format!("Unknown config key: {}", key))),
         }
-        
+
         Ok(())
     }
-    
+
     /// Get a configuration value by key
     pub fn get_value(&self, key: &str) -> Result<String> {
         let parts: Vec<&str> = key.split('.').collect();
         if parts.len() != 2 {
-            return Err(CascadeError::config(format!("Invalid config key format: {}", key)));
+            return Err(CascadeError::config(format!(
+                "Invalid config key format: {}",
+                key
+            )));
         }
-        
+
         let value = match (parts[0], parts[1]) {
             ("bitbucket", "url") => &self.bitbucket.url,
             ("bitbucket", "project") => &self.bitbucket.project,
@@ -257,42 +273,61 @@ impl Settings {
             ("cascade", "auto_cleanup") => return Ok(self.cascade.auto_cleanup.to_string()),
             ("cascade", "default_sync_strategy") => &self.cascade.default_sync_strategy,
             ("cascade", "max_stack_size") => return Ok(self.cascade.max_stack_size.to_string()),
-            ("cascade", "enable_notifications") => return Ok(self.cascade.enable_notifications.to_string()),
-            ("rebase", "auto_resolve_conflicts") => return Ok(self.cascade.rebase.auto_resolve_conflicts.to_string()),
-            ("rebase", "max_retry_attempts") => return Ok(self.cascade.rebase.max_retry_attempts.to_string()),
-            ("rebase", "preserve_merges") => return Ok(self.cascade.rebase.preserve_merges.to_string()),
+            ("cascade", "enable_notifications") => {
+                return Ok(self.cascade.enable_notifications.to_string())
+            }
+            ("rebase", "auto_resolve_conflicts") => {
+                return Ok(self.cascade.rebase.auto_resolve_conflicts.to_string())
+            }
+            ("rebase", "max_retry_attempts") => {
+                return Ok(self.cascade.rebase.max_retry_attempts.to_string())
+            }
+            ("rebase", "preserve_merges") => {
+                return Ok(self.cascade.rebase.preserve_merges.to_string())
+            }
             ("rebase", "version_suffix_pattern") => &self.cascade.rebase.version_suffix_pattern,
-            ("rebase", "backup_before_rebase") => return Ok(self.cascade.rebase.backup_before_rebase.to_string()),
+            ("rebase", "backup_before_rebase") => {
+                return Ok(self.cascade.rebase.backup_before_rebase.to_string())
+            }
             _ => return Err(CascadeError::config(format!("Unknown config key: {}", key))),
         };
-        
+
         Ok(value.to_string())
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         // Validate Bitbucket configuration if provided
         if !self.bitbucket.url.is_empty() {
-            if !self.bitbucket.url.starts_with("http://") && !self.bitbucket.url.starts_with("https://") {
-                return Err(CascadeError::config("Bitbucket URL must start with http:// or https://"));
+            if !self.bitbucket.url.starts_with("http://")
+                && !self.bitbucket.url.starts_with("https://")
+            {
+                return Err(CascadeError::config(
+                    "Bitbucket URL must start with http:// or https://",
+                ));
             }
         }
-        
+
         // Validate port
         if self.cascade.api_port == 0 {
             return Err(CascadeError::config("API port must be between 1 and 65535"));
         }
-        
+
         // Validate sync strategy
-        let valid_strategies = ["rebase", "cherry-pick", "branch-versioning", "three-way-merge"];
+        let valid_strategies = [
+            "rebase",
+            "cherry-pick",
+            "branch-versioning",
+            "three-way-merge",
+        ];
         if !valid_strategies.contains(&self.cascade.default_sync_strategy.as_str()) {
             return Err(CascadeError::config(format!(
-                "Invalid sync strategy: {}. Valid options: {}", 
+                "Invalid sync strategy: {}. Valid options: {}",
                 self.cascade.default_sync_strategy,
                 valid_strategies.join(", ")
             )));
         }
-        
+
         Ok(())
     }
-} 
+}

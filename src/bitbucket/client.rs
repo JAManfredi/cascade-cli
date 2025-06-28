@@ -1,10 +1,13 @@
-use crate::errors::{CascadeError, Result};
 use crate::config::BitbucketConfig;
-use reqwest::{Client, header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE}};
+use crate::errors::{CascadeError, Result};
+use base64::Engine;
+use reqwest::{
+    header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE},
+    Client,
+};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::{debug, trace};
-use base64::Engine;
 
 /// Bitbucket Server API client
 pub struct BitbucketClient {
@@ -18,7 +21,7 @@ impl BitbucketClient {
     /// Create a new Bitbucket client
     pub fn new(config: &BitbucketConfig) -> Result<Self> {
         let mut headers = HeaderMap::new();
-        
+
         // Set up authentication
         let auth_header = match (&config.username, &config.token) {
             (Some(username), Some(token)) => {
@@ -29,19 +32,20 @@ impl BitbucketClient {
             (None, Some(token)) => {
                 format!("Bearer {}", token)
             }
-            _ => return Err(CascadeError::config("Bitbucket authentication credentials not configured")),
+            _ => {
+                return Err(CascadeError::config(
+                    "Bitbucket authentication credentials not configured",
+                ))
+            }
         };
 
         headers.insert(
             AUTHORIZATION,
             HeaderValue::from_str(&auth_header)
-                .map_err(|e| CascadeError::config(format!("Invalid auth header: {}", e)))?
+                .map_err(|e| CascadeError::config(format!("Invalid auth header: {}", e)))?,
         );
 
-        headers.insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/json")
-        );
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -59,7 +63,8 @@ impl BitbucketClient {
 
     /// Get the base API URL for this repository
     fn api_url(&self, path: &str) -> String {
-        format!("{}/rest/api/1.0/projects/{}/repos/{}/{}",
+        format!(
+            "{}/rest/api/1.0/projects/{}/repos/{}/{}",
             self.base_url.trim_end_matches('/'),
             self.project_key,
             self.repo_slug,
@@ -75,7 +80,8 @@ impl BitbucketClient {
         let url = self.api_url(path);
         debug!("GET {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -93,7 +99,8 @@ impl BitbucketClient {
         let url = self.api_url(path);
         debug!("POST {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(body)
             .send()
@@ -112,7 +119,8 @@ impl BitbucketClient {
         let url = self.api_url(path);
         debug!("PUT {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .put(&url)
             .json(body)
             .send()
@@ -127,7 +135,8 @@ impl BitbucketClient {
         let url = self.api_url(path);
         debug!("DELETE {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .delete(&url)
             .send()
             .await
@@ -137,8 +146,14 @@ impl BitbucketClient {
             Ok(())
         } else {
             let status = response.status();
-            let text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            Err(CascadeError::bitbucket(format!("DELETE failed with status {}: {}", status, text)))
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            Err(CascadeError::bitbucket(format!(
+                "DELETE failed with status {}: {}",
+                status, text
+            )))
         }
     }
 
@@ -148,24 +163,33 @@ impl BitbucketClient {
         T: for<'de> Deserialize<'de>,
     {
         let status = response.status();
-        
+
         if status.is_success() {
-            let text = response.text().await
-                .map_err(|e| CascadeError::bitbucket(format!("Failed to read response body: {}", e)))?;
-            
+            let text = response.text().await.map_err(|e| {
+                CascadeError::bitbucket(format!("Failed to read response body: {}", e))
+            })?;
+
             trace!("Response body: {}", text);
-            
-            serde_json::from_str(&text)
-                .map_err(|e| CascadeError::bitbucket(format!("Failed to parse JSON response: {}", e)))
+
+            serde_json::from_str(&text).map_err(|e| {
+                CascadeError::bitbucket(format!("Failed to parse JSON response: {}", e))
+            })
         } else {
-            let text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            Err(CascadeError::bitbucket(format!("Request failed with status {}: {}", status, text)))
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            Err(CascadeError::bitbucket(format!(
+                "Request failed with status {}: {}",
+                status, text
+            )))
         }
     }
 
     /// Test the connection to Bitbucket Server
     pub async fn test_connection(&self) -> Result<()> {
-        let url = format!("{}/rest/api/1.0/projects/{}/repos/{}",
+        let url = format!(
+            "{}/rest/api/1.0/projects/{}/repos/{}",
             self.base_url.trim_end_matches('/'),
             self.project_key,
             self.repo_slug
@@ -173,7 +197,8 @@ impl BitbucketClient {
 
         debug!("Testing connection to {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -184,8 +209,14 @@ impl BitbucketClient {
             Ok(())
         } else {
             let status = response.status();
-            let text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            Err(CascadeError::bitbucket(format!("Connection test failed with status {}: {}", status, text)))
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            Err(CascadeError::bitbucket(format!(
+                "Connection test failed with status {}: {}",
+                status, text
+            )))
         }
     }
 
@@ -254,7 +285,7 @@ mod tests {
         };
 
         let client = BitbucketClient::new(&config).unwrap();
-        
+
         assert_eq!(
             client.api_url("pull-requests"),
             "https://bitbucket.example.com/rest/api/1.0/projects/TEST/repos/my-repo/pull-requests"
@@ -278,10 +309,10 @@ mod tests {
         };
 
         let client = BitbucketClient::new(&config).unwrap();
-        
+
         assert_eq!(
             client.api_url("pull-requests"),
             "https://bitbucket.example.com/rest/api/1.0/projects/TEST/repos/my-repo/pull-requests"
         );
     }
-} 
+}

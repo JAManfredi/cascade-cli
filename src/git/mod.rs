@@ -1,8 +1,8 @@
-pub mod repository;
 pub mod branch_manager;
+pub mod repository;
 
+pub use branch_manager::{BranchInfo, BranchManager};
 pub use repository::{GitRepository, RepositoryInfo};
-pub use branch_manager::{BranchManager, BranchInfo};
 
 use crate::errors::{CascadeError, Result};
 use std::path::Path;
@@ -14,12 +14,12 @@ pub fn is_git_repository(path: &Path) -> bool {
 
 /// Find the root of the Git repository
 pub fn find_repository_root(start_path: &Path) -> Result<std::path::PathBuf> {
-    let repo = git2::Repository::discover(start_path)
-        .map_err(|e| CascadeError::Git(e))?;
-    
-    let workdir = repo.workdir()
+    let repo = git2::Repository::discover(start_path).map_err(|e| CascadeError::Git(e))?;
+
+    let workdir = repo
+        .workdir()
         .ok_or_else(|| CascadeError::config("Repository has no working directory (bare repo?)"))?;
-    
+
     Ok(workdir.to_path_buf())
 }
 
@@ -27,6 +27,6 @@ pub fn find_repository_root(start_path: &Path) -> Result<std::path::PathBuf> {
 pub fn get_current_repository() -> Result<GitRepository> {
     let current_dir = std::env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
-    
+
     GitRepository::open(&current_dir)
 }

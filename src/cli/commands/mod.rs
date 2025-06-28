@@ -1,12 +1,12 @@
+pub mod completions;
 pub mod config;
 pub mod doctor;
 pub mod entry;
+pub mod hooks;
 pub mod init;
+pub mod setup;
 pub mod stack;
 pub mod status;
-pub mod version;
-pub mod completions;
-pub mod setup;
 pub mod tui;
-pub mod hooks;
+pub mod version;
 pub mod viz;

@@ -1,16 +1,16 @@
+use crate::cli::Cli;
+use crate::errors::{CascadeError, Result};
 use clap::CommandFactory;
 use clap_complete::{generate, Shell};
-use std::io;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
-use crate::errors::{CascadeError, Result};
-use crate::cli::Cli;
 
 /// Generate shell completions for the specified shell
 pub fn generate_completions(shell: Shell) -> Result<()> {
     let mut cmd = Cli::command();
     let bin_name = "cc";
-    
+
     generate(shell, &mut cmd, bin_name, &mut io::stdout());
     Ok(())
 }
@@ -44,7 +44,7 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
         for (shell, path) in installed {
             println!("   {:?}: {}", shell, path.display());
         }
-        
+
         println!("\n💡 Next steps:");
         println!("   1. Restart your shell or run: source ~/.bashrc (or equivalent)");
         println!("   2. Try: cc <TAB><TAB>");
@@ -63,17 +63,17 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
 /// Detect which shells are available on the system
 fn detect_available_shells() -> Vec<Shell> {
     let mut shells = Vec::new();
-    
+
     // Check for bash
     if which_shell("bash").is_some() {
         shells.push(Shell::Bash);
     }
-    
+
     // Check for zsh
     if which_shell("zsh").is_some() {
         shells.push(Shell::Zsh);
     }
-    
+
     // Check for fish
     if which_shell("fish").is_some() {
         shells.push(Shell::Fish);
@@ -89,7 +89,8 @@ fn detect_available_shells() -> Vec<Shell> {
 
 /// Check if a shell exists in PATH
 fn which_shell(shell: &str) -> Option<PathBuf> {
-    std::env::var("PATH").ok()?
+    std::env::var("PATH")
+        .ok()?
         .split(':')
         .map(PathBuf::from)
         .find_map(|path| {
@@ -104,8 +105,8 @@ fn which_shell(shell: &str) -> Option<PathBuf> {
 
 /// Install completion for a specific shell
 fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| CascadeError::config("Could not find home directory"))?;
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| CascadeError::config("Could not find home directory"))?;
 
     let (completion_dir, filename) = match shell {
         Shell::Bash => {
@@ -115,11 +116,12 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
                 PathBuf::from("/usr/local/etc/bash_completion.d"),
                 PathBuf::from("/etc/bash_completion.d"),
             ];
-            
-            let dir = dirs.into_iter()
+
+            let dir = dirs
+                .into_iter()
                 .find(|d| d.exists() || d.parent().map_or(false, |p| p.exists()))
                 .unwrap_or_else(|| home_dir.join(".bash_completion.d"));
-                
+
             (dir, "cc")
         }
         Shell::Zsh => {
@@ -129,11 +131,12 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
                 home_dir.join(".zsh/completions"),
                 PathBuf::from("/usr/local/share/zsh/site-functions"),
             ];
-            
-            let dir = dirs.into_iter()
+
+            let dir = dirs
+                .into_iter()
                 .find(|d| d.exists() || d.parent().map_or(false, |p| p.exists()))
                 .unwrap_or_else(|| home_dir.join(".zsh/completions"));
-                
+
             (dir, "_cc")
         }
         Shell::Fish => {
@@ -141,7 +144,10 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
             (dir, "cc.fish")
         }
         _ => {
-            return Err(CascadeError::config(format!("Unsupported shell: {:?}", shell)));
+            return Err(CascadeError::config(format!(
+                "Unsupported shell: {:?}",
+                shell
+            )));
         }
     };
 
@@ -169,7 +175,7 @@ pub fn show_completions_status() -> Result<()> {
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     let available_shells = detect_available_shells();
-    
+
     println!("\n📊 Available shells:");
     for shell in &available_shells {
         let status = check_completion_installed(*shell);
@@ -177,7 +183,10 @@ pub fn show_completions_status() -> Result<()> {
         println!("   {} {:?}", status_icon, shell);
     }
 
-    if available_shells.iter().any(|s| !check_completion_installed(*s)) {
+    if available_shells
+        .iter()
+        .any(|s| !check_completion_installed(*s))
+    {
         println!("\n💡 To install completions:");
         println!("   cc completions install");
         println!("   cc completions install --shell bash  # for specific shell");
@@ -211,9 +220,7 @@ fn check_completion_installed(shell: Shell) -> bool {
             home_dir.join(".zsh/completions/_cc"),
             PathBuf::from("/usr/local/share/zsh/site-functions/_cc"),
         ],
-        Shell::Fish => vec![
-            home_dir.join(".config/fish/completions/cc.fish"),
-        ],
+        Shell::Fish => vec![home_dir.join(".config/fish/completions/cc.fish")],
         _ => return false,
     };
 
@@ -237,4 +244,4 @@ mod tests {
         let result = generate_completions(Shell::Bash);
         assert!(result.is_ok());
     }
-} 
+}

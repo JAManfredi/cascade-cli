@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 /// Metadata associated with a commit in the stack
@@ -358,7 +358,8 @@ impl RepositoryMetadata {
 
     /// Add commit metadata
     pub fn add_commit(&mut self, commit_metadata: CommitMetadata) {
-        self.commits.insert(commit_metadata.hash.clone(), commit_metadata);
+        self.commits
+            .insert(commit_metadata.hash.clone(), commit_metadata);
         self.updated_at = Utc::now();
     }
 
@@ -383,7 +384,8 @@ impl RepositoryMetadata {
 
     /// Get all commits for a stack
     pub fn get_stack_commits(&self, stack_id: &Uuid) -> Vec<&CommitMetadata> {
-        self.commits.values()
+        self.commits
+            .values()
             .filter(|commit| &commit.stack_id == stack_id)
             .collect()
     }
@@ -402,7 +404,7 @@ mod tests {
     fn test_commit_metadata() {
         let stack_id = Uuid::new_v4();
         let entry_id = Uuid::new_v4();
-        
+
         let mut commit = CommitMetadata::new(
             "abc123".to_string(),
             "Test commit".to_string(),
@@ -462,14 +464,10 @@ mod tests {
     #[test]
     fn test_repository_metadata() {
         let mut repo = RepositoryMetadata::new("main".to_string());
-        
+
         let stack_id = Uuid::new_v4();
-        let stack = StackMetadata::new(
-            stack_id,
-            "test-stack".to_string(),
-            "main".to_string(),
-            None,
-        );
+        let stack =
+            StackMetadata::new(stack_id, "test-stack".to_string(), "main".to_string(), None);
 
         assert!(repo.get_active_stack().is_none());
         assert_eq!(repo.get_all_stacks().len(), 0);
@@ -486,4 +484,4 @@ mod tests {
         assert!(found.is_some());
         assert_eq!(found.unwrap().stack_id, stack_id);
     }
-} 
+}

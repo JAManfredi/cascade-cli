@@ -9,6 +9,28 @@
 
 Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a powerful technique for managing chains of related commits as separate, reviewable pull requests. Perfect for feature development, bug fixes, and complex changes that benefit from incremental review.
 
+## 📋 Table of Contents
+
+- [✨ Key Features](#key-features)
+- [🌿 How Stacked Diffs Work: Branch Management](#how-stacked-diffs-work-branch-management)
+- [🚀 Quick Start](#quick-start)
+  - [1. Installation](#1-installation)
+  - [2. Initialize Your Repository](#2-initialize-your-repository)
+  - [3. Create Your First Stack](#3-create-your-first-stack)
+  - [4. Experience the Magic](#4-experience-the-magic)
+- [🤖 Smart Conflict Resolution](#smart-conflict-resolution)
+- [🎯 Core Workflow](#core-workflow)
+- [🔄 Complex Workflow Examples](#complex-workflow-examples)
+- [📖 Command Reference](#command-reference)
+- [🔧 Configuration](#configuration)
+- [🎨 Advanced Features](#advanced-features)
+- [🏗️ Architecture](#architecture)
+- [🧪 Testing](#testing)
+- [🤝 Contributing](#contributing)
+- [📝 Documentation](#documentation)
+- [📜 License](#license)
+- [🌟 Why Stacked Diffs?](#why-stacked-diffs)
+
 ## ✨ **Key Features**
 
 ### 🔄 **Stacked Diff Workflow**

@@ -1,13 +1,13 @@
+use super::metadata::RepositoryMetadata;
+use super::{CommitMetadata, Stack, StackEntry, StackMetadata, StackStatus};
+use crate::config::get_repo_config_dir;
 use crate::errors::{CascadeError, Result};
 use crate::git::GitRepository;
-use crate::config::get_repo_config_dir;
-use super::{Stack, StackEntry, StackStatus, StackMetadata, CommitMetadata};
-use super::metadata::RepositoryMetadata;
-use std::path::{Path, PathBuf};
-use std::fs;
 use std::collections::HashMap;
-use uuid::Uuid;
+use std::fs;
+use std::path::{Path, PathBuf};
 use tracing::info;
+use uuid::Uuid;
 
 /// Manages all stack operations and persistence
 pub struct StackManager {
@@ -36,7 +36,8 @@ impl StackManager {
         let metadata_file = config_dir.join("metadata.json");
 
         // Determine default base branch
-        let default_base = repo.get_current_branch()
+        let default_base = repo
+            .get_current_branch()
             .unwrap_or_else(|_| "main".to_string());
 
         let mut manager = Self {
@@ -56,10 +57,18 @@ impl StackManager {
     }
 
     /// Create a new stack
-    pub fn create_stack(&mut self, name: String, base_branch: Option<String>, description: Option<String>) -> Result<Uuid> {
+    pub fn create_stack(
+        &mut self,
+        name: String,
+        base_branch: Option<String>,
+        description: Option<String>,
+    ) -> Result<Uuid> {
         // Check if stack with this name already exists
         if self.metadata.find_stack_by_name(&name).is_some() {
-            return Err(CascadeError::config(format!("Stack '{}' already exists", name)));
+            return Err(CascadeError::config(format!(
+                "Stack '{}' already exists",
+                name
+            )));
         }
 
         // Use provided base branch or default
@@ -67,7 +76,10 @@ impl StackManager {
 
         // Verify base branch exists
         if !self.repo.branch_exists(&base_branch) {
-            return Err(CascadeError::branch(format!("Base branch '{}' does not exist", base_branch)));
+            return Err(CascadeError::branch(format!(
+                "Base branch '{}' does not exist",
+                base_branch
+            )));
         }
 
         // Create the stack
@@ -113,7 +125,9 @@ impl StackManager {
 
     /// Get the currently active stack
     pub fn get_active_stack(&self) -> Option<&Stack> {
-        self.metadata.active_stack_id.and_then(|id| self.stacks.get(&id))
+        self.metadata
+            .active_stack_id
+            .and_then(|id| self.stacks.get(&id))
     }
 
     /// Get the currently active stack mutably
@@ -130,7 +144,10 @@ impl StackManager {
         // Verify stack exists if provided
         if let Some(id) = stack_id {
             if !self.stacks.contains_key(&id) {
-                return Err(CascadeError::config(format!("Stack with ID {} not found", id)));
+                return Err(CascadeError::config(format!(
+                    "Stack with ID {} not found",
+                    id
+                )));
             }
         }
 
@@ -156,14 +173,19 @@ impl StackManager {
 
     /// Delete a stack
     pub fn delete_stack(&mut self, stack_id: &Uuid) -> Result<Stack> {
-        let stack = self.stacks.remove(stack_id)
+        let stack = self
+            .stacks
+            .remove(stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack with ID {} not found", stack_id)))?;
 
         // Remove metadata
         self.metadata.remove_stack(stack_id);
 
         // Remove all associated commit metadata
-        let stack_commits: Vec<String> = self.metadata.commits.values()
+        let stack_commits: Vec<String> = self
+            .metadata
+            .commits
+            .values()
             .filter(|commit| &commit.stack_id == stack_id)
             .map(|commit| commit.hash.clone())
             .collect();
@@ -184,16 +206,28 @@ impl StackManager {
     }
 
     /// Push a new commit to the top of the active stack
-    pub fn push_to_stack(&mut self, branch: String, commit_hash: String, message: String) -> Result<Uuid> {
-        let stack_id = self.metadata.active_stack_id
+    pub fn push_to_stack(
+        &mut self,
+        branch: String,
+        commit_hash: String,
+        message: String,
+    ) -> Result<Uuid> {
+        let stack_id = self
+            .metadata
+            .active_stack_id
             .ok_or_else(|| CascadeError::config("No active stack"))?;
 
-        let stack = self.stacks.get_mut(&stack_id)
+        let stack = self
+            .stacks
+            .get_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Active stack not found"))?;
 
         // Verify the commit exists
         if !self.repo.commit_exists(&commit_hash)? {
-            return Err(CascadeError::branch(format!("Commit {} does not exist", commit_hash)));
+            return Err(CascadeError::branch(format!(
+                "Commit {} does not exist",
+                commit_hash
+            )));
         }
 
         // Add to stack
@@ -222,13 +256,18 @@ impl StackManager {
 
     /// Pop the top commit from the active stack
     pub fn pop_from_stack(&mut self) -> Result<StackEntry> {
-        let stack_id = self.metadata.active_stack_id
+        let stack_id = self
+            .metadata
+            .active_stack_id
             .ok_or_else(|| CascadeError::config("No active stack"))?;
 
-        let stack = self.stacks.get_mut(&stack_id)
+        let stack = self
+            .stacks
+            .get_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Active stack not found"))?;
 
-        let entry = stack.pop_entry()
+        let entry = stack
+            .pop_entry()
             .ok_or_else(|| CascadeError::config("Stack is empty"))?;
 
         // Remove commit metadata
@@ -246,19 +285,30 @@ impl StackManager {
     }
 
     /// Submit a stack entry for review (mark as submitted)
-    pub fn submit_entry(&mut self, stack_id: &Uuid, entry_id: &Uuid, pull_request_id: String) -> Result<()> {
-        let stack = self.stacks.get_mut(stack_id)
+    pub fn submit_entry(
+        &mut self,
+        stack_id: &Uuid,
+        entry_id: &Uuid,
+        pull_request_id: String,
+    ) -> Result<()> {
+        let stack = self
+            .stacks
+            .get_mut(stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
 
         let entry_commit_hash = {
-            let entry = stack.get_entry(entry_id)
+            let entry = stack
+                .get_entry(entry_id)
                 .ok_or_else(|| CascadeError::config(format!("Entry {} not found", entry_id)))?;
             entry.commit_hash.clone()
         };
 
         // Update stack entry
         if !stack.mark_entry_submitted(entry_id, pull_request_id.clone()) {
-            return Err(CascadeError::config(format!("Failed to mark entry {} as submitted", entry_id)));
+            return Err(CascadeError::config(format!(
+                "Failed to mark entry {} as submitted",
+                entry_id
+            )));
         }
 
         // Update commit metadata
@@ -268,10 +318,12 @@ impl StackManager {
 
         // Update stack metadata statistics
         if let Some(stack_meta) = self.metadata.get_stack_mut(stack_id) {
-            let submitted_count = stack.entries.iter()
-                .filter(|e| e.is_submitted)
-                .count();
-            stack_meta.update_stats(stack.entries.len(), submitted_count, stack_meta.merged_commits);
+            let submitted_count = stack.entries.iter().filter(|e| e.is_submitted).count();
+            stack_meta.update_stats(
+                stack.entries.len(),
+                submitted_count,
+                stack_meta.merged_commits,
+            );
         }
 
         self.save_to_disk()?;
@@ -308,7 +360,9 @@ impl StackManager {
 
     /// Check if currently in edit mode
     pub fn is_in_edit_mode(&self) -> bool {
-        self.metadata.edit_mode.as_ref()
+        self.metadata
+            .edit_mode
+            .as_ref()
             .map(|edit_state| edit_state.is_active)
             .unwrap_or(false)
     }
@@ -322,11 +376,13 @@ impl StackManager {
     pub fn enter_edit_mode(&mut self, stack_id: Uuid, entry_id: Uuid) -> Result<()> {
         // Get the commit hash first to avoid borrow checker issues
         let commit_hash = {
-            let stack = self.get_stack(&stack_id)
+            let stack = self
+                .get_stack(&stack_id)
                 .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
 
-            let entry = stack.get_entry(&entry_id)
-                .ok_or_else(|| CascadeError::config(format!("Entry {} not found in stack", entry_id)))?;
+            let entry = stack.get_entry(&entry_id).ok_or_else(|| {
+                CascadeError::config(format!("Entry {} not found in stack", entry_id))
+            })?;
 
             entry.commit_hash.clone()
         };
@@ -337,16 +393,15 @@ impl StackManager {
         }
 
         // Create new edit mode state
-        let edit_state = super::metadata::EditModeState::new(
-            stack_id,
-            entry_id,
-            commit_hash
-        );
+        let edit_state = super::metadata::EditModeState::new(stack_id, entry_id, commit_hash);
 
         self.metadata.edit_mode = Some(edit_state);
         self.save_to_disk()?;
 
-        info!("Entered edit mode for entry {} in stack {}", entry_id, stack_id);
+        info!(
+            "Entered edit mode for entry {} in stack {}",
+            entry_id, stack_id
+        );
         Ok(())
     }
 
@@ -366,7 +421,9 @@ impl StackManager {
 
     /// Sync stack with Git repository state
     pub fn sync_stack(&mut self, stack_id: &Uuid) -> Result<()> {
-        let stack = self.stacks.get_mut(stack_id)
+        let stack = self
+            .stacks
+            .get_mut(stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
 
         // Check if all commits still exist
@@ -389,13 +446,13 @@ impl StackManager {
         // Check if base branch exists and has new commits
         if !self.repo.branch_exists(&stack.base_branch) {
             return Err(CascadeError::branch(format!(
-                "Base branch '{}' does not exist. Create it or switch to a different base.", 
+                "Base branch '{}' does not exist. Create it or switch to a different base.",
                 stack.base_branch
             )));
         }
-        
+
         let _base_hash = self.repo.get_branch_head(&stack.base_branch)?;
-        
+
         // Check if any stack entries are missing their commits
         let mut corrupted_entry = None;
         for entry in &stack.entries {
@@ -404,21 +461,24 @@ impl StackManager {
                 break;
             }
         }
-        
+
         if let Some((commit_hash, branch)) = corrupted_entry {
             stack.update_status(StackStatus::Corrupted);
             return Err(CascadeError::branch(format!(
-                "Commit {} from stack entry '{}' no longer exists", 
+                "Commit {} from stack entry '{}' no longer exists",
                 commit_hash, branch
             )));
         }
-        
+
         // Compare base branch with the earliest commit in the stack
         let needs_sync = if let Some(first_entry) = stack.entries.first() {
             // Get commits between base and first entry
-            match self.repo.get_commits_between(&stack.base_branch, &first_entry.commit_hash) {
+            match self
+                .repo
+                .get_commits_between(&stack.base_branch, &first_entry.commit_hash)
+            {
                 Ok(commits) => !commits.is_empty(), // If there are commits, we need to sync
-                Err(_) => true, // If we can't compare, assume we need to sync
+                Err(_) => true,                     // If we can't compare, assume we need to sync
             }
         } else {
             false // Empty stack is always clean
@@ -427,7 +487,10 @@ impl StackManager {
         // Update stack status based on sync needs
         if needs_sync {
             stack.update_status(StackStatus::NeedsSync);
-            info!("Stack '{}' needs sync - new commits on base branch", stack.name);
+            info!(
+                "Stack '{}' needs sync - new commits on base branch",
+                stack.name
+            );
         } else {
             stack.update_status(StackStatus::Clean);
             info!("Stack '{}' is clean", stack.name);
@@ -445,14 +508,21 @@ impl StackManager {
 
     /// List all stacks with their status
     pub fn list_stacks(&self) -> Vec<(Uuid, &str, &StackStatus, usize, Option<&str>)> {
-        self.stacks.values()
-            .map(|stack| (
-                stack.id,
-                stack.name.as_str(),
-                &stack.status,
-                stack.entries.len(),
-                if stack.is_active { Some("active") } else { None }
-            ))
+        self.stacks
+            .values()
+            .map(|stack| {
+                (
+                    stack.id,
+                    stack.name.as_str(),
+                    &stack.status,
+                    stack.entries.len(),
+                    if stack.is_active {
+                        Some("active")
+                    } else {
+                        None
+                    },
+                )
+            })
             .collect()
     }
 
@@ -466,8 +536,9 @@ impl StackManager {
     /// Validate all stacks
     pub fn validate_all(&self) -> Result<()> {
         for stack in self.stacks.values() {
-            stack.validate()
-                .map_err(|e| CascadeError::config(format!("Stack '{}' validation failed: {}", stack.name, e)))?;
+            stack.validate().map_err(|e| {
+                CascadeError::config(format!("Stack '{}' validation failed: {}", stack.name, e))
+            })?;
         }
         Ok(())
     }
@@ -476,8 +547,9 @@ impl StackManager {
     fn save_to_disk(&self) -> Result<()> {
         // Ensure config directory exists
         if !self.config_dir.exists() {
-            fs::create_dir_all(&self.config_dir)
-                .map_err(|e| CascadeError::config(format!("Failed to create config directory: {}", e)))?;
+            fs::create_dir_all(&self.config_dir).map_err(|e| {
+                CascadeError::config(format!("Failed to create config directory: {}", e))
+            })?;
         }
 
         // Save stacks
@@ -510,11 +582,13 @@ impl StackManager {
 
         // Load metadata if file exists
         if self.metadata_file.exists() {
-            let metadata_content = fs::read_to_string(&self.metadata_file)
-                .map_err(|e| CascadeError::config(format!("Failed to read metadata file: {}", e)))?;
+            let metadata_content = fs::read_to_string(&self.metadata_file).map_err(|e| {
+                CascadeError::config(format!("Failed to read metadata file: {}", e))
+            })?;
 
-            self.metadata = serde_json::from_str(&metadata_content)
-                .map_err(|e| CascadeError::config(format!("Failed to parse metadata file: {}", e)))?;
+            self.metadata = serde_json::from_str(&metadata_content).map_err(|e| {
+                CascadeError::config(format!("Failed to parse metadata file: {}", e))
+            })?;
         }
 
         Ok(())
@@ -524,8 +598,8 @@ impl StackManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::process::Command;
+    use tempfile::TempDir;
 
     fn create_test_repo() -> (TempDir, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
@@ -566,7 +640,8 @@ mod tests {
             .unwrap();
 
         // Initialize cascade
-        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
+        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
+            .unwrap();
 
         (temp_dir, repo_path)
     }
@@ -586,11 +661,13 @@ mod tests {
         let mut manager = StackManager::new(&repo_path).unwrap();
 
         // Create a stack using the default branch
-        let stack_id = manager.create_stack(
-            "test-stack".to_string(),
-            None, // Use default branch
-            Some("Test stack description".to_string())
-        ).unwrap();
+        let stack_id = manager
+            .create_stack(
+                "test-stack".to_string(),
+                None, // Use default branch
+                Some("Test stack description".to_string()),
+            )
+            .unwrap();
 
         // Verify stack was created
         assert_eq!(manager.stacks.len(), 1);
@@ -612,10 +689,12 @@ mod tests {
     #[test]
     fn test_stack_persistence() {
         let (_temp_dir, repo_path) = create_test_repo();
-        
+
         let stack_id = {
             let mut manager = StackManager::new(&repo_path).unwrap();
-            manager.create_stack("persistent-stack".to_string(), None, None).unwrap()
+            manager
+                .create_stack("persistent-stack".to_string(), None, None)
+                .unwrap()
         };
 
         // Create new manager and verify data was loaded
@@ -630,11 +709,15 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let mut manager = StackManager::new(&repo_path).unwrap();
 
-        let stack1_id = manager.create_stack("stack-1".to_string(), None, None).unwrap();
-        let stack2_id = manager.create_stack("stack-2".to_string(), None, None).unwrap();
+        let stack1_id = manager
+            .create_stack("stack-1".to_string(), None, None)
+            .unwrap();
+        let stack2_id = manager
+            .create_stack("stack-2".to_string(), None, None)
+            .unwrap();
 
         assert_eq!(manager.stacks.len(), 2);
-        
+
         // First stack should still be active
         assert!(manager.get_stack(&stack1_id).unwrap().is_active);
         assert!(!manager.get_stack(&stack2_id).unwrap().is_active);
@@ -650,7 +733,9 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let mut manager = StackManager::new(&repo_path).unwrap();
 
-        let stack_id = manager.create_stack("to-delete".to_string(), None, None).unwrap();
+        let stack_id = manager
+            .create_stack("to-delete".to_string(), None, None)
+            .unwrap();
         assert_eq!(manager.stacks.len(), 1);
 
         let deleted = manager.delete_stack(&stack_id).unwrap();
@@ -664,9 +749,11 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let mut manager = StackManager::new(&repo_path).unwrap();
 
-        manager.create_stack("valid-stack".to_string(), None, None).unwrap();
-        
+        manager
+            .create_stack("valid-stack".to_string(), None, None)
+            .unwrap();
+
         // Should pass validation
         assert!(manager.validate_all().is_ok());
     }
-} 
+}

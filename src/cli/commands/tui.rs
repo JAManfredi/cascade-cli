@@ -1,24 +1,23 @@
 use crate::errors::{CascadeError, Result};
 use crate::stack::{StackManager, StackStatus};
-use std::env;
-use std::time::{Duration, Instant};
-use std::io;
-use ratatui::{
-    backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect, Alignment},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{
-        Block, Borders, Clear, List, ListItem, ListState, Paragraph, 
-        Table, Row, Cell, Tabs, Wrap
-    },
-    Frame, Terminal,
-};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{
+        Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Tabs, Wrap,
+    },
+    Frame, Terminal,
+};
+use std::env;
+use std::io;
+use std::time::{Duration, Instant};
 
 /// TUI Application state
 pub struct TuiApp {
@@ -39,10 +38,10 @@ impl TuiApp {
     pub fn new() -> Result<Self> {
         let current_dir = env::current_dir()
             .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
-        
+
         let stack_manager = StackManager::new(&current_dir)?;
         let stacks = stack_manager.get_all_stacks_objects()?;
-        
+
         let mut stack_list_state = ListState::default();
         if !stacks.is_empty() {
             stack_list_state.select(Some(0));
@@ -65,7 +64,8 @@ impl TuiApp {
 
     pub fn run(&mut self) -> Result<()> {
         // Setup terminal
-        enable_raw_mode().map_err(|e| CascadeError::config(format!("Failed to enable raw mode: {}", e)))?;
+        enable_raw_mode()
+            .map_err(|e| CascadeError::config(format!("Failed to enable raw mode: {}", e)))?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
             .map_err(|e| CascadeError::config(format!("Failed to setup terminal: {}", e)))?;
@@ -77,25 +77,35 @@ impl TuiApp {
         let result = self.run_app(&mut terminal);
 
         // Restore terminal
-        disable_raw_mode().map_err(|e| CascadeError::config(format!("Failed to disable raw mode: {}", e)))?;
+        disable_raw_mode()
+            .map_err(|e| CascadeError::config(format!("Failed to disable raw mode: {}", e)))?;
         execute!(
             terminal.backend_mut(),
             LeaveAlternateScreen,
             DisableMouseCapture
-        ).map_err(|e| CascadeError::config(format!("Failed to restore terminal: {}", e)))?;
-        terminal.show_cursor().map_err(|e| CascadeError::config(format!("Failed to show cursor: {}", e)))?;
+        )
+        .map_err(|e| CascadeError::config(format!("Failed to restore terminal: {}", e)))?;
+        terminal
+            .show_cursor()
+            .map_err(|e| CascadeError::config(format!("Failed to show cursor: {}", e)))?;
 
         result
     }
 
     fn run_app<B: ratatui::backend::Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
         loop {
-            terminal.draw(|f| self.draw(f)).map_err(|e| CascadeError::config(format!("Failed to draw: {}", e)))?;
+            terminal
+                .draw(|f| self.draw(f))
+                .map_err(|e| CascadeError::config(format!("Failed to draw: {}", e)))?;
 
             // Handle events with timeout for refresh
             let timeout = Duration::from_millis(100);
-            if crossterm::event::poll(timeout).map_err(|e| CascadeError::config(format!("Event poll failed: {}", e)))? {
-                if let Event::Key(key) = event::read().map_err(|e| CascadeError::config(format!("Failed to read event: {}", e)))? {
+            if crossterm::event::poll(timeout)
+                .map_err(|e| CascadeError::config(format!("Event poll failed: {}", e)))?
+            {
+                if let Event::Key(key) = event::read()
+                    .map_err(|e| CascadeError::config(format!("Failed to read event: {}", e)))?
+                {
                     if key.kind == KeyEventKind::Press {
                         self.handle_key_event(key.code)?;
                     }
@@ -246,7 +256,11 @@ impl TuiApp {
 
     fn draw_header(&self, f: &mut Frame, area: Rect) {
         let title = Paragraph::new("🌊 Cascade CLI - Interactive Stack Manager")
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, area);
@@ -258,7 +272,11 @@ impl TuiApp {
         let tabs_widget = Tabs::new(tab_titles)
             .block(Block::default().borders(Borders::ALL).title("Navigation"))
             .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            .highlight_style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
             .select(self.selected_tab);
 
         let body_chunks = Layout::default()
@@ -297,18 +315,21 @@ impl TuiApp {
                     StackStatus::NeedsSync => "🔄",
                     StackStatus::Corrupted => "💥",
                 };
-                
-                let active_marker = if stack.is_active {
-                    "👉 "
-                } else {
-                    "   "
-                };
 
-                let content = format!("{}{} {} ({} entries)", 
-                    active_marker, status_icon, stack.name, stack.entries.len());
-                
+                let active_marker = if stack.is_active { "👉 " } else { "   " };
+
+                let content = format!(
+                    "{}{} {} ({} entries)",
+                    active_marker,
+                    status_icon,
+                    stack.name,
+                    stack.entries.len()
+                );
+
                 let style = if i == self.selected_stack {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -319,7 +340,11 @@ impl TuiApp {
 
         let stacks_list = List::new(items)
             .block(Block::default().borders(Borders::ALL).title("🗂️ Stacks"))
-            .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+            .highlight_style(
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )
             .highlight_symbol(">> ");
 
         f.render_stateful_widget(stacks_list, chunks[0], &mut self.stack_list_state);
@@ -351,19 +376,23 @@ impl TuiApp {
             ];
 
             if let Some(desc) = &stack.description {
-                lines.push(Line::from(vec![
-                    Span::styled("Description: ", Style::default().fg(Color::Cyan)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    "Description: ",
+                    Style::default().fg(Color::Cyan),
+                )]));
                 lines.push(Line::from(desc.clone()));
                 lines.push(Line::from(""));
             }
 
             // Recent entries
             if !stack.entries.is_empty() {
-                lines.push(Line::from(vec![
-                    Span::styled("Recent Commits:", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                ]));
-                
+                lines.push(Line::from(vec![Span::styled(
+                    "Recent Commits:",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )]));
+
                 for (i, entry) in stack.entries.iter().rev().take(5).enumerate() {
                     lines.push(Line::from(format!(
                         "  {} {} - {}",
@@ -375,13 +404,21 @@ impl TuiApp {
             }
 
             let summary = Paragraph::new(lines)
-                .block(Block::default().borders(Borders::ALL).title("📊 Stack Info"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("📊 Stack Info"),
+                )
                 .wrap(Wrap { trim: true });
 
             f.render_widget(summary, area);
         } else {
             let empty = Paragraph::new("No stacks available.\n\nPress 'c' to create a new stack.")
-                .block(Block::default().borders(Borders::ALL).title("📊 Stack Info"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("📊 Stack Info"),
+                )
                 .alignment(Alignment::Center);
             f.render_widget(empty, area);
         }
@@ -390,9 +427,15 @@ impl TuiApp {
     fn draw_details_tab(&self, f: &mut Frame, area: Rect) {
         if let Some(stack) = self.stacks.get(self.selected_stack) {
             if stack.entries.is_empty() {
-                let empty = Paragraph::new("No commits in this stack.\n\nUse 'cc stack push' to add commits.")
-                    .block(Block::default().borders(Borders::ALL).title("📋 Stack Details"))
-                    .alignment(Alignment::Center);
+                let empty = Paragraph::new(
+                    "No commits in this stack.\n\nUse 'cc stack push' to add commits.",
+                )
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("📋 Stack Details"),
+                )
+                .alignment(Alignment::Center);
                 f.render_widget(empty, area);
                 return;
             }
@@ -414,24 +457,39 @@ impl TuiApp {
                 ])
             });
 
-            let table = Table::new(rows, [
-                Constraint::Length(3),
-                Constraint::Length(8),
-                Constraint::Length(20),
-                Constraint::Length(35),
-                Constraint::Length(12),
-            ])
+            let table = Table::new(
+                rows,
+                [
+                    Constraint::Length(3),
+                    Constraint::Length(8),
+                    Constraint::Length(20),
+                    Constraint::Length(35),
+                    Constraint::Length(12),
+                ],
+            )
             .header(
                 Row::new(header)
-                    .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    .style(
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    )
                     .bottom_margin(1),
             )
-            .block(Block::default().borders(Borders::ALL).title("📋 Stack Details"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("📋 Stack Details"),
+            );
 
             f.render_widget(table, area);
         } else {
             let empty = Paragraph::new("No stack selected")
-                .block(Block::default().borders(Borders::ALL).title("📋 Stack Details"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("📋 Stack Details"),
+                )
                 .alignment(Alignment::Center);
             f.render_widget(empty, area);
         }
@@ -449,13 +507,14 @@ impl TuiApp {
             "🚪 q/Esc - Quit",
         ];
 
-        let lines: Vec<Line> = actions
-            .iter()
-            .map(|&action| Line::from(action))
-            .collect();
+        let lines: Vec<Line> = actions.iter().map(|&action| Line::from(action)).collect();
 
         let paragraph = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title("⚡ Quick Actions"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("⚡ Quick Actions"),
+            )
             .wrap(Wrap { trim: true });
 
         f.render_widget(paragraph, area);
@@ -464,51 +523,65 @@ impl TuiApp {
     fn draw_footer(&self, f: &mut Frame, area: Rect) {
         let last_refresh = format!("Last refresh: {:?} ago", self.last_refresh.elapsed());
         let key_hints = " h:Help │ q:Quit │ r:Refresh │ Tab:Navigate │ ↑↓:Select │ Enter:Activate ";
-        
+
         let footer_text = format!("{} │ {}", last_refresh, key_hints);
-        
+
         let footer = Paragraph::new(footer_text)
             .style(Style::default().fg(Color::Gray))
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::ALL));
-        
+
         f.render_widget(footer, area);
     }
 
     fn draw_help_popup(&self, f: &mut Frame, area: Rect) {
         let popup_area = self.centered_rect(80, 70, area);
-        
+
         let help_text = vec![
-            Line::from(vec![
-                Span::styled("🌊 Cascade CLI - Interactive Stack Manager", 
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-            ]),
+            Line::from(vec![Span::styled(
+                "🌊 Cascade CLI - Interactive Stack Manager",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("📍 Navigation:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-            ]),
+            Line::from(vec![Span::styled(
+                "📍 Navigation:",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  ↑↓ - Navigate stacks"),
             Line::from("  Tab - Switch between tabs"),
             Line::from("  Enter - Activate selected stack"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("⚡ Actions:", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
-            ]),
+            Line::from(vec![Span::styled(
+                "⚡ Actions:",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  c - Create new stack"),
             Line::from("  p - Push commit to active stack"),
             Line::from("  s - Submit entry for review"),
             Line::from("  r - Refresh data"),
             Line::from("  d - Toggle details view"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("🎛️ Controls:", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))
-            ]),
+            Line::from(vec![Span::styled(
+                "🎛️ Controls:",
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  h/? - Show this help"),
             Line::from("  q/Esc - Quit"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("💡 Tips:", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD))
-            ]),
+            Line::from(vec![Span::styled(
+                "💡 Tips:",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from("  • Data refreshes automatically every 10 seconds"),
             Line::from("  • Use CLI commands for complex operations"),
             Line::from("  • Active stack is marked with 👉"),
@@ -517,10 +590,12 @@ impl TuiApp {
         ];
 
         let help_paragraph = Paragraph::new(help_text)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .title("❓ Help")
-                .style(Style::default().fg(Color::White)))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("❓ Help")
+                    .style(Style::default().fg(Color::White)),
+            )
             .wrap(Wrap { trim: true });
 
         f.render_widget(Clear, popup_area);
@@ -529,12 +604,14 @@ impl TuiApp {
 
     fn draw_status_popup(&self, f: &mut Frame, area: Rect, message: &str) {
         let popup_area = self.centered_rect(60, 20, area);
-        
+
         let status_paragraph = Paragraph::new(message)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .title("💬 Status")
-                .style(Style::default().fg(Color::Yellow)))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("💬 Status")
+                    .style(Style::default().fg(Color::Yellow)),
+            )
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
 
@@ -567,4 +644,4 @@ impl TuiApp {
 pub async fn run() -> Result<()> {
     let mut app = TuiApp::new()?;
     app.run()
-} 
+}
