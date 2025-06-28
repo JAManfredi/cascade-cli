@@ -1,11 +1,13 @@
-# 📚 Cascade CLI - Git Stack Management for Teams
+<div align="center">
 
-> **Professional Git workflow management with stacked diffs and seamless Bitbucket integration**
+![Cascade CLI Banner](./assets/banner.svg)
 
 [![Rust](https://img.shields.io/badge/rust-1.82%2B-orange.svg)](https://rustup.rs/)
 [![CI](https://github.com/JAManfredi/cascade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/JAManfredi/cascade-cli/actions/workflows/ci.yml)
 [![Production Ready](https://img.shields.io/badge/production-ready-green.svg)](./PRODUCTION_CHECKLIST.md)
 [![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen.svg)](#testing)
+
+</div>
 
 Cascade CLI revolutionizes Git workflows by enabling **stacked diffs** - a powerful technique for managing chains of related commits as separate, reviewable pull requests. Perfect for feature development, bug fixes, and complex changes that benefit from incremental review.
 
