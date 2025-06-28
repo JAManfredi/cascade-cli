@@ -12,7 +12,7 @@ pub async fn run(force: bool) -> Result<()> {
     println!("This wizard will help you configure Cascade for your repository.\n");
 
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     // Step 1: Check Git repository
     println!("🔍 Step 1: Checking Git repository...");
@@ -35,7 +35,7 @@ pub async fn run(force: bool) -> Result<()> {
             .with_prompt("Cascade is already initialized. Do you want to reconfigure?")
             .default(false)
             .interact()
-            .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
         if !reinitialize {
             println!("✅ Setup cancelled. Run with --force to reconfigure.");
@@ -49,9 +49,9 @@ pub async fn run(force: bool) -> Result<()> {
 
     if let Some((url, project, repo)) = &auto_config {
         println!("   ✅ Detected Bitbucket configuration:");
-        println!("      Server: {}", url);
-        println!("      Project: {}", project);
-        println!("      Repository: {}", repo);
+        println!("      Server: {url}");
+        println!("      Project: {project}");
+        println!("      Repository: {repo}");
     } else {
         println!("   ⚠️  Could not auto-detect Bitbucket configuration");
     }
@@ -101,7 +101,7 @@ pub async fn run(force: bool) -> Result<()> {
         .with_prompt("Would you like to install shell completions?")
         .default(true)
         .interact()
-        .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
     if install_completions {
         match crate::cli::commands::completions::install_completions(None) {
@@ -164,7 +164,7 @@ fn parse_bitbucket_url(url: &str) -> Option<(String, String, String)> {
     if url.starts_with("git@") {
         if let Some(parts) = url.split('@').nth(1) {
             if let Some((host, path)) = parts.split_once(':') {
-                let base_url = format!("https://{}", host);
+                let base_url = format!("https://{host}");
                 if let Some((project, repo)) = path.split_once('/') {
                     let repo_name = repo.strip_suffix(".git").unwrap_or(repo);
                     return Some((base_url, project.to_string(), repo_name.to_string()));
@@ -227,7 +227,7 @@ async fn configure_bitbucket_interactive(
             }
         })
         .interact_text()
-        .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
     // Project key
     let default_project = auto_config
@@ -245,7 +245,7 @@ async fn configure_bitbucket_interactive(
             }
         })
         .interact_text()
-        .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
     // Repository slug
     let default_repo = auto_config
@@ -263,28 +263,25 @@ async fn configure_bitbucket_interactive(
             }
         })
         .interact_text()
-        .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
     // Authentication token
     println!("\n🔐 Authentication Setup");
     println!("   Cascade needs a Personal Access Token to interact with Bitbucket.");
-    println!(
-        "   You can create one at: {}/plugins/servlet/access-tokens/manage",
-        url
-    );
+    println!("   You can create one at: {url}/plugins/servlet/access-tokens/manage");
     println!("   Required permissions: Repository Read, Repository Write");
 
     let configure_token = Confirm::with_theme(&theme)
         .with_prompt("Configure authentication token now?")
         .default(true)
         .interact()
-        .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
     let token = if configure_token {
         let token: String = Input::with_theme(&theme)
             .with_prompt("Personal Access Token")
             .interact_text()
-            .map_err(|e| CascadeError::config(format!("Input error: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
         if token.trim().is_empty() {
             None
@@ -318,8 +315,7 @@ async fn test_bitbucket_connection(settings: &Settings) -> Result<()> {
             Ok(())
         }
         Err(e) => Err(CascadeError::config(format!(
-            "Failed to connect to Bitbucket: {}",
-            e
+            "Failed to connect to Bitbucket: {e}"
         ))),
     }
 }

@@ -66,8 +66,7 @@ impl StackManager {
         // Check if stack with this name already exists
         if self.metadata.find_stack_by_name(&name).is_some() {
             return Err(CascadeError::config(format!(
-                "Stack '{}' already exists",
-                name
+                "Stack '{name}' already exists"
             )));
         }
 
@@ -77,8 +76,7 @@ impl StackManager {
         // Verify base branch exists
         if !self.repo.branch_exists(&base_branch) {
             return Err(CascadeError::branch(format!(
-                "Base branch '{}' does not exist",
-                base_branch
+                "Base branch '{base_branch}' does not exist"
             )));
         }
 
@@ -145,8 +143,7 @@ impl StackManager {
         if let Some(id) = stack_id {
             if !self.stacks.contains_key(&id) {
                 return Err(CascadeError::config(format!(
-                    "Stack with ID {} not found",
-                    id
+                    "Stack with ID {id} not found"
                 )));
             }
         }
@@ -167,7 +164,7 @@ impl StackManager {
         if let Some(metadata) = self.metadata.find_stack_by_name(name) {
             self.set_active_stack(Some(metadata.stack_id))
         } else {
-            Err(CascadeError::config(format!("Stack '{}' not found", name)))
+            Err(CascadeError::config(format!("Stack '{name}' not found")))
         }
     }
 
@@ -176,7 +173,7 @@ impl StackManager {
         let stack = self
             .stacks
             .remove(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack with ID {} not found", stack_id)))?;
+            .ok_or_else(|| CascadeError::config(format!("Stack with ID {stack_id} not found")))?;
 
         // Remove metadata
         self.metadata.remove_stack(stack_id);
@@ -225,8 +222,7 @@ impl StackManager {
         // Verify the commit exists
         if !self.repo.commit_exists(&commit_hash)? {
             return Err(CascadeError::branch(format!(
-                "Commit {} does not exist",
-                commit_hash
+                "Commit {commit_hash} does not exist"
             )));
         }
 
@@ -294,20 +290,19 @@ impl StackManager {
         let stack = self
             .stacks
             .get_mut(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
         let entry_commit_hash = {
             let entry = stack
                 .get_entry(entry_id)
-                .ok_or_else(|| CascadeError::config(format!("Entry {} not found", entry_id)))?;
+                .ok_or_else(|| CascadeError::config(format!("Entry {entry_id} not found")))?;
             entry.commit_hash.clone()
         };
 
         // Update stack entry
         if !stack.mark_entry_submitted(entry_id, pull_request_id.clone()) {
             return Err(CascadeError::config(format!(
-                "Failed to mark entry {} as submitted",
-                entry_id
+                "Failed to mark entry {entry_id} as submitted"
             )));
         }
 
@@ -378,10 +373,10 @@ impl StackManager {
         let commit_hash = {
             let stack = self
                 .get_stack(&stack_id)
-                .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
+                .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
             let entry = stack.get_entry(&entry_id).ok_or_else(|| {
-                CascadeError::config(format!("Entry {} not found in stack", entry_id))
+                CascadeError::config(format!("Entry {entry_id} not found in stack"))
             })?;
 
             entry.commit_hash.clone()
@@ -424,7 +419,7 @@ impl StackManager {
         let stack = self
             .stacks
             .get_mut(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
         // Check if all commits still exist
         let mut missing_commits = Vec::new();
@@ -465,8 +460,7 @@ impl StackManager {
         if let Some((commit_hash, branch)) = corrupted_entry {
             stack.update_status(StackStatus::Corrupted);
             return Err(CascadeError::branch(format!(
-                "Commit {} from stack entry '{}' no longer exists",
-                commit_hash, branch
+                "Commit {commit_hash} from stack entry '{branch}' no longer exists"
             )));
         }
 
@@ -548,23 +542,23 @@ impl StackManager {
         // Ensure config directory exists
         if !self.config_dir.exists() {
             fs::create_dir_all(&self.config_dir).map_err(|e| {
-                CascadeError::config(format!("Failed to create config directory: {}", e))
+                CascadeError::config(format!("Failed to create config directory: {e}"))
             })?;
         }
 
         // Save stacks
         let stacks_json = serde_json::to_string_pretty(&self.stacks)
-            .map_err(|e| CascadeError::config(format!("Failed to serialize stacks: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to serialize stacks: {e}")))?;
 
         fs::write(&self.stacks_file, stacks_json)
-            .map_err(|e| CascadeError::config(format!("Failed to write stacks file: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to write stacks file: {e}")))?;
 
         // Save metadata
         let metadata_json = serde_json::to_string_pretty(&self.metadata)
-            .map_err(|e| CascadeError::config(format!("Failed to serialize metadata: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to serialize metadata: {e}")))?;
 
         fs::write(&self.metadata_file, metadata_json)
-            .map_err(|e| CascadeError::config(format!("Failed to write metadata file: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to write metadata file: {e}")))?;
 
         Ok(())
     }
@@ -574,21 +568,19 @@ impl StackManager {
         // Load stacks if file exists
         if self.stacks_file.exists() {
             let stacks_content = fs::read_to_string(&self.stacks_file)
-                .map_err(|e| CascadeError::config(format!("Failed to read stacks file: {}", e)))?;
+                .map_err(|e| CascadeError::config(format!("Failed to read stacks file: {e}")))?;
 
             self.stacks = serde_json::from_str(&stacks_content)
-                .map_err(|e| CascadeError::config(format!("Failed to parse stacks file: {}", e)))?;
+                .map_err(|e| CascadeError::config(format!("Failed to parse stacks file: {e}")))?;
         }
 
         // Load metadata if file exists
         if self.metadata_file.exists() {
-            let metadata_content = fs::read_to_string(&self.metadata_file).map_err(|e| {
-                CascadeError::config(format!("Failed to read metadata file: {}", e))
-            })?;
+            let metadata_content = fs::read_to_string(&self.metadata_file)
+                .map_err(|e| CascadeError::config(format!("Failed to read metadata file: {e}")))?;
 
-            self.metadata = serde_json::from_str(&metadata_content).map_err(|e| {
-                CascadeError::config(format!("Failed to parse metadata file: {}", e))
-            })?;
+            self.metadata = serde_json::from_str(&metadata_content)
+                .map_err(|e| CascadeError::config(format!("Failed to parse metadata file: {e}")))?;
         }
 
         Ok(())
@@ -607,20 +599,20 @@ mod tests {
 
         // Initialize git repository
         Command::new("git")
-            .args(&["init"])
+            .args(["init"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
 
         // Configure git
         Command::new("git")
-            .args(&["config", "user.name", "Test User"])
+            .args(["config", "user.name", "Test User"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
 
         Command::new("git")
-            .args(&["config", "user.email", "test@example.com"])
+            .args(["config", "user.email", "test@example.com"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -628,13 +620,13 @@ mod tests {
         // Create an initial commit
         std::fs::write(repo_path.join("README.md"), "# Test Repo").unwrap();
         Command::new("git")
-            .args(&["add", "."])
+            .args(["add", "."])
             .current_dir(&repo_path)
             .output()
             .unwrap();
 
         Command::new("git")
-            .args(&["commit", "-m", "Initial commit"])
+            .args(["commit", "-m", "Initial commit"])
             .current_dir(&repo_path)
             .output()
             .unwrap();

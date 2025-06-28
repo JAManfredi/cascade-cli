@@ -9,7 +9,7 @@ pub async fn run(bitbucket_url: Option<String>, force: bool) -> Result<()> {
 
     // Get current directory
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     // Check if we're in a Git repository
     if !is_git_repository(&current_dir) {
@@ -40,7 +40,7 @@ pub async fn run(bitbucket_url: Option<String>, force: bool) -> Result<()> {
     println!("✅ Cascade repository initialized successfully!");
 
     if let Some(url) = &bitbucket_url {
-        println!("📊 Bitbucket Server URL: {}", url);
+        println!("📊 Bitbucket Server URL: {url}");
     }
 
     println!("\n📋 Next steps:");

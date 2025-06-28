@@ -24,10 +24,7 @@ impl OutputFormat {
             "mermaid" => Ok(OutputFormat::Mermaid),
             "dot" | "graphviz" => Ok(OutputFormat::Dot),
             "plantuml" | "puml" => Ok(OutputFormat::PlantUml),
-            _ => Err(CascadeError::config(format!(
-                "Unknown output format: {}",
-                s
-            ))),
+            _ => Err(CascadeError::config(format!("Unknown output format: {s}"))),
         }
     }
 }
@@ -95,10 +92,10 @@ impl StackVisualizer {
         output.push_str(&format!("📚 Stack: {}\n", stack.name));
         output.push_str(&format!("🌿 Base: {}\n", stack.base_branch));
         if let Some(desc) = &stack.description {
-            output.push_str(&format!("📝 Description: {}\n", desc));
+            output.push_str(&format!("📝 Description: {desc}\n"));
         }
         output.push_str(&format!("📊 Status: {:?}\n", stack.status));
-        output.push_str("\n");
+        output.push('\n');
 
         if stack.entries.is_empty() {
             output.push_str("   (empty stack)\n");
@@ -136,7 +133,7 @@ impl StackVisualizer {
 
             if self.style.show_pr_status {
                 if let Some(pr_id) = &entry.pull_request_id {
-                    output.push_str(&format!(" (PR #{})", pr_id));
+                    output.push_str(&format!(" (PR #{pr_id})"));
                 }
             }
 
@@ -202,19 +199,19 @@ impl StackVisualizer {
                     )
                 };
 
-                output.push_str(&format!("        {}[\"{}\"]\n", node_id, label));
-                output.push_str(&format!("        {} --> {}\n", previous, node_id));
+                output.push_str(&format!("        {node_id}[\"{label}\"]\n"));
+                output.push_str(&format!("        {previous} --> {node_id}\n"));
 
                 // Style based on status
                 if entry.pull_request_id.is_some() {
                     if entry.is_synced {
-                        output.push_str(&format!("        {} --> {}[Merged]\n", node_id, node_id));
-                        output.push_str(&format!("        class {} merged\n", node_id));
+                        output.push_str(&format!("        {node_id} --> {node_id}[Merged]\n"));
+                        output.push_str(&format!("        class {node_id} merged\n"));
                     } else {
-                        output.push_str(&format!("        class {} submitted\n", node_id));
+                        output.push_str(&format!("        class {node_id} submitted\n"));
                     }
                 } else {
-                    output.push_str(&format!("        class {} draft\n", node_id));
+                    output.push_str(&format!("        class {node_id} draft\n"));
                 }
 
                 previous = node_id;
@@ -224,7 +221,7 @@ impl StackVisualizer {
         output.push_str("    end\n");
 
         // Add styling
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    classDef draft fill:#fef3c7,stroke:#d97706,stroke-width:2px\n");
         output.push_str("    classDef submitted fill:#dbeafe,stroke:#2563eb,stroke-width:2px\n");
         output.push_str("    classDef merged fill:#d1fae5,stroke:#059669,stroke-width:2px\n");
@@ -239,10 +236,10 @@ impl StackVisualizer {
         output.push_str("    rankdir=TB;\n");
         output.push_str("    node [shape=box, style=rounded];\n");
         output.push_str("    edge [arrowhead=open];\n");
-        output.push_str("\n");
+        output.push('\n');
 
         // Subgraph for the stack
-        output.push_str(&format!("    subgraph cluster_stack {{\n"));
+        output.push_str("    subgraph cluster_stack {\n");
         output.push_str(&format!("        label=\"Stack: {}\";\n", stack.name));
         output.push_str("        color=blue;\n");
 
@@ -290,10 +287,9 @@ impl StackVisualizer {
                 };
 
                 output.push_str(&format!(
-                    "        {} [label=\"{}\" style=filled fillcolor={}];\n",
-                    node_id, label, color
+                    "        {node_id} [label=\"{label}\" style=filled fillcolor={color}];\n"
                 ));
-                output.push_str(&format!("        {} -> {};\n", previous, node_id));
+                output.push_str(&format!("        {previous} -> {node_id};\n"));
 
                 previous = node_id;
             }
@@ -312,10 +308,10 @@ impl StackVisualizer {
         output.push_str("!theme plain\n");
         output.push_str("skinparam backgroundColor #FAFAFA\n");
         output.push_str("skinparam shadowing false\n");
-        output.push_str("\n");
+        output.push('\n');
 
         output.push_str(&format!("title Stack: {}\n", stack.name));
-        output.push_str("\n");
+        output.push('\n');
 
         if stack.entries.is_empty() {
             output.push_str(&format!(
@@ -360,15 +356,12 @@ impl StackVisualizer {
                     entry.short_hash()
                 );
 
-                output.push_str(&format!(
-                    "rectangle \"{}\" as {} {}\n",
-                    label, node_id, color
-                ));
+                output.push_str(&format!("rectangle \"{label}\" as {node_id} {color}\n"));
 
                 if i == 0 {
-                    output.push_str(&format!("base --> {}\n", node_id));
+                    output.push_str(&format!("base --> {node_id}\n"));
                 } else {
-                    output.push_str(&format!("entry{} --> {}\n", i, node_id));
+                    output.push_str(&format!("entry{i} --> {node_id}\n"));
                 }
             }
         }
@@ -400,7 +393,7 @@ impl StackVisualizer {
 
         let base_count = by_base.len();
         for (base_branch, base_stacks) in by_base {
-            output.push_str(&format!("🌿 Base Branch: {}\n", base_branch));
+            output.push_str(&format!("🌿 Base Branch: {base_branch}\n"));
             output.push_str("┌─────────────────────────────────────────────────────┐\n");
 
             for (i, stack) in base_stacks.iter().enumerate() {
@@ -461,13 +454,13 @@ impl StackVisualizer {
         // Statistics
         output.push_str("📈 Statistics:\n");
         output.push_str(&format!("  Total stacks: {}\n", stacks.len()));
-        output.push_str(&format!("  Base branches: {}\n", base_count));
+        output.push_str(&format!("  Base branches: {base_count}\n"));
 
         let total_entries: usize = stacks.iter().map(|s| s.entries.len()).sum();
-        output.push_str(&format!("  Total entries: {}\n", total_entries));
+        output.push_str(&format!("  Total entries: {total_entries}\n"));
 
         let active_stacks = stacks.iter().filter(|s| s.is_active).count();
-        output.push_str(&format!("  Active stacks: {}\n", active_stacks));
+        output.push_str(&format!("  Active stacks: {active_stacks}\n"));
 
         Ok(output)
     }
@@ -488,11 +481,11 @@ impl StackVisualizer {
         }
 
         for (i, (base_branch, base_stacks)) in by_base.iter().enumerate() {
-            let base_id = format!("BASE{}", i);
-            output.push_str(&format!("        {}[\"🌿 {}\"]\n", base_id, base_branch));
+            let base_id = format!("BASE{i}");
+            output.push_str(&format!("        {base_id}[\"🌿 {base_branch}\"]\n"));
 
             for (j, stack) in base_stacks.iter().enumerate() {
-                let stack_id = format!("STACK{}_{}", i, j);
+                let stack_id = format!("STACK{i}_{j}");
                 let active_marker = if stack.is_active { " 👉" } else { "" };
 
                 output.push_str(&format!(
@@ -502,11 +495,11 @@ impl StackVisualizer {
                     stack.entries.len(),
                     active_marker
                 ));
-                output.push_str(&format!("        {} --> {}\n", base_id, stack_id));
+                output.push_str(&format!("        {base_id} --> {stack_id}\n"));
 
                 // Add class for active stacks
                 if stack.is_active {
-                    output.push_str(&format!("        class {} active\n", stack_id));
+                    output.push_str(&format!("        class {stack_id} active\n"));
                 }
             }
         }
@@ -514,7 +507,7 @@ impl StackVisualizer {
         output.push_str("    end\n");
 
         // Add styling
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("    classDef active fill:#fef3c7,stroke:#d97706,stroke-width:3px\n");
 
         Ok(output)
@@ -527,7 +520,7 @@ impl StackVisualizer {
         output.push_str("    rankdir=TB;\n");
         output.push_str("    node [shape=box, style=rounded];\n");
         output.push_str("    edge [arrowhead=open];\n");
-        output.push_str("\n");
+        output.push('\n');
 
         // Group by base branch
         let mut by_base: HashMap<String, Vec<&Stack>> = HashMap::new();
@@ -539,18 +532,17 @@ impl StackVisualizer {
         }
 
         for (i, (base_branch, base_stacks)) in by_base.iter().enumerate() {
-            output.push_str(&format!("    subgraph cluster_{} {{\n", i));
-            output.push_str(&format!("        label=\"Base: {}\";\n", base_branch));
+            output.push_str(&format!("    subgraph cluster_{i} {{\n"));
+            output.push_str(&format!("        label=\"Base: {base_branch}\";\n"));
             output.push_str("        color=blue;\n");
 
-            let base_id = format!("base{}", i);
+            let base_id = format!("base{i}");
             output.push_str(&format!(
-                "        {} [label=\"🌿 {}\" style=filled fillcolor=lightgray];\n",
-                base_id, base_branch
+                "        {base_id} [label=\"🌿 {base_branch}\" style=filled fillcolor=lightgray];\n"
             ));
 
             for (j, stack) in base_stacks.iter().enumerate() {
-                let stack_id = format!("stack{}_{}", i, j);
+                let stack_id = format!("stack{i}_{j}");
                 let active_marker = if stack.is_active { " 👉" } else { "" };
                 let color = if stack.is_active { "gold" } else { "lightblue" };
 
@@ -562,7 +554,7 @@ impl StackVisualizer {
                     active_marker,
                     color
                 ));
-                output.push_str(&format!("        {} -> {};\n", base_id, stack_id));
+                output.push_str(&format!("        {base_id} -> {stack_id};\n"));
             }
 
             output.push_str("    }\n");
@@ -579,10 +571,10 @@ impl StackVisualizer {
         output.push_str("@startuml\n");
         output.push_str("!theme plain\n");
         output.push_str("skinparam backgroundColor #FAFAFA\n");
-        output.push_str("\n");
+        output.push('\n');
 
         output.push_str("title Stack Dependencies\n");
-        output.push_str("\n");
+        output.push('\n');
 
         // Group by base branch
         let mut by_base: HashMap<String, Vec<&Stack>> = HashMap::new();
@@ -594,14 +586,13 @@ impl StackVisualizer {
         }
 
         for (i, (base_branch, base_stacks)) in by_base.iter().enumerate() {
-            let base_id = format!("base{}", i);
+            let base_id = format!("base{i}");
             output.push_str(&format!(
-                "rectangle \"🌿 {}\" as {} #lightgray\n",
-                base_branch, base_id
+                "rectangle \"🌿 {base_branch}\" as {base_id} #lightgray\n"
             ));
 
             for (j, stack) in base_stacks.iter().enumerate() {
-                let stack_id = format!("stack{}_{}", i, j);
+                let stack_id = format!("stack{i}_{j}");
                 let active_marker = if stack.is_active { " 👉" } else { "" };
                 let color = if stack.is_active {
                     "#FFD700"
@@ -617,7 +608,7 @@ impl StackVisualizer {
                     stack_id,
                     color
                 ));
-                output.push_str(&format!("{} --> {}\n", base_id, stack_id));
+                output.push_str(&format!("{base_id} --> {stack_id}\n"));
             }
         }
 
@@ -636,14 +627,14 @@ pub async fn show_stack(
     no_colors: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let manager = StackManager::new(&current_dir)?;
 
     let stack = if let Some(name) = stack_name {
         manager
             .get_stack_by_name(&name)
-            .ok_or_else(|| CascadeError::config(format!("Stack '{}' not found", name)))?
+            .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?
     } else {
         manager.get_active_stack().ok_or_else(|| {
             CascadeError::config("No active stack. Use 'cc stack list' to see available stacks")
@@ -667,11 +658,11 @@ pub async fn show_stack(
 
     if let Some(file_path) = output_file {
         fs::write(&file_path, diagram).map_err(|e| {
-            CascadeError::config(format!("Failed to write to file '{}': {}", file_path, e))
+            CascadeError::config(format!("Failed to write to file '{file_path}': {e}"))
         })?;
-        println!("✅ Stack diagram saved to: {}", file_path);
+        println!("✅ Stack diagram saved to: {file_path}");
     } else {
-        println!("{}", diagram);
+        println!("{diagram}");
     }
 
     Ok(())
@@ -685,7 +676,7 @@ pub async fn show_dependencies(
     no_colors: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let manager = StackManager::new(&current_dir)?;
     let stacks = manager.get_all_stacks_objects()?;
@@ -712,11 +703,11 @@ pub async fn show_dependencies(
 
     if let Some(file_path) = output_file {
         fs::write(&file_path, diagram).map_err(|e| {
-            CascadeError::config(format!("Failed to write to file '{}': {}", file_path, e))
+            CascadeError::config(format!("Failed to write to file '{file_path}': {e}"))
         })?;
-        println!("✅ Dependency graph saved to: {}", file_path);
+        println!("✅ Dependency graph saved to: {file_path}");
     } else {
-        println!("{}", diagram);
+        println!("{diagram}");
     }
 
     Ok(())

@@ -3,19 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
     pub bitbucket_tokens: std::collections::HashMap<String, String>,
     pub default_server: Option<String>,
-}
-
-impl Default for AuthConfig {
-    fn default() -> Self {
-        Self {
-            bitbucket_tokens: std::collections::HashMap::new(),
-            default_server: None,
-        }
-    }
 }
 
 pub struct AuthManager {
@@ -73,8 +64,7 @@ impl AuthManager {
     pub fn set_default_server(&mut self, server_url: &str) -> Result<()> {
         if !self.config.bitbucket_tokens.contains_key(server_url) {
             return Err(CascadeError::auth(format!(
-                "No token configured for server: {}",
-                server_url
+                "No token configured for server: {server_url}"
             )));
         }
 
@@ -93,8 +83,7 @@ impl AuthManager {
     pub fn validate_auth(&self, server_url: &str) -> Result<()> {
         if self.get_token(server_url).is_none() {
             return Err(CascadeError::auth(format!(
-                "No authentication token configured for server: {}. Use 'cc config set bitbucket.token <token>' to configure.",
-                server_url
+                "No authentication token configured for server: {server_url}. Use 'cc config set bitbucket.token <token>' to configure."
             )));
         }
         Ok(())
@@ -114,10 +103,10 @@ impl AuthConfig {
         }
 
         let content = fs::read_to_string(path)
-            .map_err(|e| CascadeError::config(format!("Failed to read auth config: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to read auth config: {e}")))?;
 
         let config: AuthConfig = serde_json::from_str(&content)
-            .map_err(|e| CascadeError::config(format!("Failed to parse auth config: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to parse auth config: {e}")))?;
 
         Ok(config)
     }
@@ -127,20 +116,20 @@ impl AuthConfig {
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| {
-                CascadeError::config(format!("Failed to create config directory: {}", e))
+                CascadeError::config(format!("Failed to create config directory: {e}"))
             })?;
         }
 
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| CascadeError::config(format!("Failed to serialize auth config: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to serialize auth config: {e}")))?;
 
         // Write to temporary file first, then rename for atomic write
         let temp_path = path.with_extension("tmp");
         fs::write(&temp_path, content)
-            .map_err(|e| CascadeError::config(format!("Failed to write auth config: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to write auth config: {e}")))?;
 
         fs::rename(&temp_path, path)
-            .map_err(|e| CascadeError::config(format!("Failed to finalize auth config: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to finalize auth config: {e}")))?;
 
         Ok(())
     }

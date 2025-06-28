@@ -10,7 +10,7 @@ pub async fn run() -> Result<()> {
 
     // Get current directory and repository
     let _current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let git_repo = match get_current_repository() {
         Ok(repo) => repo,
@@ -39,7 +39,7 @@ fn show_git_status(git_repo: &GitRepository) -> Result<()> {
 
     // Current branch
     if let Some(branch) = &repo_info.head_branch {
-        println!("  Current branch: {}", branch);
+        println!("  Current branch: {branch}");
     } else {
         println!("  Current branch: (detached HEAD)");
     }
@@ -64,11 +64,11 @@ fn show_git_status(git_repo: &GitRepository) -> Result<()> {
         );
         if repo_info.untracked_files.len() <= 5 {
             for file in &repo_info.untracked_files {
-                println!("    - {}", file);
+                println!("    - {file}");
             }
         } else {
             for file in repo_info.untracked_files.iter().take(3) {
-                println!("    - {}", file);
+                println!("    - {file}");
             }
             println!("    ... and {} more", repo_info.untracked_files.len() - 3);
         }

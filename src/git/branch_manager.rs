@@ -81,17 +81,13 @@ impl BranchManager {
         let mut candidate = base_name.clone();
 
         while self.git_repo.branch_exists(&candidate) {
-            candidate = format!("{}-{}", base_name, counter);
+            candidate = format!("{base_name}-{counter}");
             counter += 1;
         }
 
         // Ensure it starts with a letter
-        if candidate
-            .chars()
-            .next()
-            .map_or(true, |c| !c.is_alphabetic())
-        {
-            candidate = format!("feature-{}", candidate);
+        if candidate.chars().next().is_none_or(|c| !c.is_alphabetic()) {
+            candidate = format!("feature-{candidate}");
         }
 
         candidate

@@ -24,24 +24,21 @@ pub fn get_repo_config_dir(repo_path: &Path) -> Result<PathBuf> {
 /// Ensure the configuration directory exists
 pub fn ensure_config_dir(config_dir: &Path) -> Result<()> {
     if !config_dir.exists() {
-        fs::create_dir_all(config_dir).map_err(|e| {
-            CascadeError::config(format!("Failed to create config directory: {}", e))
-        })?;
+        fs::create_dir_all(config_dir)
+            .map_err(|e| CascadeError::config(format!("Failed to create config directory: {e}")))?;
     }
 
     // Create subdirectories
     let stacks_dir = config_dir.join("stacks");
     if !stacks_dir.exists() {
-        fs::create_dir_all(&stacks_dir).map_err(|e| {
-            CascadeError::config(format!("Failed to create stacks directory: {}", e))
-        })?;
+        fs::create_dir_all(&stacks_dir)
+            .map_err(|e| CascadeError::config(format!("Failed to create stacks directory: {e}")))?;
     }
 
     let cache_dir = config_dir.join("cache");
     if !cache_dir.exists() {
-        fs::create_dir_all(&cache_dir).map_err(|e| {
-            CascadeError::config(format!("Failed to create cache directory: {}", e))
-        })?;
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| CascadeError::config(format!("Failed to create cache directory: {e}")))?;
     }
 
     Ok(())

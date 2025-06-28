@@ -8,7 +8,7 @@ use std::env;
 pub async fn run(action: ConfigAction) -> Result<()> {
     // Find the repository root
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let repo_root = find_repository_root(&current_dir)?;
 
@@ -36,7 +36,7 @@ async fn set_config_value(config_file: &std::path::Path, key: &str, value: &str)
     settings.validate()?;
     settings.save_to_file(config_file)?;
 
-    println!("✅ Configuration updated: {} = {}", key, value);
+    println!("✅ Configuration updated: {key} = {value}");
 
     // Provide contextual hints
     match key {
@@ -66,15 +66,13 @@ async fn get_config_value(config_file: &std::path::Path, key: &str) -> Result<()
         } else {
             format!("{}***", &value[..std::cmp::min(4, value.len())])
         }
+    } else if value.is_empty() {
+        "(not set)".to_string()
     } else {
-        if value.is_empty() {
-            "(not set)".to_string()
-        } else {
-            value
-        }
+        value
     };
 
-    println!("{} = {}", key, display_value);
+    println!("{key} = {display_value}");
     Ok(())
 }
 
@@ -124,15 +122,13 @@ fn print_config_value(settings: &Settings, key: &str) -> Result<()> {
             } else {
                 format!("{}***", &value[..std::cmp::min(4, value.len())])
             }
+        } else if value.is_empty() {
+            "(not set)".to_string()
         } else {
-            if value.is_empty() {
-                "(not set)".to_string()
-            } else {
-                value
-            }
+            value
         };
 
-    println!("{} = {}", key, display_value);
+    println!("{key} = {display_value}");
     Ok(())
 }
 
@@ -143,7 +139,7 @@ async fn unset_config_value(config_file: &std::path::Path, key: &str) -> Result<
     settings.set_value(key, "")?;
     settings.save_to_file(config_file)?;
 
-    println!("✅ Configuration value unset: {}", key);
+    println!("✅ Configuration value unset: {key}");
     Ok(())
 }
 

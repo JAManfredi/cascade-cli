@@ -48,7 +48,7 @@ pub enum EntryAction {
 
 pub async fn run(action: EntryAction) -> Result<()> {
     let _current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     match action {
         EntryAction::Checkout { entry, direct, yes } => checkout_entry(entry, direct, yes).await,
@@ -64,7 +64,7 @@ async fn checkout_entry(
     skip_confirmation: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
 
@@ -95,7 +95,7 @@ async fn checkout_entry(
         ));
     } else {
         // Show interactive picker
-        show_entry_picker(&active_stack).await?
+        show_entry_picker(active_stack).await?
     };
 
     let target_entry = &active_stack.entries[target_entry_num - 1]; // Convert to 0-based index
@@ -117,9 +117,8 @@ async fn checkout_entry(
         if !skip_confirmation {
             println!("⚠️  Already in edit mode!");
             println!(
-                "   Current target: {} ({})",
-                edit_info.original_commit_hash[..8].to_string(),
-                "TODO: get commit message"
+                "   Current target: {} (TODO: get commit message)",
+                &edit_info.original_commit_hash[..8]
             );
             println!("   Do you want to exit current edit mode and start a new one? [y/N]");
 
@@ -132,13 +131,10 @@ async fn checkout_entry(
     // Confirmation prompt
     if !skip_confirmation {
         println!("🎯 Checking out entry for editing:");
-        println!(
-            "   Entry #{}: {} ({})",
-            target_entry_num, entry_short_hash, entry_short_message
-        );
-        println!("   Branch: {}", entry_branch);
+        println!("   Entry #{target_entry_num}: {entry_short_hash} ({entry_short_message})");
+        println!("   Branch: {entry_branch}");
         if let Some(pr_id) = &entry_pr_id {
-            println!("   PR: #{}", pr_id);
+            println!("   PR: #{pr_id}");
         }
         println!("\n⚠️  This will checkout the commit and enter edit mode.");
         println!("   Any changes you make can be amended to this commit or create new entries.");
@@ -154,18 +150,15 @@ async fn checkout_entry(
 
     // Checkout the commit
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
     let repo = crate::git::GitRepository::open(&current_dir)?;
 
     info!("Checking out commit: {}", entry_commit_hash);
     repo.checkout_commit(&entry_commit_hash)?;
 
-    println!("✅ Entered edit mode for entry #{}", target_entry_num);
-    println!(
-        "   You are now on commit: {} ({})",
-        entry_short_hash, entry_short_message
-    );
-    println!("   Branch: {}", entry_branch);
+    println!("✅ Entered edit mode for entry #{target_entry_num}");
+    println!("   You are now on commit: {entry_short_hash} ({entry_short_message})");
+    println!("   Branch: {entry_branch}");
     println!("\n📝 Make your changes and commit normally.");
     println!("   • Use 'cc entry status' to see edit mode info");
     println!("   • Changes will be smartly handled when you commit");
@@ -232,7 +225,7 @@ async fn show_entry_picker(stack: &crate::stack::Stack) -> Result<usize> {
                     };
 
                     let pr_text = if let Some(pr_id) = &entry.pull_request_id {
-                        format!(" PR: #{}", pr_id)
+                        format!(" PR: #{pr_id}")
                     } else {
                         "".to_string()
                     };
@@ -321,7 +314,7 @@ async fn show_entry_picker(stack: &crate::stack::Stack) -> Result<usize> {
 /// Show current edit mode status
 async fn show_edit_status(quiet: bool) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
     let manager = StackManager::new(&current_dir)?;
 
     if !manager.is_in_edit_mode() {
@@ -369,7 +362,7 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
 /// List all entries in the stack with edit status
 async fn list_entries(verbose: bool) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
     let manager = StackManager::new(&current_dir)?;
 
     let active_stack = manager.get_active_stack().ok_or_else(|| {
@@ -426,10 +419,10 @@ async fn list_entries(verbose: bool) -> Result<()> {
 
         // PR information
         if let Some(pr_id) = &entry.pull_request_id {
-            print!(" PR: #{}", pr_id);
+            print!(" PR: #{pr_id}");
         }
 
-        print!("{}", edit_indicator);
+        print!("{edit_indicator}");
         println!();
 
         // Verbose information

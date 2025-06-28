@@ -146,14 +146,14 @@ impl HooksManager {
         if hook_path.exists() {
             let backup_path = hook_path.with_extension("cascade-backup");
             fs::copy(&hook_path, &backup_path).map_err(|e| {
-                CascadeError::config(format!("Failed to backup existing hook: {}", e))
+                CascadeError::config(format!("Failed to backup existing hook: {e}"))
             })?;
             println!("📦 Backed up existing {} hook", hook_type.filename());
         }
 
         // Write new hook
         fs::write(&hook_path, hook_content)
-            .map_err(|e| CascadeError::config(format!("Failed to write hook file: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to write hook file: {e}")))?;
 
         // Make executable (Unix only - Windows doesn't need this)
         #[cfg(unix)]
@@ -161,12 +161,12 @@ impl HooksManager {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = fs::metadata(&hook_path)
                 .map_err(|e| {
-                    CascadeError::config(format!("Failed to get hook file metadata: {}", e))
+                    CascadeError::config(format!("Failed to get hook file metadata: {e}"))
                 })?
                 .permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&hook_path, perms).map_err(|e| {
-                CascadeError::config(format!("Failed to make hook executable: {}", e))
+                CascadeError::config(format!("Failed to make hook executable: {e}"))
             })?;
         }
 
@@ -206,18 +206,18 @@ impl HooksManager {
         if hook_path.exists() {
             // Check if it's a Cascade hook
             let content = fs::read_to_string(&hook_path)
-                .map_err(|e| CascadeError::config(format!("Failed to read hook file: {}", e)))?;
+                .map_err(|e| CascadeError::config(format!("Failed to read hook file: {e}")))?;
 
             if content.contains("# Cascade CLI Hook") {
                 fs::remove_file(&hook_path).map_err(|e| {
-                    CascadeError::config(format!("Failed to remove hook file: {}", e))
+                    CascadeError::config(format!("Failed to remove hook file: {e}"))
                 })?;
 
                 // Restore backup if it exists
                 let backup_path = hook_path.with_extension("cascade-backup");
                 if backup_path.exists() {
                     fs::rename(&backup_path, &hook_path).map_err(|e| {
-                        CascadeError::config(format!("Failed to restore backup: {}", e))
+                        CascadeError::config(format!("Failed to restore backup: {e}"))
                     })?;
                     println!("📦 Restored original {} hook", hook_type.filename());
                 } else {
@@ -279,7 +279,7 @@ impl HooksManager {
     fn generate_hook_script(&self, hook_type: &HookType) -> Result<String> {
         let cascade_cli = env::current_exe()
             .map_err(|e| {
-                CascadeError::config(format!("Failed to get current executable path: {}", e))
+                CascadeError::config(format!("Failed to get current executable path: {e}"))
             })?
             .to_string_lossy()
             .to_string();
@@ -381,8 +381,7 @@ echo "✅ Pre-push validation complete"
     }
 
     fn generate_commit_msg_hook(&self, _cascade_cli: &str) -> String {
-        format!(
-            r#"#!/bin/sh
+        r#"#!/bin/sh
 # Cascade CLI Hook - Commit Message
 # Validates commit message format
 
@@ -402,13 +401,13 @@ if [ ! -d ".cascade" ]; then
 fi
 
 # Basic commit message validation
-if [ ${{#COMMIT_MSG}} -lt 10 ]; then
+if [ ${#COMMIT_MSG} -lt 10 ]; then
     echo "❌ Commit message too short (minimum 10 characters)"
     echo "💡 Write a descriptive commit message for better stack management"
     exit 1
 fi
 
-if [ ${{#COMMIT_MSG}} -gt 72 ]; then
+if [ ${#COMMIT_MSG} -gt 72 ]; then
     echo "⚠️ Warning: Commit message longer than 72 characters"
     echo "💡 Consider keeping the first line short for better readability"
 fi
@@ -423,8 +422,7 @@ if ! echo "$COMMIT_MSG" | grep -E "^(feat|fix|docs|style|refactor|test|chore|per
 fi
 
 echo "✅ Commit message validation passed"
-"#
-        )
+"#.to_string()
     }
 
     fn generate_prepare_commit_msg_hook(&self, cascade_cli: &str) -> String {
@@ -475,10 +473,10 @@ fi
     /// Detect repository type from remote URLs
     pub fn detect_repository_type(&self) -> Result<RepositoryType> {
         let output = Command::new("git")
-            .args(&["remote", "get-url", "origin"])
+            .args(["remote", "get-url", "origin"])
             .current_dir(&self.repo_path)
             .output()
-            .map_err(|e| CascadeError::config(format!("Failed to get remote URL: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to get remote URL: {e}")))?;
 
         if !output.status.success() {
             return Ok(RepositoryType::Unknown);
@@ -504,10 +502,10 @@ fi
     /// Detect current branch type
     pub fn detect_branch_type(&self) -> Result<BranchType> {
         let output = Command::new("git")
-            .args(&["branch", "--show-current"])
+            .args(["branch", "--show-current"])
             .current_dir(&self.repo_path)
             .output()
-            .map_err(|e| CascadeError::config(format!("Failed to get current branch: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to get current branch: {e}")))?;
 
         if !output.status.success() {
             return Ok(BranchType::Unknown);
@@ -701,7 +699,7 @@ pub async fn install_with_options(
     force: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let hooks_manager = HooksManager::new(&current_dir)?;
 
@@ -717,7 +715,7 @@ pub async fn install_with_options(
 
 pub async fn uninstall() -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let hooks_manager = HooksManager::new(&current_dir)?;
     hooks_manager.uninstall_all()
@@ -725,7 +723,7 @@ pub async fn uninstall() -> Result<()> {
 
 pub async fn status() -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let hooks_manager = HooksManager::new(&current_dir)?;
     hooks_manager.list_installed_hooks()
@@ -741,7 +739,7 @@ pub async fn install_hook_with_options(
     force: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let hooks_manager = HooksManager::new(&current_dir)?;
 
@@ -752,8 +750,7 @@ pub async fn install_hook_with_options(
         "prepare-commit-msg" => HookType::PrepareCommitMsg,
         _ => {
             return Err(CascadeError::config(format!(
-                "Unknown hook type: {}",
-                hook_name
+                "Unknown hook type: {hook_name}"
             )))
         }
     };
@@ -768,7 +765,7 @@ pub async fn install_hook_with_options(
 
 pub async fn uninstall_hook(hook_name: &str) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let hooks_manager = HooksManager::new(&current_dir)?;
 
@@ -779,8 +776,7 @@ pub async fn uninstall_hook(hook_name: &str) -> Result<()> {
         "prepare-commit-msg" => HookType::PrepareCommitMsg,
         _ => {
             return Err(CascadeError::config(format!(
-                "Unknown hook type: {}",
-                hook_name
+                "Unknown hook type: {hook_name}"
             )))
         }
     };
@@ -800,17 +796,17 @@ mod tests {
 
         // Initialize git repository
         Command::new("git")
-            .args(&["init"])
+            .args(["init"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
         Command::new("git")
-            .args(&["config", "user.name", "Test"])
+            .args(["config", "user.name", "Test"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
         Command::new("git")
-            .args(&["config", "user.email", "test@test.com"])
+            .args(["config", "user.email", "test@test.com"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -818,12 +814,12 @@ mod tests {
         // Create initial commit
         std::fs::write(repo_path.join("README.md"), "# Test").unwrap();
         Command::new("git")
-            .args(&["add", "."])
+            .args(["add", "."])
             .current_dir(&repo_path)
             .output()
             .unwrap();
         Command::new("git")
-            .args(&["commit", "-m", "Initial"])
+            .args(["commit", "-m", "Initial"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -838,10 +834,10 @@ mod tests {
     #[test]
     fn test_hooks_manager_creation() {
         let (_temp_dir, repo_path) = create_test_repo();
-        let manager = HooksManager::new(&repo_path).unwrap();
+        let _manager = HooksManager::new(&repo_path).unwrap();
 
-        assert_eq!(manager.repo_path, repo_path);
-        assert_eq!(manager.hooks_dir, repo_path.join(".git/hooks"));
+        assert_eq!(_manager.repo_path, repo_path);
+        assert_eq!(_manager.hooks_dir, repo_path.join(".git/hooks"));
     }
 
     #[test]
@@ -872,7 +868,7 @@ mod tests {
     #[test]
     fn test_hook_detection() {
         let (_temp_dir, repo_path) = create_test_repo();
-        let manager = HooksManager::new(&repo_path).unwrap();
+        let _manager = HooksManager::new(&repo_path).unwrap();
 
         // Check if hook files exist (simplified test)
         let post_commit_path = repo_path.join(".git/hooks/post-commit");

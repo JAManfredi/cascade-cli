@@ -46,11 +46,11 @@ impl BitbucketIntegration {
         let stack = self
             .stack_manager
             .get_stack(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
-        let entry = stack.get_entry(entry_id).ok_or_else(|| {
-            CascadeError::config(format!("Entry {} not found in stack", entry_id))
-        })?;
+        let entry = stack
+            .get_entry(entry_id)
+            .ok_or_else(|| CascadeError::config(format!("Entry {entry_id} not found in stack")))?;
 
         info!("Submitting stack entry {} as pull request", entry_id);
 
@@ -75,7 +75,7 @@ impl BitbucketIntegration {
         let stack = self
             .stack_manager
             .get_stack(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?;
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
         let mut status = StackSubmissionStatus {
             stack_name: stack.name.clone(),
@@ -181,7 +181,7 @@ impl BitbucketIntegration {
         };
 
         let to_ref = PullRequestRef {
-            id: format!("refs/heads/{}", target_branch),
+            id: format!("refs/heads/{target_branch}"),
             display_id: target_branch.to_string(),
             latest_commit: "".to_string(), // This will be filled by the API
             repository,
@@ -220,7 +220,7 @@ impl BitbucketIntegration {
         let stack = self
             .stack_manager
             .get_stack(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?
             .clone();
 
         let mut updated_branches = Vec::new();
@@ -284,7 +284,7 @@ impl BitbucketIntegration {
                                         "⚠️ **Rebase Update Issue**\n\n\
                                         The automatic rebase completed, but updating this PR failed.\n\
                                         You may need to manually update this branch.\n\
-                                        Error: {}", e
+                                        Error: {e}"
                                     );
 
                                     if let Err(e2) =

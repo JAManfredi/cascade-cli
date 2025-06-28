@@ -175,7 +175,7 @@ pub enum StackAction {
 
 pub async fn run(action: StackAction) -> Result<()> {
     let _current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     match action {
         StackAction::Create {
@@ -242,7 +242,7 @@ async fn create_stack(
     description: Option<String>,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
     let stack_id = manager.create_stack(name.clone(), base.clone(), description.clone())?;
@@ -262,7 +262,7 @@ async fn create_stack(
 
 async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let manager = StackManager::new(&current_dir)?;
     let stacks = manager.list_stacks();
@@ -291,15 +291,12 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
         };
 
         if verbose {
-            println!(
-                "  {} {} [{}]{}",
-                status_icon, name, entry_count, active_indicator
-            );
-            println!("    ID: {}", stack_id);
+            println!("  {status_icon} {name} [{entry_count}]{active_indicator}");
+            println!("    ID: {stack_id}");
             if let Some(stack_meta) = manager.get_stack_metadata(&stack_id) {
                 println!("    Base: {}", stack_meta.base_branch);
                 if let Some(desc) = &stack_meta.description {
-                    println!("    Description: {}", desc);
+                    println!("    Description: {desc}");
                 }
                 println!(
                     "    Commits: {} total, {} submitted",
@@ -311,10 +308,7 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
             }
             println!();
         } else {
-            println!(
-                "  {} {} [{}]{}",
-                status_icon, name, entry_count, active_indicator
-            );
+            println!("  {status_icon} {name} [{entry_count}]{active_indicator}");
         }
     }
 
@@ -327,13 +321,13 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
 
 async fn switch_stack(name: String) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
 
     // Verify stack exists
     if manager.get_stack_by_name(&name).is_none() {
-        return Err(CascadeError::config(format!("Stack '{}' not found", name)));
+        return Err(CascadeError::config(format!("Stack '{name}' not found")));
     }
 
     manager.set_active_stack_by_name(&name)?;
@@ -344,14 +338,14 @@ async fn switch_stack(name: String) -> Result<()> {
 
 async fn show_stack(name: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let manager = StackManager::new(&current_dir)?;
 
     let stack = if let Some(name) = name {
         manager
             .get_stack_by_name(&name)
-            .ok_or_else(|| CascadeError::config(format!("Stack '{}' not found", name)))?
+            .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?
     } else {
         manager.get_active_stack().ok_or_else(|| {
             CascadeError::config("No active stack. Use 'cc stack list' to see available stacks")
@@ -365,7 +359,7 @@ async fn show_stack(name: Option<String>) -> Result<()> {
     println!("   Base: {}", stack.base_branch);
 
     if let Some(description) = &stack.description {
-        println!("   Description: {}", description);
+        println!("   Description: {description}");
     }
 
     println!("   Status: {:?}", stack.status);
@@ -409,7 +403,7 @@ async fn show_stack(name: Option<String>) -> Result<()> {
             );
             println!("      Branch: {}", entry.branch);
             if let Some(pr_id) = &entry.pull_request_id {
-                println!("      PR: #{}", pr_id);
+                println!("      PR: #{pr_id}");
             }
         }
     } else {
@@ -418,7 +412,7 @@ async fn show_stack(name: Option<String>) -> Result<()> {
 
     // Show unpushed commits
     let repo = GitRepository::open(&current_dir)?;
-    let unpushed_commits = get_unpushed_commits(&repo, &stack)?;
+    let unpushed_commits = get_unpushed_commits(&repo, stack)?;
 
     if !unpushed_commits.is_empty() {
         println!(
@@ -459,6 +453,7 @@ async fn show_stack(name: Option<String>) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn push_to_stack(
     branch: Option<String>,
     message: Option<String>,
@@ -470,25 +465,22 @@ async fn push_to_stack(
     squash_since: Option<String>,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
     let repo = GitRepository::open(&current_dir)?;
 
     // Handle squash operations first
     if let Some(squash_count) = squash {
-        println!("🔄 Squashing last {} commits...", squash_count);
+        println!("🔄 Squashing last {squash_count} commits...");
         squash_commits(&repo, squash_count, None).await?;
-        println!("✅ Squashed {} commits into one", squash_count);
+        println!("✅ Squashed {squash_count} commits into one");
     } else if let Some(since_ref) = squash_since {
-        println!("🔄 Squashing commits since {}...", since_ref);
+        println!("🔄 Squashing commits since {since_ref}...");
         let since_commit = repo.resolve_reference(&since_ref)?;
         let commits_count = count_commits_since(&repo, &since_commit.id().to_string())?;
         squash_commits(&repo, commits_count, Some(since_ref.clone())).await?;
-        println!(
-            "✅ Squashed {} commits since {} into one",
-            commits_count, since_ref
-        );
+        println!("✅ Squashed {commits_count} commits since {since_ref} into one");
     }
 
     // Determine which commits to push
@@ -596,8 +588,8 @@ async fn push_to_stack(
             &commit_hash[..8],
             commit_msg.split('\n').next().unwrap_or("")
         );
-        println!("   Branch: {}", branch_name);
-        println!("   Entry ID: {}", entry_id);
+        println!("   Branch: {branch_name}");
+        println!("   Entry ID: {entry_id}");
         println!();
     }
 
@@ -612,7 +604,7 @@ async fn push_to_stack(
 
 async fn pop_from_stack(keep_branch: bool) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
     let repo = GitRepository::open(&current_dir)?;
@@ -646,7 +638,7 @@ async fn submit_entry(
     range: Option<String>,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     // Load configuration first
     let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
@@ -716,7 +708,7 @@ async fn submit_entry(
             // Handle comma-separated list like "2,4,6"
             for entry_str in range_str.split(',') {
                 let entry_num: usize = entry_str.trim().parse().map_err(|_| {
-                    CascadeError::config(format!("Invalid entry number: {}", entry_str))
+                    CascadeError::config(format!("Invalid entry number: {entry_str}"))
                 })?;
 
                 if entry_num == 0 || entry_num > active_stack.entries.len() {
@@ -761,7 +753,7 @@ async fn submit_entry(
     pb.set_style(
         ProgressStyle::default_bar()
             .template("📤 {msg} [{bar:40.cyan/blue}] {pos}/{len}")
-            .map_err(|e| CascadeError::config(format!("Progress bar template error: {}", e)))?,
+            .map_err(|e| CascadeError::config(format!("Progress bar template error: {e}")))?,
     );
 
     pb.set_message("Connecting to Bitbucket");
@@ -808,7 +800,7 @@ async fn submit_entry(
                 submitted_count += 1;
                 println!("✅ Entry {} - PR #{}: {}", entry_num, pr.id, pr.title);
                 if let Some(url) = pr.web_url() {
-                    println!("   URL: {}", url);
+                    println!("   URL: {url}");
                 }
                 println!(
                     "   From: {} -> {}",
@@ -818,7 +810,7 @@ async fn submit_entry(
             }
             Err(e) => {
                 failed_entries.push((*entry_num, e.to_string()));
-                println!("❌ Entry {} failed: {}", entry_num, e);
+                println!("❌ Entry {entry_num} failed: {e}");
             }
         }
 
@@ -835,12 +827,12 @@ async fn submit_entry(
     } else {
         pb.abandon_with_message("⚠️  Some submissions failed");
         println!("📊 Submission Summary:");
-        println!("   ✅ Successful: {}", submitted_count);
+        println!("   ✅ Successful: {submitted_count}");
         println!("   ❌ Failed: {}", failed_entries.len());
         println!();
         println!("💡 Failed entries:");
         for (entry_num, error) in failed_entries {
-            println!("   - Entry {}: {}", entry_num, error);
+            println!("   - Entry {entry_num}: {error}");
         }
         println!();
         println!("💡 You can retry failed entries individually:");
@@ -852,7 +844,7 @@ async fn submit_entry(
 
 async fn check_stack_status(name: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let stack_manager = StackManager::new(&current_dir)?;
 
@@ -872,7 +864,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     let stack = if let Some(name) = name {
         stack_manager
             .get_stack_by_name(&name)
-            .ok_or_else(|| CascadeError::config(format!("Stack '{}' not found", name)))?
+            .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?
     } else {
         stack_manager.get_active_stack().ok_or_else(|| {
             CascadeError::config("No active stack. Use 'cc stack list' to see available stacks")
@@ -885,7 +877,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     println!("   Base: {}", stack.base_branch);
 
     if let Some(description) = &stack.description {
-        println!("   Description: {}", description);
+        println!("   Description: {description}");
     }
 
     // Create Bitbucket integration (this takes ownership of stack_manager)
@@ -915,7 +907,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
                         state_icon, pr.id, pr.title, pr.from_ref.display_id, pr.to_ref.display_id
                     );
                     if let Some(url) = pr.web_url() {
-                        println!("      URL: {}", url);
+                        println!("      URL: {url}");
                     }
                 }
             }
@@ -931,7 +923,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
 
 async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let stack_manager = StackManager::new(&current_dir)?;
 
@@ -958,8 +950,7 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
             "declined" => Some(crate::bitbucket::PullRequestState::Declined),
             _ => {
                 return Err(CascadeError::config(format!(
-                    "Invalid state '{}'. Use: open, merged, declined",
-                    state_str
+                    "Invalid state '{state_str}'. Use: open, merged, declined"
                 )))
             }
         }
@@ -990,11 +981,11 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
                     );
                     println!("      Author: {}", pr.author.user.display_name);
                     if let Some(url) = pr.web_url() {
-                        println!("      URL: {}", url);
+                        println!("      URL: {url}");
                     }
                     if let Some(desc) = &pr.description {
                         if !desc.is_empty() {
-                            println!("      Description: {}", desc);
+                            println!("      Description: {desc}");
                         }
                     }
                     println!();
@@ -1016,7 +1007,7 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
 
 async fn sync_stack(_force: bool) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
 
@@ -1038,7 +1029,7 @@ async fn rebase_stack(
     strategy: Option<RebaseStrategyArg>,
 ) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let stack_manager = StackManager::new(&current_dir)?;
     let git_repo = GitRepository::open(&current_dir)?;
@@ -1135,7 +1126,7 @@ async fn rebase_stack(
             if !result.branch_mapping.is_empty() {
                 println!("   📋 Branch mapping:");
                 for (old, new) in &result.branch_mapping {
-                    println!("      {} -> {}", old, new);
+                    println!("      {old} -> {new}");
                 }
 
                 // Handle PR updates if enabled
@@ -1155,12 +1146,12 @@ async fn rebase_stack(
                             if !updated_prs.is_empty() {
                                 println!("   🔄 Preserved pull request history:");
                                 for pr_update in updated_prs {
-                                    println!("      ✅ {}", pr_update);
+                                    println!("      ✅ {pr_update}");
                                 }
                             }
                         }
                         Err(e) => {
-                            eprintln!("   ⚠️  Failed to update pull requests: {}", e);
+                            eprintln!("   ⚠️  Failed to update pull requests: {e}");
                             eprintln!("      You may need to manually update PRs in Bitbucket");
                         }
                     }
@@ -1208,7 +1199,7 @@ async fn rebase_stack(
 
 async fn continue_rebase() -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let stack_manager = StackManager::new(&current_dir)?;
     let git_repo = crate::git::GitRepository::open(&current_dir)?;
@@ -1240,7 +1231,7 @@ async fn continue_rebase() -> Result<()> {
 
 async fn abort_rebase() -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let stack_manager = StackManager::new(&current_dir)?;
     let git_repo = crate::git::GitRepository::open(&current_dir)?;
@@ -1269,7 +1260,7 @@ async fn abort_rebase() -> Result<()> {
 
 async fn rebase_status() -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let stack_manager = StackManager::new(&current_dir)?;
     let git_repo = crate::git::GitRepository::open(&current_dir)?;
@@ -1307,7 +1298,7 @@ async fn rebase_status() -> Result<()> {
                 if !conflicts.is_empty() {
                     println!("   ⚠️  Conflicts in {} files:", conflicts.len());
                     for conflict in conflicts {
-                        println!("      - {}", conflict);
+                        println!("      - {conflict}");
                     }
                     println!(
                         "   
@@ -1338,13 +1329,13 @@ async fn rebase_status() -> Result<()> {
 
 async fn delete_stack(name: String, force: bool) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let mut manager = StackManager::new(&current_dir)?;
 
     let stack = manager
         .get_stack_by_name(&name)
-        .ok_or_else(|| CascadeError::config(format!("Stack '{}' not found", name)))?;
+        .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
     let stack_id = stack.id;
 
     if !force && !stack.entries.is_empty() {
@@ -1367,7 +1358,7 @@ async fn delete_stack(name: String, force: bool) -> Result<()> {
 
 async fn validate_stack(name: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let manager = StackManager::new(&current_dir)?;
 
@@ -1375,15 +1366,15 @@ async fn validate_stack(name: Option<String>) -> Result<()> {
         // Validate specific stack
         let stack = manager
             .get_stack_by_name(&name)
-            .ok_or_else(|| CascadeError::config(format!("Stack '{}' not found", name)))?;
+            .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
 
         match stack.validate() {
             Ok(_) => {
-                println!("✅ Stack '{}' validation passed", name);
+                println!("✅ Stack '{name}' validation passed");
                 Ok(())
             }
             Err(e) => {
-                println!("❌ Stack '{}' validation failed: {}", name, e);
+                println!("❌ Stack '{name}' validation failed: {e}");
                 Err(CascadeError::config(e))
             }
         }
@@ -1395,7 +1386,7 @@ async fn validate_stack(name: Option<String>) -> Result<()> {
                 Ok(())
             }
             Err(e) => {
-                println!("❌ Stack validation failed: {}", e);
+                println!("❌ Stack validation failed: {e}");
                 Err(e)
             }
         }
@@ -1451,13 +1442,10 @@ pub async fn squash_commits(
     let rebase_range = if let Some(ref since) = since_ref {
         since.clone()
     } else {
-        format!("HEAD~{}", count)
+        format!("HEAD~{count}")
     };
 
-    println!(
-        "   Analyzing {} commits to create smart squash message...",
-        count
-    );
+    println!("   Analyzing {count} commits to create smart squash message...");
 
     // Get the commits that will be squashed to create a smart message
     let head_commit = repo.get_head_commit()?;
@@ -1468,7 +1456,7 @@ pub async fn squash_commits(
     for _ in 0..count {
         commits_to_squash.push(current.clone());
         if current.parent_count() > 0 {
-            current = current.parent(0).map_err(|e| CascadeError::Git(e))?;
+            current = current.parent(0).map_err(CascadeError::Git)?;
         } else {
             break;
         }
@@ -1482,12 +1470,12 @@ pub async fn squash_commits(
     );
 
     // Get the commit we want to reset to (the commit before our range)
-    let reset_target = if let Some(_) = since_ref {
+    let reset_target = if since_ref.is_some() {
         // If squashing since a reference, reset to that reference
-        format!("{}~1", rebase_range)
+        format!("{rebase_range}~1")
     } else {
         // If squashing last N commits, reset to N commits before
-        format!("HEAD~{}", count)
+        format!("HEAD~{count}")
     };
 
     // Soft reset to preserve changes in staging area
@@ -1602,7 +1590,7 @@ pub fn extract_feature_from_wip(messages: &[String]) -> String {
             .trim();
 
         if !cleaned.is_empty() {
-            return format!("Implement {}", cleaned);
+            return format!("Implement {cleaned}");
         }
     }
 
@@ -1630,7 +1618,7 @@ pub fn count_commits_since(repo: &GitRepository, since_commit_hash: &str) -> Res
             break; // Reached root commit
         }
 
-        current = current.parent(0).map_err(|e| CascadeError::Git(e))?;
+        current = current.parent(0).map_err(CascadeError::Git)?;
     }
 
     Ok(count)
@@ -1648,19 +1636,19 @@ mod tests {
 
         // Initialize git repository
         Command::new("git")
-            .args(&["init"])
+            .args(["init"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
 
         Command::new("git")
-            .args(&["config", "user.name", "Test User"])
+            .args(["config", "user.name", "Test User"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
 
         Command::new("git")
-            .args(&["config", "user.email", "test@example.com"])
+            .args(["config", "user.email", "test@example.com"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -1668,13 +1656,13 @@ mod tests {
         // Create initial commit
         std::fs::write(repo_path.join("README.md"), "# Test").unwrap();
         Command::new("git")
-            .args(&["add", "."])
+            .args(["add", "."])
             .current_dir(&repo_path)
             .output()
             .unwrap();
 
         Command::new("git")
-            .args(&["commit", "-m", "Initial commit"])
+            .args(["commit", "-m", "Initial commit"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -1795,7 +1783,7 @@ mod tests {
         // This test would need real git2::Commit objects, so we'll test the logic indirectly
         // through the extract_feature_from_wip function which handles the core logic
 
-        let messages = vec![
+        let messages = [
             "Final: implement user authentication system".to_string(),
             "WIP: add tests".to_string(),
             "WIP: fix validation".to_string(),
@@ -1811,7 +1799,7 @@ mod tests {
 
     #[test]
     fn test_squash_message_wip_detection() {
-        let messages = vec![
+        let messages = [
             "WIP: start feature".to_string(),
             "WIP: continue work".to_string(),
             "WIP: almost done".to_string(),

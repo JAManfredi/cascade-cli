@@ -9,6 +9,7 @@
 pub mod manager;
 pub mod metadata;
 pub mod rebase;
+#[allow(clippy::module_inception)]
 pub mod stack;
 
 pub use manager::StackManager;

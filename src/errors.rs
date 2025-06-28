@@ -92,7 +92,7 @@ impl CascadeError {
     }
 
     pub fn bitbucket_api(status: u16, message: String) -> Self {
-        CascadeError::Conflict(format!("Bitbucket API error: {} - {}", status, message))
+        CascadeError::Conflict(format!("Bitbucket API error: {status} - {message}"))
     }
 
     pub fn bitbucket<S: Into<String>>(msg: S) -> Self {

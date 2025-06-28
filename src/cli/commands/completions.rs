@@ -53,7 +53,7 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
     if !errors.is_empty() {
         println!("\n⚠️  Some installations failed:");
         for (shell, error) in errors {
-            println!("   {:?}: {}", shell, error);
+            println!("   {shell:?}: {error}");
         }
     }
 
@@ -119,7 +119,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
 
             let dir = dirs
                 .into_iter()
-                .find(|d| d.exists() || d.parent().map_or(false, |p| p.exists()))
+                .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
                 .unwrap_or_else(|| home_dir.join(".bash_completion.d"));
 
             (dir, "cc")
@@ -134,7 +134,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
 
             let dir = dirs
                 .into_iter()
-                .find(|d| d.exists() || d.parent().map_or(false, |p| p.exists()))
+                .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
                 .unwrap_or_else(|| home_dir.join(".zsh/completions"));
 
             (dir, "_cc")
@@ -145,8 +145,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
         }
         _ => {
             return Err(CascadeError::config(format!(
-                "Unsupported shell: {:?}",
-                shell
+                "Unsupported shell: {shell:?}"
             )));
         }
     };
@@ -180,7 +179,7 @@ pub fn show_completions_status() -> Result<()> {
     for shell in &available_shells {
         let status = check_completion_installed(*shell);
         let status_icon = if status { "✅" } else { "❌" };
-        println!("   {} {:?}", status_icon, shell);
+        println!("   {status_icon} {shell:?}");
     }
 
     if available_shells

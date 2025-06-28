@@ -39,7 +39,7 @@ async fn check_git_repository() -> Result<u32> {
     println!("🔍 Checking Git repository...");
 
     let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     if !is_git_repository(&current_dir) {
         println!("  ❌ Not in a Git repository");
@@ -53,13 +53,13 @@ async fn check_git_repository() -> Result<u32> {
             println!("  ✅ Git repository found at: {}", repo_info.path.display());
 
             if let Some(branch) = &repo_info.head_branch {
-                println!("  ✅ Current branch: {}", branch);
+                println!("  ✅ Current branch: {branch}");
             } else {
                 println!("  ⚠️  Detached HEAD state");
             }
         }
         Err(e) => {
-            println!("  ❌ Git repository error: {}", e);
+            println!("  ❌ Git repository error: {e}");
             return Ok(1);
         }
     }
@@ -131,7 +131,7 @@ async fn check_configuration() -> Result<u32> {
             println!("  ✅ Configuration is valid");
         }
         Err(e) => {
-            println!("  ⚠️  Configuration validation failed: {}", e);
+            println!("  ⚠️  Configuration validation failed: {e}");
             warnings += 1;
         }
     }
@@ -167,7 +167,7 @@ async fn check_configuration() -> Result<u32> {
         .bitbucket
         .token
         .as_ref()
-        .map_or(true, |s| s.is_empty())
+        .is_none_or(|s| s.is_empty())
     {
         println!("  ⚠️  Bitbucket authentication token not configured");
         println!("     Solution: cc config set bitbucket.token your-personal-access-token");
@@ -193,7 +193,7 @@ async fn check_git_configuration() -> Result<u32> {
         Ok(config) => {
             match config.get_string("user.name") {
                 Ok(name) => {
-                    println!("  ✅ Git user.name: {}", name);
+                    println!("  ✅ Git user.name: {name}");
                 }
                 Err(_) => {
                     println!("  ⚠️  Git user.name not configured");
@@ -204,7 +204,7 @@ async fn check_git_configuration() -> Result<u32> {
 
             match config.get_string("user.email") {
                 Ok(email) => {
-                    println!("  ✅ Git user.email: {}", email);
+                    println!("  ✅ Git user.email: {email}");
                 }
                 Err(_) => {
                     println!("  ⚠️  Git user.email not configured");

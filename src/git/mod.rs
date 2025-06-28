@@ -14,7 +14,7 @@ pub fn is_git_repository(path: &Path) -> bool {
 
 /// Find the root of the Git repository
 pub fn find_repository_root(start_path: &Path) -> Result<std::path::PathBuf> {
-    let repo = git2::Repository::discover(start_path).map_err(|e| CascadeError::Git(e))?;
+    let repo = git2::Repository::discover(start_path).map_err(CascadeError::Git)?;
 
     let workdir = repo
         .workdir()
@@ -26,7 +26,7 @@ pub fn find_repository_root(start_path: &Path) -> Result<std::path::PathBuf> {
 /// Get the current working directory as a Git repository
 pub fn get_current_repository() -> Result<GitRepository> {
     let current_dir = std::env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     GitRepository::open(&current_dir)
 }

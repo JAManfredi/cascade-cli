@@ -25,12 +25,12 @@ impl BitbucketClient {
         // Set up authentication
         let auth_header = match (&config.username, &config.token) {
             (Some(username), Some(token)) => {
-                let auth_string = format!("{}:{}", username, token);
+                let auth_string = format!("{username}:{token}");
                 let auth_encoded = base64::engine::general_purpose::STANDARD.encode(auth_string);
-                format!("Basic {}", auth_encoded)
+                format!("Basic {auth_encoded}")
             }
             (None, Some(token)) => {
-                format!("Bearer {}", token)
+                format!("Bearer {token}")
             }
             _ => {
                 return Err(CascadeError::config(
@@ -42,7 +42,7 @@ impl BitbucketClient {
         headers.insert(
             AUTHORIZATION,
             HeaderValue::from_str(&auth_header)
-                .map_err(|e| CascadeError::config(format!("Invalid auth header: {}", e)))?,
+                .map_err(|e| CascadeError::config(format!("Invalid auth header: {e}")))?,
         );
 
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -51,7 +51,7 @@ impl BitbucketClient {
             .timeout(Duration::from_secs(30))
             .default_headers(headers)
             .build()
-            .map_err(|e| CascadeError::config(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to create HTTP client: {e}")))?;
 
         Ok(Self {
             client,
@@ -85,7 +85,7 @@ impl BitbucketClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| CascadeError::bitbucket(format!("GET request failed: {}", e)))?;
+            .map_err(|e| CascadeError::bitbucket(format!("GET request failed: {e}")))?;
 
         self.handle_response(response).await
     }
@@ -105,7 +105,7 @@ impl BitbucketClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| CascadeError::bitbucket(format!("POST request failed: {}", e)))?;
+            .map_err(|e| CascadeError::bitbucket(format!("POST request failed: {e}")))?;
 
         self.handle_response(response).await
     }
@@ -125,7 +125,7 @@ impl BitbucketClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| CascadeError::bitbucket(format!("PUT request failed: {}", e)))?;
+            .map_err(|e| CascadeError::bitbucket(format!("PUT request failed: {e}")))?;
 
         self.handle_response(response).await
     }
@@ -140,7 +140,7 @@ impl BitbucketClient {
             .delete(&url)
             .send()
             .await
-            .map_err(|e| CascadeError::bitbucket(format!("DELETE request failed: {}", e)))?;
+            .map_err(|e| CascadeError::bitbucket(format!("DELETE request failed: {e}")))?;
 
         if response.status().is_success() {
             Ok(())
@@ -151,8 +151,7 @@ impl BitbucketClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             Err(CascadeError::bitbucket(format!(
-                "DELETE failed with status {}: {}",
-                status, text
+                "DELETE failed with status {status}: {text}"
             )))
         }
     }
@@ -166,22 +165,20 @@ impl BitbucketClient {
 
         if status.is_success() {
             let text = response.text().await.map_err(|e| {
-                CascadeError::bitbucket(format!("Failed to read response body: {}", e))
+                CascadeError::bitbucket(format!("Failed to read response body: {e}"))
             })?;
 
             trace!("Response body: {}", text);
 
-            serde_json::from_str(&text).map_err(|e| {
-                CascadeError::bitbucket(format!("Failed to parse JSON response: {}", e))
-            })
+            serde_json::from_str(&text)
+                .map_err(|e| CascadeError::bitbucket(format!("Failed to parse JSON response: {e}")))
         } else {
             let text = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             Err(CascadeError::bitbucket(format!(
-                "Request failed with status {}: {}",
-                status, text
+                "Request failed with status {status}: {text}"
             )))
         }
     }
@@ -202,7 +199,7 @@ impl BitbucketClient {
             .get(&url)
             .send()
             .await
-            .map_err(|e| CascadeError::bitbucket(format!("Connection test failed: {}", e)))?;
+            .map_err(|e| CascadeError::bitbucket(format!("Connection test failed: {e}")))?;
 
         if response.status().is_success() {
             debug!("Connection test successful");
@@ -214,8 +211,7 @@ impl BitbucketClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             Err(CascadeError::bitbucket(format!(
-                "Connection test failed with status {}: {}",
-                status, text
+                "Connection test failed with status {status}: {text}"
             )))
         }
     }

@@ -121,7 +121,7 @@ impl RebaseManager {
         let stack = self
             .stack_manager
             .get_stack(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {} not found", stack_id)))?
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?
             .clone();
 
         match self.options.strategy {
@@ -209,7 +209,7 @@ impl RebaseManager {
                         Err(resolve_err) => {
                             result.success = false;
                             result.error =
-                                Some(format!("Could not resolve conflicts: {}", resolve_err));
+                                Some(format!("Could not resolve conflicts: {resolve_err}"));
                             break;
                         }
                     }
@@ -379,7 +379,7 @@ impl RebaseManager {
         };
 
         loop {
-            let candidate = format!("{}-v{}", base_name, version);
+            let candidate = format!("{base_name}-v{version}");
             if !self.git_repo.branch_exists(&candidate) {
                 return Ok(candidate);
             }
@@ -474,9 +474,8 @@ impl RebaseManager {
         let full_path = repo_path.join(file_path);
 
         // Read the file content with conflict markers
-        let content = std::fs::read_to_string(&full_path).map_err(|e| {
-            CascadeError::config(format!("Failed to read file {}: {}", file_path, e))
-        })?;
+        let content = std::fs::read_to_string(&full_path)
+            .map_err(|e| CascadeError::config(format!("Failed to read file {file_path}: {e}")))?;
 
         // Parse conflicts from the file
         let conflicts = self.parse_conflict_markers(&content)?;
@@ -503,7 +502,7 @@ impl RebaseManager {
                     // Replace the conflict region with the resolved content
                     let before = &resolved_content[..conflict.start];
                     let after = &resolved_content[conflict.end..];
-                    resolved_content = format!("{}{}{}", before, resolution, after);
+                    resolved_content = format!("{before}{resolution}{after}");
                     any_resolved = true;
                     debug!(
                         "✅ Resolved conflict at lines {}-{} in {}",
@@ -529,10 +528,7 @@ impl RebaseManager {
             if remaining_conflicts.is_empty() {
                 // All conflicts resolved - write the file back
                 std::fs::write(&full_path, resolved_content).map_err(|e| {
-                    CascadeError::config(format!(
-                        "Failed to write resolved file {}: {}",
-                        file_path, e
-                    ))
+                    CascadeError::config(format!("Failed to write resolved file {file_path}: {e}"))
                 })?;
 
                 return Ok(ConflictResolution::Resolved);
@@ -562,10 +558,10 @@ impl RebaseManager {
                 let mut end_line = None;
 
                 // Find the separator and end
-                for j in (i + 1)..lines.len() {
-                    if lines[j].starts_with("=======") {
+                for (j, line) in lines.iter().enumerate().skip(i + 1) {
+                    if line.starts_with("=======") {
                         separator_line = Some(j + 1);
-                    } else if lines[j].starts_with(">>>>>>>") {
+                    } else if line.starts_with(">>>>>>>") {
                         end_line = Some(j + 1);
                         break;
                     }
@@ -750,10 +746,7 @@ impl RebaseManager {
 
         if our_imports && their_imports {
             // Merge and sort imports
-            let mut all_imports: Vec<&str> = our_lines
-                .into_iter()
-                .chain(their_lines.into_iter())
-                .collect();
+            let mut all_imports: Vec<&str> = our_lines.into_iter().chain(their_lines).collect();
             all_imports.sort();
             all_imports.dedup();
 
@@ -862,8 +855,7 @@ impl RebaseManager {
         if git_dir.join("REBASE_HEAD").exists() {
             std::fs::remove_file(git_dir.join("REBASE_HEAD")).map_err(|e| {
                 CascadeError::Git(git2::Error::from_str(&format!(
-                    "Failed to clean rebase state: {}",
-                    e
+                    "Failed to clean rebase state: {e}"
                 )))
             })?;
         }
@@ -871,8 +863,7 @@ impl RebaseManager {
         if git_dir.join("rebase-merge").exists() {
             std::fs::remove_dir_all(git_dir.join("rebase-merge")).map_err(|e| {
                 CascadeError::Git(git2::Error::from_str(&format!(
-                    "Failed to clean rebase-merge: {}",
-                    e
+                    "Failed to clean rebase-merge: {e}"
                 )))
             })?;
         }
@@ -880,8 +871,7 @@ impl RebaseManager {
         if git_dir.join("rebase-apply").exists() {
             std::fs::remove_dir_all(git_dir.join("rebase-apply")).map_err(|e| {
                 CascadeError::Git(git2::Error::from_str(&format!(
-                    "Failed to clean rebase-apply: {}",
-                    e
+                    "Failed to clean rebase-apply: {e}"
                 )))
             })?;
         }
@@ -940,23 +930,24 @@ mod tests {
     use std::process::Command;
     use tempfile::TempDir;
 
+    #[allow(dead_code)]
     fn create_test_repo() -> (TempDir, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_path_buf();
 
         // Initialize git repository
         Command::new("git")
-            .args(&["init"])
+            .args(["init"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
         Command::new("git")
-            .args(&["config", "user.name", "Test"])
+            .args(["config", "user.name", "Test"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
         Command::new("git")
-            .args(&["config", "user.email", "test@test.com"])
+            .args(["config", "user.email", "test@test.com"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -964,12 +955,12 @@ mod tests {
         // Create initial commit
         std::fs::write(repo_path.join("README.md"), "# Test").unwrap();
         Command::new("git")
-            .args(&["add", "."])
+            .args(["add", "."])
             .current_dir(&repo_path)
             .output()
             .unwrap();
         Command::new("git")
-            .args(&["commit", "-m", "Initial"])
+            .args(["commit", "-m", "Initial"])
             .current_dir(&repo_path)
             .output()
             .unwrap();

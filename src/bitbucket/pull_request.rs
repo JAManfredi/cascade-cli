@@ -33,7 +33,7 @@ impl PullRequestManager {
 
     /// Get a pull request by ID
     pub async fn get_pull_request(&self, pr_id: u64) -> Result<PullRequest> {
-        self.client.get(&format!("pull-requests/{}", pr_id)).await
+        self.client.get(&format!("pull-requests/{pr_id}")).await
     }
 
     /// List pull requests with optional filters
@@ -109,7 +109,7 @@ impl PullRequestManager {
             participant_status: "DECLINED".to_string(),
         };
 
-        let path = format!("pull-requests/{}/decline", pr_id);
+        let path = format!("pull-requests/{pr_id}/decline");
 
         // Use the client to make the decline request
         let _: serde_json::Value = self.client.post(&path, &decline_body).await?;
@@ -131,7 +131,7 @@ impl PullRequestManager {
             text: comment.to_string(),
         };
 
-        let path = format!("pull-requests/{}/comments", pr_id);
+        let path = format!("pull-requests/{pr_id}/comments");
         let _: serde_json::Value = self.client.post(&path, &comment_body).await?;
 
         info!("Added comment to PR #{}", pr_id);
@@ -310,11 +310,11 @@ impl PullRequest {
 
     /// Get the created date as a DateTime
     pub fn created_at(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp(self.created_date as i64 / 1000, 0).unwrap_or_else(|| Utc::now())
+        DateTime::from_timestamp(self.created_date as i64 / 1000, 0).unwrap_or_else(Utc::now)
     }
 
     /// Get the updated date as a DateTime
     pub fn updated_at(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp(self.updated_date as i64 / 1000, 0).unwrap_or_else(|| Utc::now())
+        DateTime::from_timestamp(self.updated_date as i64 / 1000, 0).unwrap_or_else(Utc::now)
     }
 }

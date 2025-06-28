@@ -37,7 +37,7 @@ pub struct TuiApp {
 impl TuiApp {
     pub fn new() -> Result<Self> {
         let current_dir = env::current_dir()
-            .map_err(|e| CascadeError::config(format!("Could not get current directory: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
         let stack_manager = StackManager::new(&current_dir)?;
         let stacks = stack_manager.get_all_stacks_objects()?;
@@ -65,29 +65,29 @@ impl TuiApp {
     pub fn run(&mut self) -> Result<()> {
         // Setup terminal
         enable_raw_mode()
-            .map_err(|e| CascadeError::config(format!("Failed to enable raw mode: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to enable raw mode: {e}")))?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-            .map_err(|e| CascadeError::config(format!("Failed to setup terminal: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to setup terminal: {e}")))?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)
-            .map_err(|e| CascadeError::config(format!("Failed to create terminal: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to create terminal: {e}")))?;
 
         // Main loop
         let result = self.run_app(&mut terminal);
 
         // Restore terminal
         disable_raw_mode()
-            .map_err(|e| CascadeError::config(format!("Failed to disable raw mode: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to disable raw mode: {e}")))?;
         execute!(
             terminal.backend_mut(),
             LeaveAlternateScreen,
             DisableMouseCapture
         )
-        .map_err(|e| CascadeError::config(format!("Failed to restore terminal: {}", e)))?;
+        .map_err(|e| CascadeError::config(format!("Failed to restore terminal: {e}")))?;
         terminal
             .show_cursor()
-            .map_err(|e| CascadeError::config(format!("Failed to show cursor: {}", e)))?;
+            .map_err(|e| CascadeError::config(format!("Failed to show cursor: {e}")))?;
 
         result
     }
@@ -96,15 +96,15 @@ impl TuiApp {
         loop {
             terminal
                 .draw(|f| self.draw(f))
-                .map_err(|e| CascadeError::config(format!("Failed to draw: {}", e)))?;
+                .map_err(|e| CascadeError::config(format!("Failed to draw: {e}")))?;
 
             // Handle events with timeout for refresh
             let timeout = Duration::from_millis(100);
             if crossterm::event::poll(timeout)
-                .map_err(|e| CascadeError::config(format!("Event poll failed: {}", e)))?
+                .map_err(|e| CascadeError::config(format!("Event poll failed: {e}")))?
             {
                 if let Event::Key(key) = event::read()
-                    .map_err(|e| CascadeError::config(format!("Failed to read event: {}", e)))?
+                    .map_err(|e| CascadeError::config(format!("Failed to read event: {e}")))?
                 {
                     if key.kind == KeyEventKind::Press {
                         self.handle_key_event(key.code)?;
@@ -267,7 +267,7 @@ impl TuiApp {
     }
 
     fn draw_body(&mut self, f: &mut Frame, area: Rect) {
-        let tabs = vec!["📚 Stacks", "🔍 Details", "⚡ Actions"];
+        let tabs = ["📚 Stacks", "🔍 Details", "⚡ Actions"];
         let tab_titles = tabs.iter().cloned().map(Line::from).collect();
         let tabs_widget = Tabs::new(tab_titles)
             .block(Block::default().borders(Borders::ALL).title("Navigation"))
@@ -496,7 +496,7 @@ impl TuiApp {
     }
 
     fn draw_actions_tab(&self, f: &mut Frame, area: Rect) {
-        let actions = vec![
+        let actions = [
             "📌 Enter - Activate selected stack",
             "📝 c - Create new stack",
             "🚀 p - Push current commit to stack",
@@ -524,7 +524,7 @@ impl TuiApp {
         let last_refresh = format!("Last refresh: {:?} ago", self.last_refresh.elapsed());
         let key_hints = " h:Help │ q:Quit │ r:Refresh │ Tab:Navigate │ ↑↓:Select │ Enter:Activate ";
 
-        let footer_text = format!("{} │ {}", last_refresh, key_hints);
+        let footer_text = format!("{last_refresh} │ {key_hints}");
 
         let footer = Paragraph::new(footer_text)
             .style(Style::default().fg(Color::Gray))
