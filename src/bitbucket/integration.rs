@@ -201,7 +201,7 @@ impl BitbucketIntegration {
                     
                     // Get the existing PR to understand its current state
                     match self.pr_manager.get_pull_request(pr_id).await {
-                        Ok(existing_pr) => {
+                        Ok(_existing_pr) => {
                             // Force push the new branch content to the old branch name
                             // This preserves the PR while updating its contents
                             match self.stack_manager.git_repo().force_push_branch(&entry.branch, new_branch) {

@@ -153,13 +153,23 @@ impl HooksManager {
         fs::write(&hook_path, hook_content)
             .map_err(|e| CascadeError::config(format!("Failed to write hook file: {}", e)))?;
 
-        // Make executable
-        let mut perms = fs::metadata(&hook_path)
-            .map_err(|e| CascadeError::config(format!("Failed to get hook file metadata: {}", e)))?
-            .permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&hook_path, perms)
-            .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {}", e)))?;
+        // Make executable (Unix only - Windows doesn't need this)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&hook_path)
+                .map_err(|e| CascadeError::config(format!("Failed to get hook file metadata: {}", e)))?
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&hook_path, perms)
+                .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {}", e)))?;
+        }
+
+        #[cfg(windows)]
+        {
+            // On Windows, .sh files are executed by Git Bash automatically
+            // No need to set executable permissions
+        }
 
         println!("✅ Installed {} hook", hook_type.filename());
         Ok(())
@@ -353,7 +363,7 @@ echo "✅ Pre-push validation complete"
 "#)
     }
 
-    fn generate_commit_msg_hook(&self, cascade_cli: &str) -> String {
+    fn generate_commit_msg_hook(&self, _cascade_cli: &str) -> String {
         format!(r#"#!/bin/sh
 # Cascade CLI Hook - Commit Message
 # Validates commit message format

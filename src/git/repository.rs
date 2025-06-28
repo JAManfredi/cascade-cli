@@ -702,7 +702,12 @@ mod tests {
         
         let info = repo.get_info().unwrap();
         assert!(!info.is_dirty); // Should be clean after commit
-        assert_eq!(info.head_branch, Some("master".to_string()));
+        assert!(
+            info.head_branch == Some("master".to_string()) || 
+            info.head_branch == Some("main".to_string()),
+            "Expected default branch to be 'master' or 'main', got {:?}", 
+            info.head_branch
+        );
         assert!(info.head_commit.is_some()); // Just check it exists
         assert!(info.untracked_files.is_empty()); // Should be empty after commit
     }
@@ -712,13 +717,16 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let repo = GitRepository::open(&repo_path).unwrap();
         
+        // Get the actual default branch name
+        let default_branch = repo.get_current_branch().unwrap();
+        
         // Create source branch with commits
         create_commit(&repo_path, "Feature commit 1", "feature1.rs");
         Command::new("git").args(&["checkout", "-b", "source-branch"]).current_dir(&repo_path).output().unwrap();
         create_commit(&repo_path, "Feature commit 2", "feature2.rs");
         
         // Create target branch
-        Command::new("git").args(&["checkout", "master"]).current_dir(&repo_path).output().unwrap();
+        Command::new("git").args(&["checkout", &default_branch]).current_dir(&repo_path).output().unwrap();
         Command::new("git").args(&["checkout", "-b", "target-branch"]).current_dir(&repo_path).output().unwrap();
         create_commit(&repo_path, "Target commit", "target.rs");
         
@@ -735,12 +743,15 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let repo = GitRepository::open(&repo_path).unwrap();
         
+        // Get the actual default branch name
+        let default_branch = repo.get_current_branch().unwrap();
+        
         // Test force push with nonexistent source branch
         let result = repo.force_push_branch("target", "nonexistent-source");
         assert!(result.is_err());
         
         // Test force push with nonexistent target branch  
-        let result = repo.force_push_branch("nonexistent-target", "master");
+        let result = repo.force_push_branch("nonexistent-target", &default_branch);
         assert!(result.is_err());
     }
 
@@ -782,9 +793,13 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let repo = GitRepository::open(&repo_path).unwrap();
         
-        // Test get current branch
+        // Test get current branch - accept either main or master
         let current = repo.get_current_branch().unwrap();
-        assert_eq!(current, "master");
+        assert!(
+            current == "master" || current == "main",
+            "Expected default branch to be 'master' or 'main', got '{}'", 
+            current
+        );
         
         // Test create branch
         Command::new("git").args(&["checkout", "-b", "test-branch"]).current_dir(&repo_path).output().unwrap();
