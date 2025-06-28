@@ -1,0 +1,86 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Structure Guide
+
+## Entry Points
+
+- **Main binary**: [src/main.rs](mdc:src/main.rs) - CLI application entry point
+- **Library root**: [src/lib.rs](mdc:src/lib.rs) - Core library exports
+- **CLI interface**: [src/cli/mod.rs](mdc:src/cli/mod.rs) - Command-line interface
+
+## Core Architecture
+
+### Command Structure
+All CLI commands are in [src/cli/commands/](mdc:src/cli/commands):
+- [stack.rs](mdc:src/cli/commands/stack.rs) - Stack management (create, push, pop, list)
+- [hooks.rs](mdc:src/cli/commands/hooks.rs) - Git hooks installation and management
+- [init.rs](mdc:src/cli/commands/init.rs) - Repository initialization
+- [config.rs](mdc:src/cli/commands/config.rs) - Configuration management
+- [status.rs](mdc:src/cli/commands/status.rs) - Repository status display
+
+### Core Modules
+
+#### Git Operations
+- [src/git/repository.rs](mdc:src/git/repository.rs) - Git repository interactions
+- [src/git/branch_manager.rs](mdc:src/git/branch_manager.rs) - Branch creation and management
+
+#### Stack Management
+- [src/stack/stack.rs](mdc:src/stack/stack.rs) - Core stack data structures
+- [src/stack/manager.rs](mdc:src/stack/manager.rs) - Stack lifecycle management
+- [src/stack/metadata.rs](mdc:src/stack/metadata.rs) - Stack metadata persistence
+- [src/stack/rebase.rs](mdc:src/stack/rebase.rs) - Stack rebase operations
+
+#### External Integrations
+- [src/bitbucket/](mdc:src/bitbucket) - Bitbucket API integration
+  - [client.rs](mdc:src/bitbucket/client.rs) - HTTP client
+  - [pull_request.rs](mdc:src/bitbucket/pull_request.rs) - PR operations
+
+#### Configuration
+- [src/config/settings.rs](mdc:src/config/settings.rs) - Application settings
+- [src/config/auth.rs](mdc:src/config/auth.rs) - Authentication management
+
+## Build and Distribution
+
+### Core Files
+- [Cargo.toml](mdc:Cargo.toml) - Rust package manifest with metadata for crates.io
+- [README.md](mdc:README.md) - Project documentation with animated banner
+- [assets/banner.svg](mdc:assets/banner.svg) - Animated project banner matching macOS app theme
+
+### Scripts and Tools
+- [scripts/pre-push-check.sh](mdc:scripts/pre-push-check.sh) - Comprehensive CI validation
+- [install.sh](mdc:install.sh) - Universal installation script
+- [homebrew/cascade-cli.rb](mdc:homebrew/cascade-cli.rb) - Homebrew formula
+
+### Completions
+- [completions/](mdc:completions) - Shell completion files
+  - [cc.bash](mdc:completions/cc.bash) - Bash completions
+  - [cc.fish](mdc:completions/cc.fish) - Fish completions
+  - [_cc](mdc:completions/_cc) - Zsh completions
+
+## Testing Structure
+
+### Unit Tests
+- Tests are co-located with source files using `#[cfg(test)]` modules
+- Critical test files:
+  - [src/git/repository.rs](mdc:src/git/repository.rs) - Git operations
+  - [src/stack/manager.rs](mdc:src/stack/manager.rs) - Stack management
+  - [src/cli/commands/hooks.rs](mdc:src/cli/commands/hooks.rs) - Hooks functionality
+
+### Integration Tests
+- [tests/integration/](mdc:tests/integration) - End-to-end workflow tests
+- [tests/fixtures/](mdc:tests/fixtures) - Test data and setup
+
+## Documentation
+
+### User Documentation
+- [docs/USER_MANUAL.md](mdc:docs/USER_MANUAL.md) - Complete user guide
+- [docs/INSTALLATION.md](mdc:docs/INSTALLATION.md) - Installation instructions
+- [docs/TROUBLESHOOTING.md](mdc:docs/TROUBLESHOOTING.md) - Common issues
+
+### Developer Documentation
+- [docs/DEVELOPMENT.md](mdc:docs/DEVELOPMENT.md) - Development setup and workflow
+- [docs/ARCHITECTURE.md](mdc:docs/ARCHITECTURE.md) - System design documentation
+- [docs/RELEASING.md](mdc:docs/RELEASING.md) - Release process guide

@@ -1,0 +1,205 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Testing Strategy Guide
+
+## Test Organization
+
+### Unit Tests
+All unit tests are co-located with source files using `#[cfg(test)]` modules. Current coverage: **65+ passing tests**.
+
+### Test Structure Pattern
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    
+    fn create_test_repo() -> (TempDir, PathBuf) {
+        // Test setup helper
+    }
+    
+    #[test]
+    fn test_functionality() {
+        // Test implementation
+    }
+}
+```
+
+## Cross-Platform Testing Considerations
+
+### Environment Independence
+**Critical**: Tests must work across all CI environments (Ubuntu, Windows, macOS).
+
+#### Git Branch Names
+❌ **Don't hardcode branch names:**
+```rust
+// BAD - Fails in CI with different default branches
+assert!(branch_info.iter().any(|b| b.name == "master"));
+```
+
+✅ **Use environment-agnostic checks:**
+```rust
+// GOOD - Works with any default branch name
+assert!(!branch_info.is_empty());
+assert!(branch_info.iter().any(|b| b.is_current));
+```
+
+#### Platform-Specific Code
+Use conditional compilation for platform-specific functionality:
+
+```rust
+#[cfg(unix)]
+{
+    use std::os::unix::fs::PermissionsExt;
+    let permissions = metadata.permissions();
+    assert!(permissions.mode() & 0o111 != 0); // Check executable bit
+}
+```
+
+### Directory Handling in Tests
+**Issue**: Changing directories in tests can cause CI failures.
+
+❌ **Avoid changing current directory:**
+```rust
+// BAD - Unreliable in CI
+env::set_current_dir(&repo_path).unwrap();
+run(None, false).await; // Depends on current directory
+```
+
+✅ **Use direct path references:**
+```rust
+// GOOD - Explicit path handling
+let result = some_function_with_path(&repo_path);
+```
+
+## Test Helper Patterns
+
+### Repository Creation
+Standard pattern for creating test Git repositories:
+
+```rust
+fn create_test_repo() -> (TempDir, PathBuf) {
+    let temp_dir = TempDir::new().unwrap();
+    let repo_path = temp_dir.path().to_path_buf();
+    
+    // Initialize git repository
+    Command::new("git")
+        .args(["init"])
+        .current_dir(&repo_path)
+        .output()
+        .unwrap();
+    
+    // Configure git user
+    Command::new("git")
+        .args(["config", "user.name", "Test"])
+        .current_dir(&repo_path)
+        .output()
+        .unwrap();
+    
+    (temp_dir, repo_path)
+}
+```
+
+### Cascade Initialization
+For tests requiring initialized Cascade repositories:
+
+```rust
+async fn create_initialized_repo() -> (TempDir, PathBuf) {
+    let (temp_dir, repo_path) = create_test_repo();
+    
+    // Initialize cascade
+    crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
+        .unwrap();
+    
+    (temp_dir, repo_path)
+}
+```
+
+## Critical Test Files
+
+### Git Operations
+[src/git/repository.rs](mdc:src/git/repository.rs) - Tests for:
+- Repository operations
+- Commit handling with proper lifetimes
+- Branch management
+- Force push workflows
+
+### Stack Management
+[src/stack/manager.rs](mdc:src/stack/manager.rs) - Tests for:
+- Stack creation and deletion
+- Multi-stack scenarios
+- Persistence verification
+
+### Hooks System
+[src/cli/commands/hooks.rs](mdc:src/cli/commands/hooks.rs) - Tests for:
+- Hook installation/uninstallation
+- Platform-specific executable permissions
+- Hook content generation
+
+## Test Data and Fixtures
+
+### Temporary Files
+Always use `tempfile::TempDir` for test isolation:
+- Automatic cleanup on test completion
+- Unique directories prevent test interference
+- Cross-platform path handling
+
+### Test Fixtures
+Store reusable test data in [tests/fixtures/](mdc:tests/fixtures):
+- Sample repository states
+- Configuration files
+- Expected output examples
+
+## Integration Testing
+
+### End-to-End Workflows
+[tests/integration/](mdc:tests/integration) contains:
+- [end_to_end_tests.rs](mdc:tests/integration/end_to_end_tests.rs) - Complete user workflows
+- [bitbucket_api_tests.rs](mdc:tests/integration/bitbucket_api_tests.rs) - External API integration
+- [squash_and_push_tests.rs](mdc:tests/integration/squash_and_push_tests.rs) - Complex Git operations
+
+### CI Environment Considerations
+- Network access may be limited
+- External services may be unavailable
+- File system permissions may differ
+- Default Git configurations vary
+
+## Performance and Reliability
+
+### Test Timeouts
+Long-running tests should have reasonable timeouts:
+```rust
+#[tokio::test(timeout = Duration::from_secs(30))]
+async fn test_long_operation() {
+    // Test implementation
+}
+```
+
+### Resource Cleanup
+Ensure proper cleanup in tests:
+- Use RAII patterns with `Drop` traits
+- Utilize `tempfile::TempDir` for automatic cleanup
+- Avoid global state modifications
+
+## Running Tests
+
+### Local Development
+```bash
+# Run all tests
+cargo test
+
+# Run specific test
+cargo test test_name
+
+# Run with output
+cargo test -- --nocapture
+```
+
+### Pre-Push Validation
+The [scripts/pre-push-check.sh](mdc:scripts/pre-push-check.sh) runs:
+- Unit tests: `cargo test`
+- Integration tests: `cargo test --test '*'`
+- Documentation tests: `cargo test --doc`

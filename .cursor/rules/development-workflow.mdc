@@ -1,0 +1,58 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Development Workflow Guide
+
+## Pre-Push Validation
+
+**Always run comprehensive checks before pushing to GitHub** using [scripts/pre-push-check.sh](mdc:scripts/pre-push-check.sh). This script replicates all CI checks locally:
+
+```bash
+./scripts/pre-push-check.sh
+```
+
+### What the Pre-Push Script Checks
+- **Code formatting**: `cargo fmt --check`
+- **Linting**: `cargo clippy --all-targets --all-features -- -D warnings`
+- **Unit tests**: All 65+ tests across modules
+- **Integration tests**: End-to-end functionality
+- **Build verification**: Release compilation
+- **Documentation**: `cargo doc` generation
+- **Security audit**: `cargo audit` (when installed)
+
+## Code Quality Standards
+
+### Rust Standards
+- **MSRV**: Rust 1.82.0 (specified in [Cargo.toml](mdc:Cargo.toml))
+- **Clippy**: Zero warnings policy (`-D warnings`)
+- **Format**: Consistent formatting via `cargo fmt`
+- **Lifetimes**: Explicit lifetime annotations for git2 objects (see [src/git/repository.rs](mdc:src/git/repository.rs))
+
+### Testing Requirements
+- **Unit test coverage**: All public APIs must have tests
+- **Integration tests**: Critical workflows in [tests/integration/](mdc:tests/integration)
+- **Environment independence**: Tests must work across platforms (avoid hardcoded branch names like "master")
+
+## Git Hook Integration
+
+Set up automatic validation:
+```bash
+echo "#!/bin/sh\n./scripts/pre-push-check.sh" > .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
+## Cross-Platform Considerations
+
+- **Conditional compilation**: Use `#[cfg(unix)]` for platform-specific code
+- **Path handling**: Always use `PathBuf` and proper path joining
+- **Default branch names**: Don't assume "master" - check current branch dynamically
+- **File permissions**: Only validate executable bits on Unix systems
+
+## Documentation Standards
+
+Comprehensive documentation in [docs/](mdc:docs) including:
+- [DEVELOPMENT.md](mdc:docs/DEVELOPMENT.md) - Complete development guide
+- [ARCHITECTURE.md](mdc:docs/ARCHITECTURE.md) - System design
+- [USER_MANUAL.md](mdc:docs/USER_MANUAL.md) - End-user documentation
