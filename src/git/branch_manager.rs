@@ -192,7 +192,11 @@ mod tests {
         let branch_info = branch_manager.get_branch_info().unwrap();
         assert!(!branch_info.is_empty());
 
-        // Should have at least the master branch
-        assert!(branch_info.iter().any(|b| b.name == "master"));
+        // Should have at least one branch (the default branch, whether it's "main" or "master")
+        // and at least one should be marked as current
+        assert!(branch_info.iter().any(|b| b.is_current));
+
+        // Should have at least 2 branches (default + the test feature branch we created)
+        assert!(branch_info.len() >= 2);
     }
 }

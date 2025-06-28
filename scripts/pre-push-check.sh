@@ -42,6 +42,10 @@ run_check() {
 echo "🚀 Running all CI checks locally before push..."
 echo "This will catch any issues before they reach GitHub!"
 echo
+print_warning "Note: Some environment-dependent issues (like default Git branch names)"
+print_warning "may still occur in CI even if tests pass locally. Consider testing with"
+print_warning "different Git configurations if CI failures don't match local results."
+echo
 
 # Configure git (in case it's not set)
 git config --global user.name "$(git config user.name || echo 'Local User')" 2>/dev/null || true
