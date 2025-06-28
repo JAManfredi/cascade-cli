@@ -4,9 +4,9 @@
 class CascadeCli < Formula
   desc "Stacked diffs CLI for Bitbucket Server"
   homepage "https://github.com/JAManfredi/cascade-cli"
-  url "https://github.com/JAManfredi/cascade-cli/archive/v1.0.1.tar.gz"
-  # sha256 "TODO: Update this after creating the v1.0.1 release tag"
-  # To get the hash: curl -L https://github.com/JAManfredi/cascade-cli/archive/v1.0.1.tar.gz | sha256sum
+  url "https://github.com/JAManfredi/cascade-cli/archive/v0.1.0.tar.gz"
+  # sha256 "TODO: Update this after creating the v0.1.0 release tag"
+  # To get the hash: curl -L https://github.com/JAManfredi/cascade-cli/archive/v0.1.0.tar.gz | sha256sum
   license "MIT OR Apache-2.0"
   head "https://github.com/JAManfredi/cascade-cli.git", branch: "master"
 

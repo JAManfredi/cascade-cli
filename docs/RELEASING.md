@@ -294,4 +294,4 @@ The workflow automatically generates release notes with:
 
 ---
 
-*This release guide is maintained by the Cascade CLI team. Last updated: [Current Date]* 
+*This release guide is maintained by the Cascade CLI team. Last updated: 6/28/25 
