@@ -727,7 +727,10 @@ impl RebaseManager {
             || file_path.ends_with(".js")
             || file_path.ends_with(".ts")
             || file_path.ends_with(".go")
-            || file_path.ends_with(".java");
+            || file_path.ends_with(".java")
+            || file_path.ends_with(".swift")
+            || file_path.ends_with(".kt")
+            || file_path.ends_with(".cs");
 
         if !is_import_file {
             return Ok(None);
@@ -776,6 +779,12 @@ impl RebaseManager {
             return trimmed.starts_with("import ") || trimmed == "import (" || trimmed == ")";
         } else if file_path.ends_with(".java") {
             return trimmed.starts_with("import ");
+        } else if file_path.ends_with(".swift") {
+            return trimmed.starts_with("import ") || trimmed.starts_with("@testable import ");
+        } else if file_path.ends_with(".kt") {
+            return trimmed.starts_with("import ") || trimmed.starts_with("@file:");
+        } else if file_path.ends_with(".cs") {
+            return trimmed.starts_with("using ") || trimmed.starts_with("extern alias ");
         }
 
         false
@@ -1019,5 +1028,35 @@ mod tests {
         assert!(result.success);
         assert!(result.has_conflicts());
         assert_eq!(result.success_count(), 1);
+    }
+
+    #[test]
+    fn test_import_line_detection() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let git_repo = crate::git::GitRepository::open(&repo_path).unwrap();
+        let stack_manager = crate::stack::StackManager::new(&repo_path).unwrap();
+        let options = RebaseOptions::default();
+        let rebase_manager = RebaseManager::new(stack_manager, git_repo, options);
+
+        // Test Swift import detection
+        assert!(rebase_manager.is_import_line("import Foundation", "test.swift"));
+        assert!(rebase_manager.is_import_line("@testable import MyModule", "test.swift"));
+        assert!(!rebase_manager.is_import_line("class MyClass {", "test.swift"));
+
+        // Test Kotlin import detection
+        assert!(rebase_manager.is_import_line("import kotlin.collections.*", "test.kt"));
+        assert!(rebase_manager.is_import_line("@file:JvmName(\"Utils\")", "test.kt"));
+        assert!(!rebase_manager.is_import_line("fun myFunction() {", "test.kt"));
+
+        // Test C# import detection
+        assert!(rebase_manager.is_import_line("using System;", "test.cs"));
+        assert!(rebase_manager.is_import_line("using System.Collections.Generic;", "test.cs"));
+        assert!(rebase_manager.is_import_line("extern alias GridV1;", "test.cs"));
+        assert!(!rebase_manager.is_import_line("namespace MyNamespace {", "test.cs"));
+
+        // Test empty lines are allowed in import sections
+        assert!(rebase_manager.is_import_line("", "test.swift"));
+        assert!(rebase_manager.is_import_line("   ", "test.kt"));
+        assert!(rebase_manager.is_import_line("", "test.cs"));
     }
 }

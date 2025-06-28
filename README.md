@@ -263,6 +263,9 @@ cc stack rebase
 - **JavaScript/TypeScript** - `import`, `const`, and `require()` statements
 - **Go** - `import` blocks and statements
 - **Java** - `import` statements
+- **Swift** - `import` and `@testable import` statements
+- **Kotlin** - `import` statements and `@file:` annotations
+- **C#** - `using` statements and `extern alias` declarations
 
 ### **Benefits**
 - **⚡ 60-80% fewer** manual conflict resolutions
