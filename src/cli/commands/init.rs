@@ -150,31 +150,34 @@ mod tests {
     async fn test_init_already_initialized() {
         let (_temp_dir, repo_path) = create_test_git_repo().await;
 
-        // Change to the repo directory (with proper error handling)
-        let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
-        match env::set_current_dir(&repo_path) {
-            Ok(_) => {
-                // Initialize Cascade first time
-                run(None, false).await.unwrap();
+        // Test directly without changing directories by using internal functions
+        crate::config::initialize_repo(&repo_path, None).unwrap();
+        assert!(is_repo_initialized(&repo_path));
 
-                // Try to initialize again without force
-                let result = run(None, false).await;
-                assert!(result.is_err());
-                assert!(matches!(result.unwrap_err(), CascadeError::Validation(_)));
+        // Store original directory
+        let original_dir = env::current_dir().unwrap();
 
-                // Initialize with force should succeed
-                let result = run(None, true).await;
-                assert!(result.is_ok());
+        // Initialize Cascade first time by using internal logic directly
+        env::set_current_dir(&repo_path).unwrap();
 
-                // Restore original directory (best effort)
-                if let Ok(orig) = original_dir {
-                    let _ = env::set_current_dir(orig);
-                }
-            }
-            Err(_) => {
-                // Skip test if we can't change directories (CI environment issue)
-                println!("Skipping test due to directory access restrictions");
-            }
-        }
+        // Try to initialize again without force
+        let result = run(None, false).await;
+
+        // Restore original directory immediately to avoid issues
+        let _ = env::set_current_dir(&original_dir);
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), CascadeError::Validation(_)));
+
+        // Change back for force test
+        env::set_current_dir(&repo_path).unwrap();
+
+        // Initialize with force should succeed
+        let result = run(None, true).await;
+
+        // Restore original directory again
+        let _ = env::set_current_dir(&original_dir);
+
+        assert!(result.is_ok());
     }
 }

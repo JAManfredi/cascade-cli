@@ -148,7 +148,6 @@ mod tests {
     use super::*;
     use crate::config::initialize_repo;
     use git2::{Repository, Signature};
-    use std::env;
     use tempfile::TempDir;
 
     async fn create_initialized_repo() -> (TempDir, std::path::PathBuf) {
@@ -186,56 +185,30 @@ mod tests {
     async fn test_config_set_get() {
         let (_temp_dir, repo_path) = create_initialized_repo().await;
 
-        // Change to the repo directory (with proper error handling)
-        let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
-        match env::set_current_dir(&repo_path) {
-            Ok(_) => {
-                // Set a configuration value
-                let set_action = ConfigAction::Set {
-                    key: "bitbucket.url".to_string(),
-                    value: "https://test.bitbucket.com".to_string(),
-                };
-                run(set_action).await.unwrap();
+        // Test directly with config file instead of changing directories
+        let config_dir = crate::config::get_repo_config_dir(&repo_path).unwrap();
+        let config_file = config_dir.join("config.json");
 
-                // Get the configuration value
-                let get_action = ConfigAction::Get {
-                    key: "bitbucket.url".to_string(),
-                };
-                run(get_action).await.unwrap();
+        // Set a configuration value
+        set_config_value(&config_file, "bitbucket.url", "https://test.bitbucket.com")
+            .await
+            .unwrap();
 
-                // Restore original directory (best effort)
-                if let Ok(orig) = original_dir {
-                    let _ = env::set_current_dir(orig);
-                }
-            }
-            Err(_) => {
-                // Skip test if we can't change directories (CI environment issue)
-                println!("Skipping test due to directory access restrictions");
-            }
-        }
+        // Get the configuration value
+        get_config_value(&config_file, "bitbucket.url")
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_config_list() {
         let (_temp_dir, repo_path) = create_initialized_repo().await;
 
-        // Change to the repo directory (with proper error handling)
-        let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
-        match env::set_current_dir(&repo_path) {
-            Ok(_) => {
-                // List all configuration values
-                let list_action = ConfigAction::List;
-                run(list_action).await.unwrap();
+        // Test directly with config file instead of changing directories
+        let config_dir = crate::config::get_repo_config_dir(&repo_path).unwrap();
+        let config_file = config_dir.join("config.json");
 
-                // Restore original directory (best effort)
-                if let Ok(orig) = original_dir {
-                    let _ = env::set_current_dir(orig);
-                }
-            }
-            Err(_) => {
-                // Skip test if we can't change directories (CI environment issue)
-                println!("Skipping test due to directory access restrictions");
-            }
-        }
+        // List all configuration values
+        list_config_values(&config_file).await.unwrap();
     }
 }
