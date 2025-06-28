@@ -26,8 +26,6 @@ Pre-built binaries are now available! The next step is integration with popular 
 ```bash
 # Planned package manager support
 brew install JAManfredi/tap/cascade-cli    # Homebrew
-choco install cascade-cli                  # Chocolatey  
-sudo snap install cascade-cli              # Snap
 cargo install cascade-cli                  # Cargo registry
 ```
 

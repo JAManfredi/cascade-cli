@@ -116,12 +116,6 @@ brew install JAManfredi/cascade-cli/cascade-cli
 
 # Rust users
 cargo install cascade-cli
-
-# Windows - Chocolatey
-choco install cascade-cli
-
-# Linux - Snap
-sudo snap install cascade-cli --classic
 ```
 
 #### **Manual Installation**

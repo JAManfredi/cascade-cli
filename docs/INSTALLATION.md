@@ -110,11 +110,6 @@ brew tap JAManfredi/cascade-cli
 brew install cascade-cli
 ```
 
-#### **Linux - Snap**
-```bash
-sudo snap install cascade-cli
-```
-
 #### **Rust - Cargo**
 ```bash
 cargo install cascade-cli
@@ -382,9 +377,6 @@ cargo install --path . --force
 ```bash
 # Homebrew
 brew upgrade cascade-cli
-
-# Snap
-sudo snap refresh cascade-cli
 
 # Cargo
 cargo install cascade-cli --force
