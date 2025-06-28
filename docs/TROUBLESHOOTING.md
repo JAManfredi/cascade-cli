@@ -81,7 +81,7 @@ error: linking with `cc` failed: exit status: 1
 1. **Update Rust:**
    ```bash
    rustup update
-   rustc --version  # Should be 1.70+
+   rustc --version  # Should be 1.82+
    ```
 
 2. **Install system dependencies:**

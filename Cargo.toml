@@ -1,6 +1,6 @@
 [package]
 name = "cascade-cli"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Stacked diffs CLI for Bitbucket Server"
 authors = ["Jared Manfredi <jared@jaredm.dev>"]
@@ -11,7 +11,7 @@ repository = "https://github.com/JAManfredi/cascade-cli"
 documentation = "https://docs.rs/cascade-cli"
 keywords = ["git", "bitbucket", "stacked-diffs", "cli", "development"]
 categories = ["command-line-utilities", "development-tools"]
-rust-version = "1.78.0"
+rust-version = "1.82.0"
 
 [[bin]]
 name = "cc"

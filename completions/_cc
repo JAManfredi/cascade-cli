@@ -1,0 +1,1969 @@
+#compdef cc
+
+autoload -U is-at-least
+
+_cc() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_cc_commands" \
+"*::: :->cc" \
+&& ret=0
+    case $state in
+    (cc)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-command-$line[1]:"
+        case $line[1] in
+            (init)
+_arguments "${_arguments_options[@]}" : \
+'--bitbucket-url=[Bitbucket Server URL]:BITBUCKET_URL:_default' \
+'--force[Force initialization even if already initialized]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cc__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-config-command-$line[1]:"
+        case $line[1] in
+            (set)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':key -- Configuration key (e.g., bitbucket.url):_default' \
+':value -- Configuration value:_default' \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':key -- Configuration key:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':key -- Configuration key:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__config__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-config-help-command-$line[1]:"
+        case $line[1] in
+            (set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(stack)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cc__stack_commands" \
+"*::: :->stack" \
+&& ret=0
+
+    case $state in
+    (stack)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-stack-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+'-b+[Base branch for the stack]:BASE:_default' \
+'--base=[Base branch for the stack]:BASE:_default' \
+'-d+[Description of the stack]:DESCRIPTION:_default' \
+'--description=[Description of the stack]:DESCRIPTION:_default' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':name -- Name of the stack:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'--format=[Output format (name, id, status)]:FORMAT:_default' \
+'-v[Show detailed information]' \
+'--verbose[Show detailed information]' \
+'--active[Show only active stack]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(switch)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':name -- Name of the stack to switch to:_default' \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- Name of the stack (defaults to active stack):_default' \
+&& ret=0
+;;
+(push)
+_arguments "${_arguments_options[@]}" : \
+'-b+[Branch name for this commit]:BRANCH:_default' \
+'--branch=[Branch name for this commit]:BRANCH:_default' \
+'-m+[Commit message (if creating a new commit)]:MESSAGE:_default' \
+'--message=[Commit message (if creating a new commit)]:MESSAGE:_default' \
+'--commit=[Use specific commit hash instead of HEAD]:COMMIT:_default' \
+'--since=[Push commits since this reference (e.g., HEAD~3)]:SINCE:_default' \
+'--commits=[Push multiple specific commits (comma-separated)]:COMMITS:_default' \
+'--squash=[Squash last N commits into one before pushing]:SQUASH:_default' \
+'--squash-since=[Squash all commits since this reference (e.g., HEAD~5)]:SQUASH_SINCE:_default' \
+'--all[Push all unpushed commits since last stack push]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(pop)
+_arguments "${_arguments_options[@]}" : \
+'--keep-branch[Keep the branch (don'\''t delete it)]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(submit)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Pull request title]:TITLE:_default' \
+'--title=[Pull request title]:TITLE:_default' \
+'-d+[Pull request description]:DESCRIPTION:_default' \
+'--description=[Pull request description]:DESCRIPTION:_default' \
+'--range=[Submit range of entries (e.g., "1-3" or "2,4,6")]:RANGE:_default' \
+'--all[Submit all unsubmitted entries]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::entry -- Stack entry number (1-based, defaults to top):_default' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- Name of the stack (defaults to active stack):_default' \
+&& ret=0
+;;
+(prs)
+_arguments "${_arguments_options[@]}" : \
+'--state=[Filter by state (open, merged, declined)]:STATE:_default' \
+'-v[Show detailed information]' \
+'--verbose[Show detailed information]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" : \
+'--force[Force sync even if there are conflicts]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(rebase)
+_arguments "${_arguments_options[@]}" : \
+'--onto=[Target base branch (defaults to stack'\''s base branch)]:ONTO:_default' \
+'--strategy=[Rebase strategy to use]:STRATEGY:((branch-versioning\:"Create new branches with version suffixes"
+cherry-pick\:"Use cherry-pick to apply commits"
+three-way-merge\:"Create merge commits"
+interactive\:"Interactive rebase"))' \
+'-i[Interactive rebase]' \
+'--interactive[Interactive rebase]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(continue-rebase)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(abort-rebase)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(rebase-status)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+'--force[Force deletion without confirmation]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':name -- Name of the stack to delete:_default' \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- Name of the stack (defaults to active stack):_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__stack__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-stack-help-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(switch)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(push)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(pop)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(submit)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(prs)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(continue-rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(abort-rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rebase-status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(entry)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cc__entry_commands" \
+"*::: :->entry" \
+&& ret=0
+
+    case $state in
+    (entry)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-entry-command-$line[1]:"
+        case $line[1] in
+            (checkout)
+_arguments "${_arguments_options[@]}" : \
+'-e+[Stack entry number (optional, shows picker if not provided)]:ENTRY:_default' \
+'--entry=[Stack entry number (optional, shows picker if not provided)]:ENTRY:_default' \
+'--direct[Skip interactive picker and use entry number directly]' \
+'-y[Skip confirmation prompts]' \
+'--yes[Skip confirmation prompts]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'--quiet[Show brief status only]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-v[Show detailed information]' \
+'--verbose[Show detailed information]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__entry__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-entry-help-command-$line[1]:"
+        case $line[1] in
+            (checkout)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(version)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cc__completions_commands" \
+"*::: :->completions" \
+&& ret=0
+
+    case $state in
+    (completions)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-completions-command-$line[1]:"
+        case $line[1] in
+            (generate)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':shell -- Shell to generate completions for:(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(install)
+_arguments "${_arguments_options[@]}" : \
+'--shell=[Specific shell to install for]:SHELL:(bash elvish fish powershell zsh)' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__completions__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-completions-help-command-$line[1]:"
+        case $line[1] in
+            (generate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(install)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(setup)
+_arguments "${_arguments_options[@]}" : \
+'--force[Force reconfiguration if already initialized]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(tui)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(hooks)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cc__hooks_commands" \
+"*::: :->hooks" \
+&& ret=0
+
+    case $state in
+    (hooks)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-hooks-command-$line[1]:"
+        case $line[1] in
+            (install)
+_arguments "${_arguments_options[@]}" : \
+'--skip-checks[Skip prerequisite checks (repository type, configuration validation)]' \
+'--allow-main-branch[Allow installation on main/master branches (not recommended)]' \
+'-y[Skip confirmation prompt]' \
+'--yes[Skip confirmation prompt]' \
+'--force[Force installation even if checks fail (not recommended)]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(uninstall)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(add)
+_arguments "${_arguments_options[@]}" : \
+'--skip-checks[Skip prerequisite checks]' \
+'--force[Force installation even if checks fail]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':hook -- Hook name (post-commit, pre-push, commit-msg, prepare-commit-msg):_default' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':hook -- Hook name (post-commit, pre-push, commit-msg, prepare-commit-msg):_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__hooks__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-hooks-help-command-$line[1]:"
+        case $line[1] in
+            (install)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(uninstall)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(viz)
+_arguments "${_arguments_options[@]}" : \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cc__viz_commands" \
+"*::: :->viz" \
+&& ret=0
+
+    case $state in
+    (viz)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-viz-command-$line[1]:"
+        case $line[1] in
+            (stack)
+_arguments "${_arguments_options[@]}" : \
+'-f+[Output format (ascii, mermaid, dot, plantuml)]:FORMAT:_default' \
+'--format=[Output format (ascii, mermaid, dot, plantuml)]:FORMAT:_default' \
+'-o+[Output file path]:OUTPUT:_default' \
+'--output=[Output file path]:OUTPUT:_default' \
+'--compact[Compact mode (less details)]' \
+'--no-colors[Disable colors]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- Stack name (defaults to active stack):_default' \
+&& ret=0
+;;
+(deps)
+_arguments "${_arguments_options[@]}" : \
+'-f+[Output format (ascii, mermaid, dot, plantuml)]:FORMAT:_default' \
+'--format=[Output format (ascii, mermaid, dot, plantuml)]:FORMAT:_default' \
+'-o+[Output file path]:OUTPUT:_default' \
+'--output=[Output file path]:OUTPUT:_default' \
+'--compact[Compact mode (less details)]' \
+'--no-colors[Disable colors]' \
+'-v[Enable verbose logging]' \
+'--verbose[Enable verbose logging]' \
+'--no-color[Disable colored output]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__viz__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-viz-help-command-$line[1]:"
+        case $line[1] in
+            (stack)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(deps)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-command-$line[1]:"
+        case $line[1] in
+            (init)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-config-command-$line[1]:"
+        case $line[1] in
+            (set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(stack)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help__stack_commands" \
+"*::: :->stack" \
+&& ret=0
+
+    case $state in
+    (stack)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-stack-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(switch)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(push)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(pop)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(submit)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(prs)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(sync)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(continue-rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(abort-rebase)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(rebase-status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(entry)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help__entry_commands" \
+"*::: :->entry" \
+&& ret=0
+
+    case $state in
+    (entry)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-entry-command-$line[1]:"
+        case $line[1] in
+            (checkout)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(version)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help__completions_commands" \
+"*::: :->completions" \
+&& ret=0
+
+    case $state in
+    (completions)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-completions-command-$line[1]:"
+        case $line[1] in
+            (generate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(install)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(setup)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(tui)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(hooks)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help__hooks_commands" \
+"*::: :->hooks" \
+&& ret=0
+
+    case $state in
+    (hooks)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-hooks-command-$line[1]:"
+        case $line[1] in
+            (install)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(uninstall)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(viz)
+_arguments "${_arguments_options[@]}" : \
+":: :_cc__help__viz_commands" \
+"*::: :->viz" \
+&& ret=0
+
+    case $state in
+    (viz)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cc-help-viz-command-$line[1]:"
+        case $line[1] in
+            (stack)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(deps)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_cc_commands] )) ||
+_cc_commands() {
+    local commands; commands=(
+'init:Initialize repository for Cascade' \
+'config:Configuration management' \
+'stack:Stack management' \
+'entry:Entry management and editing' \
+'status:Show repository status' \
+'version:Show version information' \
+'doctor:Check repository health and configuration' \
+'completions:Generate shell completions' \
+'setup:Interactive setup wizard' \
+'tui:Launch interactive TUI for stack management' \
+'hooks:Git hooks management' \
+'viz:Visualize stacks and dependencies' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc commands' commands "$@"
+}
+(( $+functions[_cc__completions_commands] )) ||
+_cc__completions_commands() {
+    local commands; commands=(
+'generate:Generate completions for a shell' \
+'install:Install completions for available shells' \
+'status:Show completion installation status' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc completions commands' commands "$@"
+}
+(( $+functions[_cc__completions__generate_commands] )) ||
+_cc__completions__generate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions generate commands' commands "$@"
+}
+(( $+functions[_cc__completions__help_commands] )) ||
+_cc__completions__help_commands() {
+    local commands; commands=(
+'generate:Generate completions for a shell' \
+'install:Install completions for available shells' \
+'status:Show completion installation status' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc completions help commands' commands "$@"
+}
+(( $+functions[_cc__completions__help__generate_commands] )) ||
+_cc__completions__help__generate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions help generate commands' commands "$@"
+}
+(( $+functions[_cc__completions__help__help_commands] )) ||
+_cc__completions__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions help help commands' commands "$@"
+}
+(( $+functions[_cc__completions__help__install_commands] )) ||
+_cc__completions__help__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions help install commands' commands "$@"
+}
+(( $+functions[_cc__completions__help__status_commands] )) ||
+_cc__completions__help__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions help status commands' commands "$@"
+}
+(( $+functions[_cc__completions__install_commands] )) ||
+_cc__completions__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions install commands' commands "$@"
+}
+(( $+functions[_cc__completions__status_commands] )) ||
+_cc__completions__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc completions status commands' commands "$@"
+}
+(( $+functions[_cc__config_commands] )) ||
+_cc__config_commands() {
+    local commands; commands=(
+'set:Set a configuration value' \
+'get:Get a configuration value' \
+'list:List all configuration values' \
+'unset:Remove a configuration value' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc config commands' commands "$@"
+}
+(( $+functions[_cc__config__get_commands] )) ||
+_cc__config__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config get commands' commands "$@"
+}
+(( $+functions[_cc__config__help_commands] )) ||
+_cc__config__help_commands() {
+    local commands; commands=(
+'set:Set a configuration value' \
+'get:Get a configuration value' \
+'list:List all configuration values' \
+'unset:Remove a configuration value' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc config help commands' commands "$@"
+}
+(( $+functions[_cc__config__help__get_commands] )) ||
+_cc__config__help__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config help get commands' commands "$@"
+}
+(( $+functions[_cc__config__help__help_commands] )) ||
+_cc__config__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config help help commands' commands "$@"
+}
+(( $+functions[_cc__config__help__list_commands] )) ||
+_cc__config__help__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config help list commands' commands "$@"
+}
+(( $+functions[_cc__config__help__set_commands] )) ||
+_cc__config__help__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config help set commands' commands "$@"
+}
+(( $+functions[_cc__config__help__unset_commands] )) ||
+_cc__config__help__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config help unset commands' commands "$@"
+}
+(( $+functions[_cc__config__list_commands] )) ||
+_cc__config__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config list commands' commands "$@"
+}
+(( $+functions[_cc__config__set_commands] )) ||
+_cc__config__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config set commands' commands "$@"
+}
+(( $+functions[_cc__config__unset_commands] )) ||
+_cc__config__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc config unset commands' commands "$@"
+}
+(( $+functions[_cc__doctor_commands] )) ||
+_cc__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc doctor commands' commands "$@"
+}
+(( $+functions[_cc__entry_commands] )) ||
+_cc__entry_commands() {
+    local commands; commands=(
+'checkout:Interactively checkout a stack entry for editing' \
+'status:Show current edit mode status' \
+'list:List all entries with their edit status' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc entry commands' commands "$@"
+}
+(( $+functions[_cc__entry__checkout_commands] )) ||
+_cc__entry__checkout_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry checkout commands' commands "$@"
+}
+(( $+functions[_cc__entry__help_commands] )) ||
+_cc__entry__help_commands() {
+    local commands; commands=(
+'checkout:Interactively checkout a stack entry for editing' \
+'status:Show current edit mode status' \
+'list:List all entries with their edit status' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc entry help commands' commands "$@"
+}
+(( $+functions[_cc__entry__help__checkout_commands] )) ||
+_cc__entry__help__checkout_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry help checkout commands' commands "$@"
+}
+(( $+functions[_cc__entry__help__help_commands] )) ||
+_cc__entry__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry help help commands' commands "$@"
+}
+(( $+functions[_cc__entry__help__list_commands] )) ||
+_cc__entry__help__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry help list commands' commands "$@"
+}
+(( $+functions[_cc__entry__help__status_commands] )) ||
+_cc__entry__help__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry help status commands' commands "$@"
+}
+(( $+functions[_cc__entry__list_commands] )) ||
+_cc__entry__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry list commands' commands "$@"
+}
+(( $+functions[_cc__entry__status_commands] )) ||
+_cc__entry__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc entry status commands' commands "$@"
+}
+(( $+functions[_cc__help_commands] )) ||
+_cc__help_commands() {
+    local commands; commands=(
+'init:Initialize repository for Cascade' \
+'config:Configuration management' \
+'stack:Stack management' \
+'entry:Entry management and editing' \
+'status:Show repository status' \
+'version:Show version information' \
+'doctor:Check repository health and configuration' \
+'completions:Generate shell completions' \
+'setup:Interactive setup wizard' \
+'tui:Launch interactive TUI for stack management' \
+'hooks:Git hooks management' \
+'viz:Visualize stacks and dependencies' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc help commands' commands "$@"
+}
+(( $+functions[_cc__help__completions_commands] )) ||
+_cc__help__completions_commands() {
+    local commands; commands=(
+'generate:Generate completions for a shell' \
+'install:Install completions for available shells' \
+'status:Show completion installation status' \
+    )
+    _describe -t commands 'cc help completions commands' commands "$@"
+}
+(( $+functions[_cc__help__completions__generate_commands] )) ||
+_cc__help__completions__generate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help completions generate commands' commands "$@"
+}
+(( $+functions[_cc__help__completions__install_commands] )) ||
+_cc__help__completions__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help completions install commands' commands "$@"
+}
+(( $+functions[_cc__help__completions__status_commands] )) ||
+_cc__help__completions__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help completions status commands' commands "$@"
+}
+(( $+functions[_cc__help__config_commands] )) ||
+_cc__help__config_commands() {
+    local commands; commands=(
+'set:Set a configuration value' \
+'get:Get a configuration value' \
+'list:List all configuration values' \
+'unset:Remove a configuration value' \
+    )
+    _describe -t commands 'cc help config commands' commands "$@"
+}
+(( $+functions[_cc__help__config__get_commands] )) ||
+_cc__help__config__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help config get commands' commands "$@"
+}
+(( $+functions[_cc__help__config__list_commands] )) ||
+_cc__help__config__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help config list commands' commands "$@"
+}
+(( $+functions[_cc__help__config__set_commands] )) ||
+_cc__help__config__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help config set commands' commands "$@"
+}
+(( $+functions[_cc__help__config__unset_commands] )) ||
+_cc__help__config__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help config unset commands' commands "$@"
+}
+(( $+functions[_cc__help__doctor_commands] )) ||
+_cc__help__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help doctor commands' commands "$@"
+}
+(( $+functions[_cc__help__entry_commands] )) ||
+_cc__help__entry_commands() {
+    local commands; commands=(
+'checkout:Interactively checkout a stack entry for editing' \
+'status:Show current edit mode status' \
+'list:List all entries with their edit status' \
+    )
+    _describe -t commands 'cc help entry commands' commands "$@"
+}
+(( $+functions[_cc__help__entry__checkout_commands] )) ||
+_cc__help__entry__checkout_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help entry checkout commands' commands "$@"
+}
+(( $+functions[_cc__help__entry__list_commands] )) ||
+_cc__help__entry__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help entry list commands' commands "$@"
+}
+(( $+functions[_cc__help__entry__status_commands] )) ||
+_cc__help__entry__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help entry status commands' commands "$@"
+}
+(( $+functions[_cc__help__help_commands] )) ||
+_cc__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help help commands' commands "$@"
+}
+(( $+functions[_cc__help__hooks_commands] )) ||
+_cc__help__hooks_commands() {
+    local commands; commands=(
+'install:Install all Cascade Git hooks' \
+'uninstall:Uninstall all Cascade Git hooks' \
+'status:Show Git hooks status' \
+'add:Install a specific hook' \
+'remove:Remove a specific hook' \
+    )
+    _describe -t commands 'cc help hooks commands' commands "$@"
+}
+(( $+functions[_cc__help__hooks__add_commands] )) ||
+_cc__help__hooks__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help hooks add commands' commands "$@"
+}
+(( $+functions[_cc__help__hooks__install_commands] )) ||
+_cc__help__hooks__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help hooks install commands' commands "$@"
+}
+(( $+functions[_cc__help__hooks__remove_commands] )) ||
+_cc__help__hooks__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help hooks remove commands' commands "$@"
+}
+(( $+functions[_cc__help__hooks__status_commands] )) ||
+_cc__help__hooks__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help hooks status commands' commands "$@"
+}
+(( $+functions[_cc__help__hooks__uninstall_commands] )) ||
+_cc__help__hooks__uninstall_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help hooks uninstall commands' commands "$@"
+}
+(( $+functions[_cc__help__init_commands] )) ||
+_cc__help__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help init commands' commands "$@"
+}
+(( $+functions[_cc__help__setup_commands] )) ||
+_cc__help__setup_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help setup commands' commands "$@"
+}
+(( $+functions[_cc__help__stack_commands] )) ||
+_cc__help__stack_commands() {
+    local commands; commands=(
+'create:Create a new stack' \
+'list:List all stacks' \
+'switch:Switch to a different stack' \
+'show:Show detailed information about a stack' \
+'push:Push current commit to the top of the stack' \
+'pop:Pop the top commit from the stack' \
+'submit:Submit a stack entry for review' \
+'status:Check status of all pull requests in a stack' \
+'prs:List all pull requests for the repository' \
+'sync:Sync stack with remote repository' \
+'rebase:Rebase stack on updated base branch' \
+'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
+'abort-rebase:Abort an in-progress rebase' \
+'rebase-status:Show rebase status and conflict resolution guidance' \
+'delete:Delete a stack' \
+'validate:Validate stack integrity' \
+    )
+    _describe -t commands 'cc help stack commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__abort-rebase_commands] )) ||
+_cc__help__stack__abort-rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack abort-rebase commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__continue-rebase_commands] )) ||
+_cc__help__stack__continue-rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack continue-rebase commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__create_commands] )) ||
+_cc__help__stack__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack create commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__delete_commands] )) ||
+_cc__help__stack__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack delete commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__list_commands] )) ||
+_cc__help__stack__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack list commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__pop_commands] )) ||
+_cc__help__stack__pop_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack pop commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__prs_commands] )) ||
+_cc__help__stack__prs_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack prs commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__push_commands] )) ||
+_cc__help__stack__push_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack push commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__rebase_commands] )) ||
+_cc__help__stack__rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack rebase commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__rebase-status_commands] )) ||
+_cc__help__stack__rebase-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack rebase-status commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__show_commands] )) ||
+_cc__help__stack__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack show commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__status_commands] )) ||
+_cc__help__stack__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack status commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__submit_commands] )) ||
+_cc__help__stack__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack submit commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__switch_commands] )) ||
+_cc__help__stack__switch_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack switch commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__sync_commands] )) ||
+_cc__help__stack__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack sync commands' commands "$@"
+}
+(( $+functions[_cc__help__stack__validate_commands] )) ||
+_cc__help__stack__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help stack validate commands' commands "$@"
+}
+(( $+functions[_cc__help__status_commands] )) ||
+_cc__help__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help status commands' commands "$@"
+}
+(( $+functions[_cc__help__tui_commands] )) ||
+_cc__help__tui_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help tui commands' commands "$@"
+}
+(( $+functions[_cc__help__version_commands] )) ||
+_cc__help__version_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help version commands' commands "$@"
+}
+(( $+functions[_cc__help__viz_commands] )) ||
+_cc__help__viz_commands() {
+    local commands; commands=(
+'stack:Show stack diagram' \
+'deps:Show dependency graph of all stacks' \
+    )
+    _describe -t commands 'cc help viz commands' commands "$@"
+}
+(( $+functions[_cc__help__viz__deps_commands] )) ||
+_cc__help__viz__deps_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help viz deps commands' commands "$@"
+}
+(( $+functions[_cc__help__viz__stack_commands] )) ||
+_cc__help__viz__stack_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc help viz stack commands' commands "$@"
+}
+(( $+functions[_cc__hooks_commands] )) ||
+_cc__hooks_commands() {
+    local commands; commands=(
+'install:Install all Cascade Git hooks' \
+'uninstall:Uninstall all Cascade Git hooks' \
+'status:Show Git hooks status' \
+'add:Install a specific hook' \
+'remove:Remove a specific hook' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc hooks commands' commands "$@"
+}
+(( $+functions[_cc__hooks__add_commands] )) ||
+_cc__hooks__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks add commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help_commands] )) ||
+_cc__hooks__help_commands() {
+    local commands; commands=(
+'install:Install all Cascade Git hooks' \
+'uninstall:Uninstall all Cascade Git hooks' \
+'status:Show Git hooks status' \
+'add:Install a specific hook' \
+'remove:Remove a specific hook' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc hooks help commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help__add_commands] )) ||
+_cc__hooks__help__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks help add commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help__help_commands] )) ||
+_cc__hooks__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks help help commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help__install_commands] )) ||
+_cc__hooks__help__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks help install commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help__remove_commands] )) ||
+_cc__hooks__help__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks help remove commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help__status_commands] )) ||
+_cc__hooks__help__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks help status commands' commands "$@"
+}
+(( $+functions[_cc__hooks__help__uninstall_commands] )) ||
+_cc__hooks__help__uninstall_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks help uninstall commands' commands "$@"
+}
+(( $+functions[_cc__hooks__install_commands] )) ||
+_cc__hooks__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks install commands' commands "$@"
+}
+(( $+functions[_cc__hooks__remove_commands] )) ||
+_cc__hooks__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks remove commands' commands "$@"
+}
+(( $+functions[_cc__hooks__status_commands] )) ||
+_cc__hooks__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks status commands' commands "$@"
+}
+(( $+functions[_cc__hooks__uninstall_commands] )) ||
+_cc__hooks__uninstall_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc hooks uninstall commands' commands "$@"
+}
+(( $+functions[_cc__init_commands] )) ||
+_cc__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc init commands' commands "$@"
+}
+(( $+functions[_cc__setup_commands] )) ||
+_cc__setup_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc setup commands' commands "$@"
+}
+(( $+functions[_cc__stack_commands] )) ||
+_cc__stack_commands() {
+    local commands; commands=(
+'create:Create a new stack' \
+'list:List all stacks' \
+'switch:Switch to a different stack' \
+'show:Show detailed information about a stack' \
+'push:Push current commit to the top of the stack' \
+'pop:Pop the top commit from the stack' \
+'submit:Submit a stack entry for review' \
+'status:Check status of all pull requests in a stack' \
+'prs:List all pull requests for the repository' \
+'sync:Sync stack with remote repository' \
+'rebase:Rebase stack on updated base branch' \
+'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
+'abort-rebase:Abort an in-progress rebase' \
+'rebase-status:Show rebase status and conflict resolution guidance' \
+'delete:Delete a stack' \
+'validate:Validate stack integrity' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc stack commands' commands "$@"
+}
+(( $+functions[_cc__stack__abort-rebase_commands] )) ||
+_cc__stack__abort-rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack abort-rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__continue-rebase_commands] )) ||
+_cc__stack__continue-rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack continue-rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__create_commands] )) ||
+_cc__stack__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack create commands' commands "$@"
+}
+(( $+functions[_cc__stack__delete_commands] )) ||
+_cc__stack__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack delete commands' commands "$@"
+}
+(( $+functions[_cc__stack__help_commands] )) ||
+_cc__stack__help_commands() {
+    local commands; commands=(
+'create:Create a new stack' \
+'list:List all stacks' \
+'switch:Switch to a different stack' \
+'show:Show detailed information about a stack' \
+'push:Push current commit to the top of the stack' \
+'pop:Pop the top commit from the stack' \
+'submit:Submit a stack entry for review' \
+'status:Check status of all pull requests in a stack' \
+'prs:List all pull requests for the repository' \
+'sync:Sync stack with remote repository' \
+'rebase:Rebase stack on updated base branch' \
+'continue-rebase:Continue an in-progress rebase after resolving conflicts' \
+'abort-rebase:Abort an in-progress rebase' \
+'rebase-status:Show rebase status and conflict resolution guidance' \
+'delete:Delete a stack' \
+'validate:Validate stack integrity' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc stack help commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__abort-rebase_commands] )) ||
+_cc__stack__help__abort-rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help abort-rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__continue-rebase_commands] )) ||
+_cc__stack__help__continue-rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help continue-rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__create_commands] )) ||
+_cc__stack__help__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help create commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__delete_commands] )) ||
+_cc__stack__help__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help delete commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__help_commands] )) ||
+_cc__stack__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help help commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__list_commands] )) ||
+_cc__stack__help__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help list commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__pop_commands] )) ||
+_cc__stack__help__pop_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help pop commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__prs_commands] )) ||
+_cc__stack__help__prs_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help prs commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__push_commands] )) ||
+_cc__stack__help__push_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help push commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__rebase_commands] )) ||
+_cc__stack__help__rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__rebase-status_commands] )) ||
+_cc__stack__help__rebase-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help rebase-status commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__show_commands] )) ||
+_cc__stack__help__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help show commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__status_commands] )) ||
+_cc__stack__help__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help status commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__submit_commands] )) ||
+_cc__stack__help__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help submit commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__switch_commands] )) ||
+_cc__stack__help__switch_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help switch commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__sync_commands] )) ||
+_cc__stack__help__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help sync commands' commands "$@"
+}
+(( $+functions[_cc__stack__help__validate_commands] )) ||
+_cc__stack__help__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack help validate commands' commands "$@"
+}
+(( $+functions[_cc__stack__list_commands] )) ||
+_cc__stack__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack list commands' commands "$@"
+}
+(( $+functions[_cc__stack__pop_commands] )) ||
+_cc__stack__pop_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack pop commands' commands "$@"
+}
+(( $+functions[_cc__stack__prs_commands] )) ||
+_cc__stack__prs_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack prs commands' commands "$@"
+}
+(( $+functions[_cc__stack__push_commands] )) ||
+_cc__stack__push_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack push commands' commands "$@"
+}
+(( $+functions[_cc__stack__rebase_commands] )) ||
+_cc__stack__rebase_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack rebase commands' commands "$@"
+}
+(( $+functions[_cc__stack__rebase-status_commands] )) ||
+_cc__stack__rebase-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack rebase-status commands' commands "$@"
+}
+(( $+functions[_cc__stack__show_commands] )) ||
+_cc__stack__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack show commands' commands "$@"
+}
+(( $+functions[_cc__stack__status_commands] )) ||
+_cc__stack__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack status commands' commands "$@"
+}
+(( $+functions[_cc__stack__submit_commands] )) ||
+_cc__stack__submit_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack submit commands' commands "$@"
+}
+(( $+functions[_cc__stack__switch_commands] )) ||
+_cc__stack__switch_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack switch commands' commands "$@"
+}
+(( $+functions[_cc__stack__sync_commands] )) ||
+_cc__stack__sync_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack sync commands' commands "$@"
+}
+(( $+functions[_cc__stack__validate_commands] )) ||
+_cc__stack__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc stack validate commands' commands "$@"
+}
+(( $+functions[_cc__status_commands] )) ||
+_cc__status_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc status commands' commands "$@"
+}
+(( $+functions[_cc__tui_commands] )) ||
+_cc__tui_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc tui commands' commands "$@"
+}
+(( $+functions[_cc__version_commands] )) ||
+_cc__version_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc version commands' commands "$@"
+}
+(( $+functions[_cc__viz_commands] )) ||
+_cc__viz_commands() {
+    local commands; commands=(
+'stack:Show stack diagram' \
+'deps:Show dependency graph of all stacks' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc viz commands' commands "$@"
+}
+(( $+functions[_cc__viz__deps_commands] )) ||
+_cc__viz__deps_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc viz deps commands' commands "$@"
+}
+(( $+functions[_cc__viz__help_commands] )) ||
+_cc__viz__help_commands() {
+    local commands; commands=(
+'stack:Show stack diagram' \
+'deps:Show dependency graph of all stacks' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cc viz help commands' commands "$@"
+}
+(( $+functions[_cc__viz__help__deps_commands] )) ||
+_cc__viz__help__deps_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc viz help deps commands' commands "$@"
+}
+(( $+functions[_cc__viz__help__help_commands] )) ||
+_cc__viz__help__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc viz help help commands' commands "$@"
+}
+(( $+functions[_cc__viz__help__stack_commands] )) ||
+_cc__viz__help__stack_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc viz help stack commands' commands "$@"
+}
+(( $+functions[_cc__viz__stack_commands] )) ||
+_cc__viz__stack_commands() {
+    local commands; commands=()
+    _describe -t commands 'cc viz stack commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_cc" ]; then
+    _cc "$@"
+else
+    compdef _cc cc
+fi

@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@1.78.0  # Set your MSRV here
+    - uses: dtolnay/rust-toolchain@1.82.0  # Set your MSRV here
 
     - name: Configure Git
       run: |

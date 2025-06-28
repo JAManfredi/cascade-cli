@@ -7,7 +7,7 @@ This guide covers installing Cascade CLI on different platforms and environments
 ### **Minimum Requirements**
 - **Operating System**: macOS 10.15+, Linux (Ubuntu 18.04+), Windows 10+
 - **Git**: Version 2.20+ installed and configured
-- **Rust**: 1.70+ (for building from source)
+- **Rust**: 1.82+ (for building from source)
 - **Memory**: 50MB RAM minimum
 - **Disk**: 100MB free space
 
@@ -194,7 +194,7 @@ cargo build --release --offline
 
 ### **Docker**
 ```dockerfile
-FROM rust:1.70 as builder
+FROM rust:1.82 as builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release
