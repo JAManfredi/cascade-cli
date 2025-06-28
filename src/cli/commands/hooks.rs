@@ -856,11 +856,11 @@ mod tests {
 
         // Verify hook is executable
         let metadata = std::fs::metadata(&hook_path).unwrap();
-        let permissions = metadata.permissions();
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
+            let permissions = metadata.permissions();
             assert!(permissions.mode() & 0o111 != 0); // Check executable bit
         }
     }
