@@ -274,13 +274,13 @@ where
     let max_concurrency = std::env::var("INTEGRATION_TEST_CONCURRENCY")
         .unwrap_or_else(|_| {
             if std::env::var("CI").is_ok() {
-                "2".to_string() // Reduced concurrency in CI
+                "1".to_string() // Very conservative for CI stability
             } else {
-                "4".to_string() // Default for local development
+                "2".to_string() // Reduced even for local development
             }
         })
         .parse::<usize>()
-        .unwrap_or(2);
+        .unwrap_or(1);
 
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
     let mut handles = Vec::new();
@@ -295,8 +295,13 @@ where
                 .await
                 .expect("Semaphore should not be closed");
 
-            // Add jitter to prevent thundering herd
-            let jitter = Duration::from_millis(fastrand::u64(0..50));
+            // Add jitter to prevent thundering herd - increased for CI stability
+            let jitter_max = if std::env::var("CI").is_ok() {
+                200 // Longer delays in CI to reduce race conditions
+            } else {
+                100 // Moderate delays locally
+            };
+            let jitter = Duration::from_millis(fastrand::u64(0..jitter_max));
             tokio::time::sleep(jitter).await;
 
             let result = tokio::task::spawn_blocking(operation).await;

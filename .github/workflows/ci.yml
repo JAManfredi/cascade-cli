@@ -112,6 +112,9 @@ jobs:
         git config --global user.email "actions@github.com"
         git config --global init.defaultBranch main
 
+    - name: Build binary for coverage
+      run: cargo build --release
+
     - name: Generate code coverage
       run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
 
