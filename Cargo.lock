@@ -246,6 +246,7 @@ dependencies = [
  "crossterm",
  "dialoguer",
  "dirs",
+ "fastrand",
  "futures",
  "git2",
  "indicatif",

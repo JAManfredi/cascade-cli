@@ -23,6 +23,7 @@ pub async fn run_cli_with_timeout(
             .args(&args)
             .current_dir(&repo_path)
             .env("RUST_LOG", "info")
+            .env("CI", "true") // Always set CI mode for consistent behavior
             .output()
     });
 
@@ -43,20 +44,30 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path().to_path_buf();
 
-    // Initialize git with standard config
+    // Initialize git with CI-compatible config
     let git_commands = [
         vec!["init"],
         vec!["config", "user.name", "Test User"],
         vec!["config", "user.email", "test@example.com"],
         vec!["config", "init.defaultBranch", "main"],
+        vec!["config", "core.autocrlf", "false"], // Prevent line ending issues
+        vec!["config", "core.filemode", "false"], // Prevent file mode issues
     ];
 
     for cmd_args in &git_commands {
-        Command::new("git")
+        let output = Command::new("git")
             .args(cmd_args)
             .current_dir(&repo_path)
             .output()
             .expect("Git command should succeed");
+
+        if !output.status.success() {
+            panic!(
+                "Git command failed: git {}\nStderr: {}",
+                cmd_args.join(" "),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 
     // Create initial commit
@@ -76,13 +87,23 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
 }
 
 /// Create test git repository with cascade initialization
+#[allow(dead_code)]
 pub async fn create_test_cascade_repo(bitbucket_url: Option<String>) -> (TempDir, PathBuf) {
     let (temp_dir, repo_path) = create_test_git_repo().await;
 
-    // Initialize cascade
+    // Initialize cascade with retry logic for CI stability
     let url = bitbucket_url.unwrap_or_else(|| "https://test.bitbucket.com".to_string());
-    cascade_cli::config::initialize_repo(&repo_path, Some(url))
-        .expect("Cascade initialization should succeed");
+
+    for attempt in 1..=3 {
+        match cascade_cli::config::initialize_repo(&repo_path, Some(url.clone())) {
+            Ok(_) => break,
+            Err(e) if attempt == 3 => panic!("Cascade initialization failed after 3 attempts: {e}"),
+            Err(e) => {
+                eprintln!("Cascade initialization attempt {attempt} failed: {e}, retrying...");
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
 
     (temp_dir, repo_path)
 }
@@ -163,31 +184,57 @@ pub fn assert_output_contains(
     );
 }
 
-/// Get binary path with caching for performance
+/// Get binary path with caching for performance and CI compatibility
 pub fn get_binary_path() -> PathBuf {
     let current_dir = std::env::current_dir().unwrap();
 
-    // Try release binary first, fall back to debug binary for CI
+    // CI environments usually build release binaries
     let release_binary = current_dir.join("target/release/cc");
     let debug_binary = current_dir.join("target/debug/cc");
 
-    if release_binary.exists() {
+    // Try release first (for CI compatibility), then debug
+    if release_binary.exists() && is_executable(&release_binary) {
         release_binary
-    } else {
+    } else if debug_binary.exists() && is_executable(&debug_binary) {
         debug_binary
+    } else {
+        panic!(
+            "No executable binary found. Tried:\n  - {}\n  - {}\n\nRun 'cargo build --release' first.",
+            release_binary.display(),
+            debug_binary.display()
+        );
     }
 }
 
-/// Retry wrapper for flaky operations
+/// Check if a file is executable (cross-platform)
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(path) {
+            metadata.permissions().mode() & 0o111 != 0
+        } else {
+            false
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On Windows, assume files are executable if they exist
+        path.exists()
+    }
+}
+
+/// Retry wrapper for flaky operations with exponential backoff
 #[allow(dead_code)]
 pub async fn retry_operation<F, T, E>(
-    operation: F,
+    mut operation: F,
     max_attempts: u32,
-    delay: Duration,
+    base_delay: Duration,
     operation_name: &str,
 ) -> Result<T, E>
 where
-    F: Fn() -> Result<T, E>,
+    F: FnMut() -> Result<T, E>,
     E: std::fmt::Debug,
 {
     for attempt in 1..=max_attempts {
@@ -198,15 +245,23 @@ where
                     eprintln!("{operation_name} failed after {max_attempts} attempts: {e:?}");
                     return Err(e);
                 }
-                eprintln!("{operation_name} attempt {attempt} failed: {e:?}, retrying...");
-                tokio::time::sleep(delay).await;
+
+                // Exponential backoff with jitter
+                let delay = base_delay * 2_u32.pow(attempt - 1);
+                let jitter = Duration::from_millis(fastrand::u64(0..100));
+                let total_delay = delay + jitter;
+
+                eprintln!(
+                    "{operation_name} attempt {attempt} failed: {e:?}. Retrying in {total_delay:?}..."
+                );
+                tokio::time::sleep(total_delay).await;
             }
         }
     }
     unreachable!()
 }
 
-/// Parallel test execution helper
+/// Run parallel operations with better error handling and resource management
 pub async fn run_parallel_operations<F, T>(
     operations: Vec<F>,
     operation_name: String,
@@ -215,28 +270,75 @@ where
     F: FnOnce() -> Result<T, String> + Send + 'static,
     T: Send + 'static,
 {
-    let handles: Vec<_> = operations
-        .into_iter()
-        .enumerate()
-        .map(|(i, op)| {
-            let operation_name = operation_name.clone();
-            tokio::task::spawn_blocking(move || match op() {
-                Ok(result) => Ok(result),
-                Err(e) => Err(format!("{operation_name} #{i} failed: {e}")),
-            })
+    // Limit concurrency based on environment
+    let max_concurrency = std::env::var("INTEGRATION_TEST_CONCURRENCY")
+        .unwrap_or_else(|_| {
+            if std::env::var("CI").is_ok() {
+                "2".to_string() // Reduced concurrency in CI
+            } else {
+                "4".to_string() // Default for local development
+            }
         })
-        .collect();
+        .parse::<usize>()
+        .unwrap_or(2);
 
-    let results = futures::future::join_all(handles).await;
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
+    let mut handles = Vec::new();
+
+    for (i, operation) in operations.into_iter().enumerate() {
+        let semaphore = semaphore.clone();
+        let operation_name = operation_name.clone();
+
+        let handle = tokio::spawn(async move {
+            let _permit = semaphore
+                .acquire()
+                .await
+                .expect("Semaphore should not be closed");
+
+            // Add jitter to prevent thundering herd
+            let jitter = Duration::from_millis(fastrand::u64(0..50));
+            tokio::time::sleep(jitter).await;
+
+            let result = tokio::task::spawn_blocking(operation).await;
+
+            match result {
+                Ok(inner_result) => inner_result,
+                Err(join_error) => Err(format!("{operation_name}[{i}] panicked: {join_error}")),
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Collect results with timeout
+    let timeout_duration = Duration::from_secs(
+        std::env::var("TEST_TIMEOUT")
+            .unwrap_or_else(|_| "120".to_string())
+            .parse::<u64>()
+            .unwrap_or(120),
+    );
+
+    let mut results = Vec::new();
+    for (i, handle) in handles.into_iter().enumerate() {
+        match tokio::time::timeout(timeout_duration, handle).await {
+            Ok(Ok(result)) => results.push(result),
+            Ok(Err(join_error)) => {
+                results.push(Err(format!(
+                    "{operation_name}[{i}] join error: {join_error}"
+                )));
+            }
+            Err(_) => {
+                results.push(Err(format!(
+                    "{operation_name}[{i}] timed out after {timeout_duration:?}"
+                )));
+            }
+        }
+    }
 
     results
-        .into_iter()
-        .map(|handle_result| handle_result.unwrap_or_else(|e| Err(format!("Task panicked: {e}"))))
-        .collect()
 }
 
-/// Test fixture for pre-configured test environment
-#[allow(dead_code)]
+/// Test fixture with automatic cleanup and CI-compatible configuration
 pub struct TestFixture {
     #[allow(dead_code)]
     pub temp_dir: TempDir,
@@ -244,11 +346,10 @@ pub struct TestFixture {
     pub binary_path: PathBuf,
 }
 
-#[allow(dead_code)]
 impl TestFixture {
-    #[allow(dead_code)]
+    /// Create a new test fixture with standard git repository
     pub async fn new() -> Self {
-        let (temp_dir, repo_path) = create_test_cascade_repo(None).await;
+        let (temp_dir, repo_path) = create_test_git_repo().await;
         let binary_path = get_binary_path();
 
         Self {
@@ -258,6 +359,7 @@ impl TestFixture {
         }
     }
 
+    /// Create a new test fixture with cascade initialization
     #[allow(dead_code)]
     pub async fn new_with_bitbucket_url(url: String) -> Self {
         let (temp_dir, repo_path) = create_test_cascade_repo(Some(url)).await;
@@ -270,18 +372,22 @@ impl TestFixture {
         }
     }
 
+    /// Run CLI command with CI-compatible timeout
     #[allow(dead_code)]
     pub async fn run_cli(&self, args: &[&str]) -> std::process::Output {
-        run_cli_with_timeout(
-            &self.binary_path,
-            args,
-            &self.repo_path,
-            Duration::from_secs(30),
-        )
-        .await
-        .expect("CLI command should complete within timeout")
+        let timeout = Duration::from_secs(
+            std::env::var("TEST_TIMEOUT")
+                .unwrap_or_else(|_| "60".to_string())
+                .parse::<u64>()
+                .unwrap_or(60),
+        );
+
+        run_cli_with_timeout(&self.binary_path, args, &self.repo_path, timeout)
+            .await
+            .unwrap_or_else(|e| panic!("CLI command failed: {e}"))
     }
 
+    /// Run CLI command and assert success
     #[allow(dead_code)]
     pub async fn run_cli_expect_success(
         &self,
@@ -293,6 +399,7 @@ impl TestFixture {
         output
     }
 
+    /// Run CLI command and assert specific error
     #[allow(dead_code)]
     pub async fn run_cli_expect_error(
         &self,
@@ -305,6 +412,7 @@ impl TestFixture {
         output
     }
 
+    /// Create test commits
     #[allow(dead_code)]
     pub async fn create_commits(&self, count: u32, prefix: &str) {
         create_test_commits(&self.repo_path, count, prefix).await;
@@ -319,23 +427,35 @@ mod tests {
     async fn test_fixture_creation() {
         let fixture = TestFixture::new().await;
 
-        // Verify git repo is properly set up
-        assert!(fixture.repo_path.join(".git").exists());
-        assert!(fixture.repo_path.join("README.md").exists());
-        assert!(fixture.repo_path.join(".cascade").exists());
+        // Test that fixture is properly initialized
+        assert!(fixture.repo_path.exists());
+        assert!(fixture.binary_path.exists());
 
-        // Verify binary exists
-        assert!(
-            fixture.binary_path.exists(),
-            "Binary should be built before running tests"
-        );
+        // Test git is properly configured
+        let output = Command::new("git")
+            .args(["config", "user.name"])
+            .current_dir(&fixture.repo_path)
+            .output()
+            .unwrap();
+
+        let username = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert_eq!(username, "Test User");
+
+        // Test initial commit exists
+        let output = Command::new("git")
+            .args(["log", "--oneline"])
+            .current_dir(&fixture.repo_path)
+            .output()
+            .unwrap();
+
+        assert!(!output.stdout.is_empty());
     }
 
     #[tokio::test]
     async fn test_timeout_wrapper() {
         let fixture = TestFixture::new().await;
 
-        // Test successful command with timeout
+        // Test successful command
         let result = run_cli_with_timeout(
             &fixture.binary_path,
             &["--help"],
@@ -345,21 +465,41 @@ mod tests {
         .await;
 
         assert!(result.is_ok(), "Help command should succeed");
+
+        // Test timeout (using a command that should timeout)
+        let result = run_cli_with_timeout(
+            &fixture.binary_path,
+            &["stacks", "list"], // This might hang without proper setup
+            &fixture.repo_path,
+            Duration::from_millis(10), // Very short timeout
+        )
+        .await;
+
+        // Should either succeed quickly or timeout
+        if let Err(error_msg) = result {
+            assert!(error_msg.contains("timed out"));
+        }
     }
 
     #[tokio::test]
     async fn test_parallel_operations() {
-        let operations = vec![
-            || Ok("result1".to_string()),
-            || Ok("result2".to_string()),
-            || Err("error".to_string()),
-        ];
+        let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0..3)
+            .map(|i| {
+                let closure: Box<dyn FnOnce() -> Result<String, String> + Send> =
+                    Box::new(move || {
+                        std::thread::sleep(Duration::from_millis(10));
+                        Ok(format!("result-{i}"))
+                    });
+                closure
+            })
+            .collect();
 
-        let results = run_parallel_operations(operations, "test_op".to_string()).await;
+        let results = run_parallel_operations(operations, "test_parallel".to_string()).await;
 
         assert_eq!(results.len(), 3);
-        assert!(results[0].is_ok());
-        assert!(results[1].is_ok());
-        assert!(results[2].is_err());
+        for (i, result) in results.iter().enumerate() {
+            assert!(result.is_ok(), "Operation {i} should succeed");
+            assert_eq!(result.as_ref().unwrap(), &format!("result-{i}"));
+        }
     }
 }

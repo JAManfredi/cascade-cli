@@ -697,7 +697,7 @@ cc completions generate bash > /etc/bash_completion.d/cc
 - 🐛 **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Common issues and solutions
 - 🏗️ **[Architecture](./docs/ARCHITECTURE.md)** - Internal design and extending
 - 📋 **[Smart Force Push Strategy](./docs/EDIT_FLOWS_INTEGRATION.md)** - How PR history is preserved
-- 🚀 **[Upcoming Features](./docs/UPCOMING.md)** - Planned features and roadmap
+- 🛠️ **[Development Scripts](./docs/SCRIPTS.md)** - CI debugging and development tools
 
 ---
 
@@ -749,6 +749,12 @@ This runs all the same checks as CI:
 #!/bin/sh
 ./scripts/pre-push-check.sh
 ```
+
+### **CI Debugging Tools**
+
+Having trouble with CI failures that don't reproduce locally? We have specialized tools for that:
+
+📋 **[Development Scripts Guide](./docs/SCRIPTS.md)** - Complete reference for all CI debugging and development scripts
 
 See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for complete development guidelines, testing strategies, and contribution workflows.
 

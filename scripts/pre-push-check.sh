@@ -131,6 +131,11 @@ else
         echo "  cargo clippy --fix           # Auto-fix clippy warnings"
     fi
     echo
+    echo "🔧 Advanced debugging (for CI-specific issues):"
+    echo "  ./scripts/ci-simulation.sh           # Enhanced CI environment simulation"
+    echo "  ./scripts/debug-integration-tests.sh # Debug integration test failures"
+    echo "  ./scripts/docker-ci-simulation.sh    # Docker-based exact CI replica"
+    echo
     print_error "Please fix these issues before pushing!"
     exit 1
 fi 
