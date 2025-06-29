@@ -9,7 +9,7 @@ pub mod atomic_file {
 
     /// Write JSON data to a file atomically using a temporary file + rename strategy with file locking
     pub fn write_json<T: Serialize>(path: &Path, data: &T) -> Result<()> {
-        crate::utils::file_locking::with_file_lock(path, || {
+        with_concurrent_file_lock(path, || {
             let content = serde_json::to_string_pretty(data)
                 .map_err(|e| CascadeError::config(format!("Failed to serialize data: {e}")))?;
 
@@ -19,7 +19,25 @@ pub mod atomic_file {
 
     /// Write string content to a file atomically using a temporary file + rename strategy with file locking
     pub fn write_string(path: &Path, content: &str) -> Result<()> {
-        crate::utils::file_locking::with_file_lock(path, || write_string_unlocked(path, content))
+        with_concurrent_file_lock(path, || write_string_unlocked(path, content))
+    }
+
+    /// Execute an operation with file locking optimized for concurrent access
+    fn with_concurrent_file_lock<F, R>(file_path: &Path, operation: F) -> Result<R>
+    where
+        F: FnOnce() -> Result<R>,
+    {
+        // Use aggressive timeout in environments where concurrent access is expected
+        let use_aggressive =
+            std::env::var("CI").is_ok() || std::env::var("CONCURRENT_ACCESS_EXPECTED").is_ok();
+
+        let _lock = if use_aggressive {
+            crate::utils::file_locking::FileLock::acquire_aggressive(file_path)?
+        } else {
+            crate::utils::file_locking::FileLock::acquire(file_path)?
+        };
+
+        operation()
     }
 
     /// Internal unlocked version for use within lock contexts
@@ -31,26 +49,56 @@ pub mod atomic_file {
         fs::write(&temp_path, content)
             .map_err(|e| CascadeError::config(format!("Failed to write temporary file: {e}")))?;
 
-        // Atomically rename temporary file to final destination
-        fs::rename(&temp_path, path)
-            .map_err(|e| CascadeError::config(format!("Failed to finalize file write: {e}")))?;
+        // Platform-specific atomic rename
+        atomic_rename(&temp_path, path)
+    }
 
+    /// Platform-specific atomic rename operation
+    #[cfg(windows)]
+    fn atomic_rename(temp_path: &Path, final_path: &Path) -> Result<()> {
+        // Windows: More robust rename with retry on failure
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
+
+        for attempt in 1..=MAX_RETRIES {
+            match fs::rename(temp_path, final_path) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    if attempt == MAX_RETRIES {
+                        // Clean up temp file on final failure
+                        let _ = fs::remove_file(temp_path);
+                        return Err(CascadeError::config(format!(
+                            "Failed to finalize file write after {MAX_RETRIES} attempts on Windows: {e}"
+                        )));
+                    }
+
+                    // Retry after a short delay for transient Windows file locking issues
+                    std::thread::sleep(RETRY_DELAY);
+                }
+            }
+        }
+
+        unreachable!("Loop should have returned or failed by now")
+    }
+
+    #[cfg(not(windows))]
+    fn atomic_rename(temp_path: &Path, final_path: &Path) -> Result<()> {
+        // Unix: Standard atomic rename works reliably
+        fs::rename(temp_path, final_path)
+            .map_err(|e| CascadeError::config(format!("Failed to finalize file write: {e}")))?;
         Ok(())
     }
 
     /// Write binary data to a file atomically with file locking
     pub fn write_bytes(path: &Path, data: &[u8]) -> Result<()> {
-        crate::utils::file_locking::with_file_lock(path, || {
+        with_concurrent_file_lock(path, || {
             let temp_path = path.with_extension("tmp");
 
             fs::write(&temp_path, data).map_err(|e| {
                 CascadeError::config(format!("Failed to write temporary file: {e}"))
             })?;
 
-            fs::rename(&temp_path, path)
-                .map_err(|e| CascadeError::config(format!("Failed to finalize file write: {e}")))?;
-
-            Ok(())
+            atomic_rename(&temp_path, path)
         })
     }
 }
@@ -165,6 +213,17 @@ pub mod file_locking {
     }
 
     impl FileLock {
+        /// Platform-specific configuration for file locking
+        #[cfg(windows)]
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10); // Longer timeout for Windows
+        #[cfg(windows)]
+        const RETRY_INTERVAL: Duration = Duration::from_millis(100); // Less aggressive polling
+
+        #[cfg(not(windows))]
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5); // Shorter timeout for Unix
+        #[cfg(not(windows))]
+        const RETRY_INTERVAL: Duration = Duration::from_millis(50); // More frequent polling
+
         /// Attempt to acquire a lock on a file with timeout
         pub fn acquire_with_timeout(file_path: &Path, timeout: Duration) -> Result<Self> {
             let lock_path = file_path.with_extension("lock");
@@ -173,13 +232,15 @@ pub mod file_locking {
             loop {
                 match Self::try_acquire(&lock_path) {
                     Ok(lock) => return Ok(lock),
-                    Err(_) => {
+                    Err(e) => {
                         if start_time.elapsed() >= timeout {
                             return Err(CascadeError::config(format!(
-                                "Timeout waiting for lock on {file_path:?}"
+                                "Timeout waiting for lock on {file_path:?} after {}ms (platform: {}): {e}",
+                                timeout.as_millis(),
+                                if cfg!(windows) { "windows" } else { "unix" }
                             )));
                         }
-                        std::thread::sleep(Duration::from_millis(50));
+                        std::thread::sleep(Self::RETRY_INTERVAL);
                     }
                 }
             }
@@ -187,13 +248,8 @@ pub mod file_locking {
 
         /// Try to acquire a lock immediately (non-blocking)
         pub fn try_acquire(lock_path: &Path) -> Result<Self> {
-            let file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(lock_path)
-                .map_err(|e| {
-                    CascadeError::config(format!("Failed to acquire lock {lock_path:?}: {e}"))
-                })?;
+            // Platform-specific lock file creation
+            let file = Self::create_lock_file(lock_path)?;
 
             Ok(Self {
                 _file: file,
@@ -201,9 +257,59 @@ pub mod file_locking {
             })
         }
 
-        /// Acquire a lock with default timeout (5 seconds)
+        /// Platform-specific lock file creation
+        #[cfg(windows)]
+        fn create_lock_file(lock_path: &Path) -> Result<File> {
+            // Windows: More robust file creation with explicit sharing mode
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(lock_path)
+                .map_err(|e| {
+                    // Provide more specific error information for Windows
+                    match e.kind() {
+                        std::io::ErrorKind::AlreadyExists => {
+                            CascadeError::config(format!(
+                                "Lock file {lock_path:?} already exists - another process may be accessing the file"
+                            ))
+                        }
+                        std::io::ErrorKind::PermissionDenied => {
+                            CascadeError::config(format!(
+                                "Permission denied creating lock file {lock_path:?} - check file permissions"
+                            ))
+                        }
+                        _ => CascadeError::config(format!(
+                            "Failed to acquire lock {lock_path:?} on Windows: {e}"
+                        ))
+                    }
+                })
+        }
+
+        #[cfg(not(windows))]
+        fn create_lock_file(lock_path: &Path) -> Result<File> {
+            // Unix: Standard approach works well
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(lock_path)
+                .map_err(|e| {
+                    CascadeError::config(format!("Failed to acquire lock {lock_path:?}: {e}"))
+                })
+        }
+
+        /// Acquire a lock with platform-appropriate default timeout
         pub fn acquire(file_path: &Path) -> Result<Self> {
-            Self::acquire_with_timeout(file_path, Duration::from_secs(5))
+            Self::acquire_with_timeout(file_path, Self::DEFAULT_TIMEOUT)
+        }
+
+        /// Acquire a lock with aggressive timeout for high-concurrency scenarios
+        pub fn acquire_aggressive(file_path: &Path) -> Result<Self> {
+            let timeout = if cfg!(windows) {
+                Duration::from_secs(15) // Even longer for Windows under load
+            } else {
+                Duration::from_secs(8) // Slightly longer for Unix under load
+            };
+            Self::acquire_with_timeout(file_path, timeout)
         }
     }
 

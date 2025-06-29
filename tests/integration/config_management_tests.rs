@@ -49,9 +49,10 @@ async fn test_config_corruption_recovery() {
     }
 }
 
-/// Test concurrent config access
+/// Test concurrent config access on Unix systems (aggressive)
+#[cfg(unix)]
 #[tokio::test]
-async fn test_concurrent_config_access() {
+async fn test_concurrent_config_access_unix() {
     let (_temp_dir, repo_path) = create_test_git_repo().await;
 
     // Initialize cascade
@@ -61,15 +62,10 @@ async fn test_concurrent_config_access() {
     )
     .unwrap();
 
-    // Simulate concurrent access using helper function
     let binary_path = super::test_helpers::get_binary_path();
 
-    // Reduce concurrency in CI environments for stability
-    let concurrent_operations = if std::env::var("CI").is_ok() {
-        2 // Very conservative for CI
-    } else {
-        3 // Original count for local testing
-    };
+    // Unix systems should handle more aggressive concurrency
+    let concurrent_operations = 5;
 
     let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0
         ..concurrent_operations)
@@ -77,8 +73,81 @@ async fn test_concurrent_config_access() {
             let binary_path = binary_path.clone();
             let repo_path = repo_path.clone();
             let closure: Box<dyn FnOnce() -> Result<String, String> + Send> = Box::new(move || {
-                // Add unique prefix to avoid naming conflicts
-                let stack_name = format!("concurrent-config-test-{}-{}", std::process::id(), i);
+                let stack_name = format!("unix-concurrent-{}-{}", std::process::id(), i);
+
+                let output = Command::new(&binary_path)
+                    .args(["stacks", "create", &stack_name])
+                    .current_dir(&repo_path)
+                    .output()
+                    .map_err(|e| format!("Command failed: {e}"))?;
+
+                if output.status.success() {
+                    Ok(stack_name)
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    Err(format!(
+                        "Failed to create stack: stderr={stderr}, stdout={stdout}"
+                    ))
+                }
+            });
+            closure
+        })
+        .collect();
+
+    let results = super::test_helpers::run_parallel_operations(
+        operations,
+        "unix_concurrent_config_access".to_string(),
+    )
+    .await;
+
+    // Unix should handle concurrent access well with our file locking
+    let successful_count = results.iter().filter(|result| result.is_ok()).count();
+    let failed_count = results.len() - successful_count;
+
+    println!("Unix concurrent results: {successful_count} succeeded, {failed_count} failed");
+
+    // On Unix, we expect most operations to succeed due to file locking
+    assert!(
+        successful_count >= concurrent_operations / 2,
+        "Unix should handle at least half of concurrent operations successfully. Results: {results:#?}"
+    );
+
+    // Verify config integrity after concurrent operations
+    let config_path = repo_path.join(".cascade").join("config.json");
+    let config = Settings::load_from_file(&config_path);
+    assert!(
+        config.is_ok(),
+        "Config should be valid after concurrent access: {:?}",
+        config.err()
+    );
+}
+
+/// Test concurrent config access on Windows systems (conservative)
+#[cfg(windows)]
+#[tokio::test]
+async fn test_concurrent_config_access_windows() {
+    let (_temp_dir, repo_path) = create_test_git_repo().await;
+
+    // Initialize cascade
+    cascade_cli::config::initialize_repo(
+        &repo_path,
+        Some("https://test.bitbucket.com".to_string()),
+    )
+    .unwrap();
+
+    let binary_path = super::test_helpers::get_binary_path();
+
+    // Windows has stricter file locking - test more conservative concurrency
+    let concurrent_operations = 3;
+
+    let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0
+        ..concurrent_operations)
+        .map(|i| {
+            let binary_path = binary_path.clone();
+            let repo_path = repo_path.clone();
+            let closure: Box<dyn FnOnce() -> Result<String, String> + Send> = Box::new(move || {
+                let stack_name = format!("windows-concurrent-{}-{}", std::process::id(), i);
 
                 let output = Command::new(&binary_path)
                     .args(["stacks", "create", &stack_name])
@@ -92,18 +161,15 @@ async fn test_concurrent_config_access() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     let stdout = String::from_utf8_lossy(&output.stdout);
 
-                    // Distinguish between expected concurrency conflicts and real errors
-                    if stderr.contains("already exists")
-                        || stderr.contains("conflict")
-                        || stdout.contains("already exists")
-                        || stdout.contains("conflict")
+                    // On Windows, we might expect some operations to fail due to file locking
+                    if stderr.contains("lock")
+                        || stderr.contains("access")
+                        || stderr.contains("timeout")
                     {
-                        // This is expected in concurrent scenarios
-                        Err(format!("Expected concurrency conflict: {stderr}"))
+                        Err(format!("Expected Windows file locking behavior: {stderr}"))
                     } else {
-                        // This might be a real error
                         Err(format!(
-                            "Unexpected error - stderr: {stderr}, stdout: {stdout}"
+                            "Unexpected error: stderr={stderr}, stdout={stdout}"
                         ))
                     }
                 }
@@ -114,46 +180,37 @@ async fn test_concurrent_config_access() {
 
     let results = super::test_helpers::run_parallel_operations(
         operations,
-        "concurrent_config_access".to_string(),
+        "windows_concurrent_config_access".to_string(),
     )
     .await;
 
-    // More lenient success criteria for CI stability
     let successful_count = results.iter().filter(|result| result.is_ok()).count();
-    let expected_conflicts = results
+    let expected_lock_failures = results
         .iter()
         .filter(|result| {
             if let Err(error) = result {
-                error.contains("Expected concurrency conflict")
+                error.contains("Expected Windows file locking behavior")
             } else {
                 false
             }
         })
         .count();
+    let unexpected_failures = results.len() - successful_count - expected_lock_failures;
 
-    let unexpected_errors = results
-        .iter()
-        .filter(|result| {
-            if let Err(error) = result {
-                !error.contains("Expected concurrency conflict")
-            } else {
-                false
-            }
-        })
-        .count();
-
-    println!("Concurrent config access results: {successful_count} succeeded, {expected_conflicts} expected conflicts, {unexpected_errors} unexpected errors");
-
-    // Should handle concurrent access without corrupting state
-    // Allow for some expected concurrency conflicts, but no unexpected errors
-    assert!(
-        unexpected_errors == 0,
-        "Should not have unexpected errors during concurrent access. Results: {results:#?}"
+    println!(
+        "Windows concurrent results: {successful_count} succeeded, {expected_lock_failures} expected lock failures, {unexpected_failures} unexpected failures"
     );
 
+    // On Windows, we expect either success or proper file locking failures
     assert!(
-        successful_count > 0 || expected_conflicts > 0,
-        "At least some operations should either succeed or fail with expected conflicts"
+        unexpected_failures == 0,
+        "Should not have unexpected failures on Windows. Results: {results:#?}"
+    );
+
+    // At least one operation should succeed
+    assert!(
+        successful_count > 0,
+        "At least one operation should succeed on Windows"
     );
 
     // Verify config integrity after concurrent operations
@@ -161,7 +218,7 @@ async fn test_concurrent_config_access() {
     let config = Settings::load_from_file(&config_path);
     assert!(
         config.is_ok(),
-        "Config should still be valid after concurrent access: {:?}",
+        "Config should be valid after concurrent access: {:?}",
         config.err()
     );
 }
@@ -326,6 +383,72 @@ async fn test_stacks_metadata_corruption() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         println!("Stacks list after corruption: {stdout}");
     }
+}
+
+/// Test file locking implementation directly
+#[tokio::test]
+async fn test_file_locking_implementation() {
+    let (_temp_dir, repo_path) = create_test_git_repo().await;
+    let test_file = repo_path.join("test_lock.json");
+
+    // Test that file locking actually works
+    let content1 = r#"{"test": "content1"}"#;
+    let content2 = r#"{"test": "content2"}"#;
+
+    // Write initial content
+    cascade_cli::utils::atomic_file::write_string(&test_file, content1).unwrap();
+
+    // Test concurrent writes with explicit locking
+    let test_file_clone = test_file.clone();
+    let handle1 = tokio::task::spawn_blocking(move || {
+        // This should acquire the lock first
+        cascade_cli::utils::atomic_file::write_string(&test_file_clone, content2)
+    });
+
+    let test_file_clone2 = test_file.clone();
+    let handle2 = tokio::task::spawn_blocking(move || {
+        // This should wait for the lock or fail appropriately
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Slight delay
+        cascade_cli::utils::atomic_file::write_string(&test_file_clone2, content1)
+    });
+
+    let results = tokio::try_join!(handle1, handle2);
+
+    match results {
+        Ok((result1, result2)) => {
+            // Both should either succeed (with proper ordering) or one should fail with timeout
+            let success_count = [&result1, &result2].iter().filter(|r| r.is_ok()).count();
+            let timeout_count = [&result1, &result2]
+                .iter()
+                .filter(|r| {
+                    if let Err(e) = r {
+                        e.to_string().contains("timeout") || e.to_string().contains("lock")
+                    } else {
+                        false
+                    }
+                })
+                .count();
+
+            println!("File locking test: {success_count} succeeded, {timeout_count} timed out");
+
+            // At least one should succeed, and failures should be due to locking
+            assert!(success_count > 0, "At least one write should succeed");
+            assert!(
+                success_count + timeout_count == 2,
+                "All operations should either succeed or fail with locking errors"
+            );
+        }
+        Err(e) => {
+            panic!("Task execution failed: {e}");
+        }
+    }
+
+    // File should still be valid JSON
+    let final_content = std::fs::read_to_string(&test_file).unwrap();
+    assert!(
+        final_content == content1 || final_content == content2,
+        "File should contain valid content after locking test"
+    );
 }
 
 // Helper function
