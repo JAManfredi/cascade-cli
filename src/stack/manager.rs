@@ -649,11 +649,13 @@ impl StackManager {
             print!("   Choice (1-4): ");
 
             use std::io::{self, Write};
-            io::stdout().flush()
+            io::stdout()
+                .flush()
                 .map_err(|e| CascadeError::config(format!("Failed to write to stdout: {e}")))?;
 
             let mut input = String::new();
-            io::stdin().read_line(&mut input)
+            io::stdin()
+                .read_line(&mut input)
                 .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
 
             match input.trim() {
@@ -688,12 +690,14 @@ impl StackManager {
                         }
                     }
                     print!("   Enter stack name: ");
-                    io::stdout().flush()
-                        .map_err(|e| CascadeError::config(format!("Failed to write to stdout: {e}")))?;
+                    io::stdout().flush().map_err(|e| {
+                        CascadeError::config(format!("Failed to write to stdout: {e}"))
+                    })?;
 
                     let mut stack_name_input = String::new();
-                    io::stdin().read_line(&mut stack_name_input)
-                        .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
+                    io::stdin().read_line(&mut stack_name_input).map_err(|e| {
+                        CascadeError::config(format!("Failed to read user input: {e}"))
+                    })?;
                     let stack_name_input = stack_name_input.trim();
 
                     if let Err(e) = self.set_active_stack_by_name(stack_name_input) {

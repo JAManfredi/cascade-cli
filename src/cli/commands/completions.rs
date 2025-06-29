@@ -155,7 +155,8 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
         fs::create_dir_all(&completion_dir)?;
     }
 
-    let completion_file = completion_dir.join(crate::utils::path_validation::sanitize_filename(filename));
+    let completion_file =
+        completion_dir.join(crate::utils::path_validation::sanitize_filename(filename));
 
     // Validate the completion file path for security
     crate::utils::path_validation::validate_config_path(&completion_file, &completion_dir)?;

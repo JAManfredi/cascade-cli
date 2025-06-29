@@ -14,6 +14,10 @@ pub struct RepositoryInfo {
 }
 
 /// Wrapper around git2::Repository with safe operations
+///
+/// For thread safety, use the async variants (e.g., fetch_async, pull_async)
+/// which automatically handle threading using tokio::spawn_blocking.
+/// The async methods create new repository instances in background threads.
 pub struct GitRepository {
     repo: Repository,
     path: PathBuf,
@@ -222,12 +226,15 @@ impl GitRepository {
         let branch = self
             .repo
             .find_branch(branch_name, git2::BranchType::Local)
-            .map_err(|e| CascadeError::branch(format!("Could not find branch '{branch_name}': {e}")))?;
+            .map_err(|e| {
+                CascadeError::branch(format!("Could not find branch '{branch_name}': {e}"))
+            })?;
 
-        let commit = branch
-            .get()
-            .peel_to_commit()
-            .map_err(|e| CascadeError::branch(format!("Could not get commit for branch '{branch_name}': {e}")))?;
+        let commit = branch.get().peel_to_commit().map_err(|e| {
+            CascadeError::branch(format!(
+                "Could not get commit for branch '{branch_name}': {e}"
+            ))
+        })?;
 
         Ok(commit.id().to_string())
     }
@@ -735,7 +742,7 @@ impl GitRepository {
     fn check_force_push_safety(&self, target_branch: &str) -> Result<()> {
         // First fetch latest remote changes to ensure we have up-to-date information
         match self.fetch() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 // If fetch fails, warn but don't block the operation
                 tracing::warn!("Could not fetch latest changes for safety check: {}", e);
@@ -743,23 +750,17 @@ impl GitRepository {
         }
 
         // Check if there are commits on the remote that would be lost
-        let remote_ref = format!("refs/remotes/origin/{}", target_branch);
-        let local_ref = format!("refs/heads/{}", target_branch);
+        let remote_ref = format!("refs/remotes/origin/{target_branch}");
+        let local_ref = format!("refs/heads/{target_branch}");
 
         // Try to find both local and remote references
         let local_commit = match self.repo.find_reference(&local_ref) {
-            Ok(reference) => match reference.peel_to_commit() {
-                Ok(commit) => Some(commit),
-                Err(_) => None,
-            },
+            Ok(reference) => reference.peel_to_commit().ok(),
             Err(_) => None,
         };
 
         let remote_commit = match self.repo.find_reference(&remote_ref) {
-            Ok(reference) => match reference.peel_to_commit() {
-                Ok(commit) => Some(commit),
-                Err(_) => None,
-            },
+            Ok(reference) => reference.peel_to_commit().ok(),
             Err(_) => None,
         };
 
@@ -767,7 +768,9 @@ impl GitRepository {
         if let (Some(local), Some(remote)) = (local_commit, remote_commit) {
             if local.id() != remote.id() {
                 // Check if the remote has commits that the local doesn't have
-                let merge_base_oid = self.repo.merge_base(local.id(), remote.id())
+                let merge_base_oid = self
+                    .repo
+                    .merge_base(local.id(), remote.id())
                     .map_err(|e| CascadeError::config(format!("Failed to find merge base: {e}")))?;
 
                 // If merge base != remote commit, remote has commits that would be lost
@@ -775,9 +778,12 @@ impl GitRepository {
                     tracing::warn!(
                         "⚠️  Force push to '{}' would overwrite {} commits on remote",
                         target_branch,
-                        self.count_commits_between(&merge_base_oid.to_string(), &remote.id().to_string())?
+                        self.count_commits_between(
+                            &merge_base_oid.to_string(),
+                            &remote.id().to_string()
+                        )?
                     );
-                    
+
                     // In a real-world scenario, you might want to prompt the user here
                     // For now, we'll log the warning but allow the operation
                     tracing::info!("Force push proceeding as part of stack rebase operation");
@@ -862,6 +868,68 @@ impl GitRepository {
         Err(CascadeError::branch(format!(
             "Commit {commit_hash} not found in any local branch"
         )))
+    }
+
+    // Async wrappers for potentially blocking operations
+
+    /// Fetch from remote origin (async)
+    pub async fn fetch_async(&self) -> Result<()> {
+        let repo_path = self.path.clone();
+        crate::utils::async_ops::run_git_operation(move || {
+            let repo = GitRepository::open(&repo_path)?;
+            repo.fetch()
+        })
+        .await
+    }
+
+    /// Pull changes from remote (async)
+    pub async fn pull_async(&self, branch: &str) -> Result<()> {
+        let repo_path = self.path.clone();
+        let branch_name = branch.to_string();
+        crate::utils::async_ops::run_git_operation(move || {
+            let repo = GitRepository::open(&repo_path)?;
+            repo.pull(&branch_name)
+        })
+        .await
+    }
+
+    /// Push branch to remote (async)
+    pub async fn push_branch_async(&self, branch_name: &str) -> Result<()> {
+        let repo_path = self.path.clone();
+        let branch = branch_name.to_string();
+        crate::utils::async_ops::run_git_operation(move || {
+            let repo = GitRepository::open(&repo_path)?;
+            repo.push(&branch)
+        })
+        .await
+    }
+
+    /// Cherry-pick commit (async)
+    pub async fn cherry_pick_commit_async(&self, commit_hash: &str) -> Result<String> {
+        let repo_path = self.path.clone();
+        let hash = commit_hash.to_string();
+        crate::utils::async_ops::run_git_operation(move || {
+            let repo = GitRepository::open(&repo_path)?;
+            repo.cherry_pick(&hash)
+        })
+        .await
+    }
+
+    /// Get commit hashes between two refs (async)
+    pub async fn get_commit_hashes_between_async(
+        &self,
+        from: &str,
+        to: &str,
+    ) -> Result<Vec<String>> {
+        let repo_path = self.path.clone();
+        let from_str = from.to_string();
+        let to_str = to.to_string();
+        crate::utils::async_ops::run_git_operation(move || {
+            let repo = GitRepository::open(&repo_path)?;
+            let commits = repo.get_commits_between(&from_str, &to_str)?;
+            Ok(commits.into_iter().map(|c| c.id().to_string()).collect())
+        })
+        .await
     }
 }
 
