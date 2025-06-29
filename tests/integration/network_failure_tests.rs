@@ -308,7 +308,7 @@ async fn test_cli_network_error_integration() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
 
     // Create a stack
     let stack_result = Command::new(&binary_path)

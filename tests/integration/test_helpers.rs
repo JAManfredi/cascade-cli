@@ -165,7 +165,17 @@ pub fn assert_output_contains(
 
 /// Get binary path with caching for performance
 pub fn get_binary_path() -> PathBuf {
-    std::env::current_dir().unwrap().join("target/release/cc")
+    let current_dir = std::env::current_dir().unwrap();
+    
+    // Try release binary first, fall back to debug binary for CI
+    let release_binary = current_dir.join("target/release/cc");
+    let debug_binary = current_dir.join("target/debug/cc");
+    
+    if release_binary.exists() {
+        release_binary
+    } else {
+        debug_binary
+    }
 }
 
 /// Retry wrapper for flaky operations

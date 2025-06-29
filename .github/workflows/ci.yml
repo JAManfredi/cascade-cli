@@ -70,14 +70,14 @@ jobs:
     - name: Run unit tests
       run: cargo test --lib --verbose
 
+    - name: Build release binary for integration tests
+      run: cargo build --release
+
     - name: Run integration tests
       run: cargo test --test '*' --verbose
-      continue-on-error: true # Allow integration tests to fail while we fix network-dependent tests
 
     - name: Test CLI binary
-      run: |
-        cargo build --release
-        ./target/release/cc --help
+      run: ./target/release/cc --help
 
     - name: Test force push functionality (Linux/macOS only)
       if: matrix.os != 'windows-latest'

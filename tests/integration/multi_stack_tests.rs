@@ -14,7 +14,7 @@ async fn test_multi_stack_creation_and_switching() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
 
     // Create multiple stacks
     let stack_names = ["feature-auth", "feature-payments", "feature-ui"];
@@ -94,7 +94,7 @@ async fn test_stack_state_after_manual_git_ops() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     Command::new(&binary_path)
         .args(["stacks", "create", "git-test"])
         .current_dir(&repo_path)
@@ -149,7 +149,7 @@ async fn test_concurrent_stack_operations() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
 
     // Use the helper function for parallel operations
     let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0..5)
@@ -240,7 +240,7 @@ async fn test_stack_cleanup_and_deletion() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
 
     // Create stacks with different states
     let stack_names = ["cleanup-test-1", "cleanup-test-2"];
@@ -298,7 +298,7 @@ async fn test_stack_metadata_inconsistency() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     Command::new(&binary_path)
         .args(["stacks", "create", "metadata-test"])
         .current_dir(&repo_path)

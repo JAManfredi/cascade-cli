@@ -21,7 +21,7 @@ async fn test_complete_stack_workflow() {
     }
 
     // Test stack creation using the built binary
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     let output = Command::new(&binary_path)
         .args(["stacks", "create", "test-feature"])
         .current_dir(&repo_path)
@@ -91,7 +91,7 @@ async fn test_rebase_conflict_scenarios() {
     create_conflicting_stack(&repo_path).await;
 
     // Test automatic conflict resolution
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     let output = Command::new(&binary_path)
         .args(["rebase"])
         .current_dir(&repo_path)
@@ -117,7 +117,7 @@ async fn test_error_recovery_scenarios() {
     let (_temp_dir, repo_path) = create_test_git_repo().await;
 
     // Test with invalid stack name (empty string)
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     let output = Command::new(&binary_path)
         .args(["stacks", "create", ""])
         .current_dir(&repo_path)
@@ -226,7 +226,7 @@ async fn create_conflicting_base_changes(repo_path: &PathBuf) {
 
 async fn create_conflicting_stack(repo_path: &PathBuf) {
     // Create stack that modifies the same file
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     Command::new(&binary_path)
         .args(["stacks", "create", "conflict-test"])
         .current_dir(repo_path)

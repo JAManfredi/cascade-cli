@@ -21,7 +21,7 @@ async fn test_config_corruption_recovery() {
     fs::write(&config_path, "{ invalid json }").unwrap();
 
     // Test that CLI handles corruption gracefully
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     let output = Command::new(&binary_path)
         .args(["stacks", "list"])
         .current_dir(&repo_path)
@@ -62,7 +62,7 @@ async fn test_concurrent_config_access() {
     .unwrap();
 
     // Simulate concurrent access using helper function
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
 
     let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0..3)
         .map(|i| {
@@ -133,7 +133,7 @@ async fn test_config_permissions_handling() {
         fs::set_permissions(&cascade_dir, perms).unwrap();
 
         // Test that CLI handles permission errors gracefully
-        let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+        let binary_path = super::test_helpers::get_binary_path();
         let output = Command::new(&binary_path)
             .args(["stacks", "create", "permission-test"])
             .current_dir(&repo_path)
@@ -152,7 +152,7 @@ async fn test_config_permissions_handling() {
     // On all platforms, test directory deletion and recovery
     fs::remove_dir_all(&cascade_dir).unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     let output = Command::new(&binary_path)
         .args(["stacks", "list"])
         .current_dir(&repo_path)
@@ -239,7 +239,7 @@ async fn test_stacks_metadata_corruption() {
     )
     .unwrap();
 
-    let binary_path = std::env::current_dir().unwrap().join("target/release/cc");
+    let binary_path = super::test_helpers::get_binary_path();
     Command::new(&binary_path)
         .args(["stacks", "create", "test-stack"])
         .current_dir(&repo_path)
