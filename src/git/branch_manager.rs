@@ -43,21 +43,9 @@ impl BranchManager {
         Ok(branch_info)
     }
 
-    /// Get the commit hash for a specific branch
+    /// Get the commit hash for a specific branch safely without switching branches
     fn get_branch_commit_hash(&self, branch_name: &str) -> Result<String> {
-        // For now, we'll use a simple approach
-        // In Phase 2, we'll implement more sophisticated commit tracking
-        if branch_name == self.git_repo.get_current_branch()? {
-            self.git_repo.get_head_commit_hash()
-        } else {
-            // Switch to branch temporarily to get its commit hash
-            // This is not ideal but works for Phase 1
-            let current_branch = self.git_repo.get_current_branch()?;
-            self.git_repo.checkout_branch(branch_name)?;
-            let commit_hash = self.git_repo.get_head_commit_hash()?;
-            self.git_repo.checkout_branch(&current_branch)?;
-            Ok(commit_hash)
-        }
+        self.git_repo.get_branch_commit_hash(branch_name)
     }
 
     /// Generate a safe branch name from a commit message

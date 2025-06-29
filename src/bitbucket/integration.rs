@@ -155,7 +155,8 @@ impl BitbucketIntegration {
         description: Option<String>,
         draft: bool,
     ) -> Result<CreatePullRequestRequest> {
-        let bitbucket_config = self.config.bitbucket.as_ref().unwrap();
+        let bitbucket_config = self.config.bitbucket.as_ref()
+            .ok_or_else(|| CascadeError::config("Bitbucket configuration is missing. Run 'cc setup' to configure Bitbucket integration."))?;
 
         let repository = Repository {
             id: 0, // This will be filled by the API

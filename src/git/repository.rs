@@ -217,6 +217,21 @@ impl GitRepository {
         self.repo.find_branch(name, git2::BranchType::Local).is_ok()
     }
 
+    /// Get the commit hash for a specific branch without switching branches
+    pub fn get_branch_commit_hash(&self, branch_name: &str) -> Result<String> {
+        let branch = self
+            .repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .map_err(|e| CascadeError::branch(format!("Could not find branch '{branch_name}': {e}")))?;
+
+        let commit = branch
+            .get()
+            .peel_to_commit()
+            .map_err(|e| CascadeError::branch(format!("Could not get commit for branch '{branch_name}': {e}")))?;
+
+        Ok(commit.id().to_string())
+    }
+
     /// List all local branches
     pub fn list_branches(&self) -> Result<Vec<String>> {
         let branches = self
@@ -645,6 +660,9 @@ impl GitRepository {
             source_branch, target_branch
         );
 
+        // Safety check: Detect potential data loss by checking divergence
+        self.check_force_push_safety(target_branch)?;
+
         // First, ensure we have the latest changes for the source branch
         let source_ref = self
             .repo
@@ -711,6 +729,69 @@ impl GitRepository {
             target_branch
         );
         Ok(())
+    }
+
+    /// Check if a force push operation is safe by detecting potential data loss
+    fn check_force_push_safety(&self, target_branch: &str) -> Result<()> {
+        // First fetch latest remote changes to ensure we have up-to-date information
+        match self.fetch() {
+            Ok(_) => {},
+            Err(e) => {
+                // If fetch fails, warn but don't block the operation
+                tracing::warn!("Could not fetch latest changes for safety check: {}", e);
+            }
+        }
+
+        // Check if there are commits on the remote that would be lost
+        let remote_ref = format!("refs/remotes/origin/{}", target_branch);
+        let local_ref = format!("refs/heads/{}", target_branch);
+
+        // Try to find both local and remote references
+        let local_commit = match self.repo.find_reference(&local_ref) {
+            Ok(reference) => match reference.peel_to_commit() {
+                Ok(commit) => Some(commit),
+                Err(_) => None,
+            },
+            Err(_) => None,
+        };
+
+        let remote_commit = match self.repo.find_reference(&remote_ref) {
+            Ok(reference) => match reference.peel_to_commit() {
+                Ok(commit) => Some(commit),
+                Err(_) => None,
+            },
+            Err(_) => None,
+        };
+
+        // If we have both commits, check for divergence
+        if let (Some(local), Some(remote)) = (local_commit, remote_commit) {
+            if local.id() != remote.id() {
+                // Check if the remote has commits that the local doesn't have
+                let merge_base_oid = self.repo.merge_base(local.id(), remote.id())
+                    .map_err(|e| CascadeError::config(format!("Failed to find merge base: {e}")))?;
+
+                // If merge base != remote commit, remote has commits that would be lost
+                if merge_base_oid != remote.id() {
+                    tracing::warn!(
+                        "⚠️  Force push to '{}' would overwrite {} commits on remote",
+                        target_branch,
+                        self.count_commits_between(&merge_base_oid.to_string(), &remote.id().to_string())?
+                    );
+                    
+                    // In a real-world scenario, you might want to prompt the user here
+                    // For now, we'll log the warning but allow the operation
+                    tracing::info!("Force push proceeding as part of stack rebase operation");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Count commits between two references
+    fn count_commits_between(&self, from: &str, to: &str) -> Result<usize> {
+        let commits = self.get_commits_between(from, to)?;
+        Ok(commits.len())
     }
 
     /// Resolve a reference (branch name, tag, or commit hash) to a commit

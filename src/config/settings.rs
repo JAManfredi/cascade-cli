@@ -138,15 +138,9 @@ impl Settings {
         Ok(settings)
     }
 
-    /// Save settings to a file
+    /// Save settings to a file atomically
     pub fn save_to_file(&self, path: &Path) -> Result<()> {
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| CascadeError::config(format!("Failed to serialize config: {e}")))?;
-
-        fs::write(path, content)
-            .map_err(|e| CascadeError::config(format!("Failed to write config file: {e}")))?;
-
-        Ok(())
+        crate::utils::atomic_file::write_json(path, self)
     }
 
     /// Update a configuration value by key

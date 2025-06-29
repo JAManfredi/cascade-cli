@@ -155,15 +155,18 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
         fs::create_dir_all(&completion_dir)?;
     }
 
-    let completion_file = completion_dir.join(filename);
+    let completion_file = completion_dir.join(crate::utils::path_validation::sanitize_filename(filename));
+
+    // Validate the completion file path for security
+    crate::utils::path_validation::validate_config_path(&completion_file, &completion_dir)?;
 
     // Generate completion content
     let mut cmd = Cli::command();
     let mut content = Vec::new();
     generate(shell, &mut cmd, "cc", &mut content);
 
-    // Write to file
-    fs::write(&completion_file, content)?;
+    // Write to file atomically
+    crate::utils::atomic_file::write_bytes(&completion_file, &content)?;
 
     Ok(completion_file)
 }

@@ -570,19 +570,11 @@ impl StackManager {
             })?;
         }
 
-        // Save stacks
-        let stacks_json = serde_json::to_string_pretty(&self.stacks)
-            .map_err(|e| CascadeError::config(format!("Failed to serialize stacks: {e}")))?;
+        // Save stacks atomically
+        crate::utils::atomic_file::write_json(&self.stacks_file, &self.stacks)?;
 
-        fs::write(&self.stacks_file, stacks_json)
-            .map_err(|e| CascadeError::config(format!("Failed to write stacks file: {e}")))?;
-
-        // Save metadata
-        let metadata_json = serde_json::to_string_pretty(&self.metadata)
-            .map_err(|e| CascadeError::config(format!("Failed to serialize metadata: {e}")))?;
-
-        fs::write(&self.metadata_file, metadata_json)
-            .map_err(|e| CascadeError::config(format!("Failed to write metadata file: {e}")))?;
+        // Save metadata atomically
+        crate::utils::atomic_file::write_json(&self.metadata_file, &self.metadata)?;
 
         Ok(())
     }
@@ -657,10 +649,12 @@ impl StackManager {
             print!("   Choice (1-4): ");
 
             use std::io::{self, Write};
-            io::stdout().flush().unwrap();
+            io::stdout().flush()
+                .map_err(|e| CascadeError::config(format!("Failed to write to stdout: {e}")))?;
 
             let mut input = String::new();
-            io::stdin().read_line(&mut input).unwrap();
+            io::stdin().read_line(&mut input)
+                .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
 
             match input.trim() {
                 "1" => {
@@ -694,10 +688,12 @@ impl StackManager {
                         }
                     }
                     print!("   Enter stack name: ");
-                    io::stdout().flush().unwrap();
+                    io::stdout().flush()
+                        .map_err(|e| CascadeError::config(format!("Failed to write to stdout: {e}")))?;
 
                     let mut stack_name_input = String::new();
-                    io::stdin().read_line(&mut stack_name_input).unwrap();
+                    io::stdin().read_line(&mut stack_name_input)
+                        .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
                     let stack_name_input = stack_name_input.trim();
 
                     if let Err(e) = self.set_active_stack_by_name(stack_name_input) {

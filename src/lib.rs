@@ -5,5 +5,6 @@ pub mod errors;
 pub mod git;
 pub mod server;
 pub mod stack;
+pub mod utils;
 
 pub use errors::CascadeError;

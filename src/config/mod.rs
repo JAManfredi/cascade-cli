@@ -12,13 +12,22 @@ use std::path::{Path, PathBuf};
 pub fn get_config_dir() -> Result<PathBuf> {
     let home_dir =
         dirs::home_dir().ok_or_else(|| CascadeError::config("Could not find home directory"))?;
-    Ok(home_dir.join(".cascade"))
+    let config_dir = home_dir.join(".cascade");
+    
+    // Validate the path to ensure it's within the home directory
+    crate::utils::path_validation::validate_config_path(&config_dir, &home_dir)
 }
 
 /// Get the Cascade configuration directory for a specific repository
 pub fn get_repo_config_dir(repo_path: &Path) -> Result<PathBuf> {
-    let config_dir = repo_path.join(".cascade");
-    Ok(config_dir)
+    // Validate that repo_path is a real directory
+    let canonical_repo = repo_path.canonicalize()
+        .map_err(|e| CascadeError::config(format!("Invalid repository path '{:?}': {e}", repo_path)))?;
+    
+    let config_dir = canonical_repo.join(".cascade");
+    
+    // Validate that config dir would be within the repo directory
+    crate::utils::path_validation::validate_config_path(&config_dir, &canonical_repo)
 }
 
 /// Ensure the configuration directory exists
