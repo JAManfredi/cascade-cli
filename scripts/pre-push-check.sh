@@ -75,12 +75,9 @@ if ! run_check "Unit Tests" "cargo test --lib --verbose"; then
     FAILED_CHECKS+=("unit-tests")
 fi
 
-# 5. Integration tests (allow failures like CI does)
-print_step "Integration Tests"
-if cargo test --test '*' --verbose -- --test-threads=1; then
-    print_success "Integration tests passed"
-else
-    print_warning "Integration tests failed (allowed in CI)"
+# 5. Integration tests
+if ! run_check "Integration Tests" "cargo test --test '*' --verbose -- --test-threads=1"; then
+    FAILED_CHECKS+=("integration-tests")
 fi
 
 # 6. CLI binary test
