@@ -1,10 +1,12 @@
 use crate::integration::test_helpers::{create_test_repo_with_commits, run_cc_with_timeout};
+use serial_test::serial;
 use std::env;
 use std::fs;
 use tempfile::TempDir;
 
 /// Test checkout safety with uncommitted modified files
 #[tokio::test]
+#[serial]
 async fn test_checkout_safety_with_modified_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let repo_path = temp_dir.path();
@@ -25,6 +27,9 @@ async fn test_checkout_safety_with_modified_files() {
 
     // Set environment variable to skip interactive confirmation in tests
     env::set_var("CHECKOUT_NO_CONFIRM", "1");
+    
+    // Ensure the environment variable is set
+    assert!(env::var("CHECKOUT_NO_CONFIRM").is_ok(), "CHECKOUT_NO_CONFIRM should be set");
 
     use cascade_cli::git::GitRepository;
     let git_repo = GitRepository::open(repo_path).expect("Failed to open repository");
@@ -41,7 +46,7 @@ async fn test_checkout_safety_with_modified_files() {
     let error_msg = result.unwrap_err().to_string();
     assert!(
         error_msg.contains("uncommitted changes"),
-        "Error should mention uncommitted changes"
+        "Error should mention uncommitted changes, but got: {}", error_msg
     );
 
     // Test that unsafe checkout works
@@ -56,6 +61,7 @@ async fn test_checkout_safety_with_modified_files() {
 
 /// Test checkout safety with staged files
 #[tokio::test]
+#[serial]
 async fn test_checkout_safety_with_staged_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let repo_path = temp_dir.path();
@@ -100,6 +106,7 @@ async fn test_checkout_safety_with_staged_files() {
 
 /// Test checkout safety with untracked files
 #[tokio::test]
+#[serial]
 async fn test_checkout_safety_with_untracked_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let repo_path = temp_dir.path();
@@ -178,6 +185,7 @@ async fn test_checkout_safety_ci_environment() {
 
 /// Test commit checkout safety with uncommitted changes
 #[tokio::test]
+#[serial]
 async fn test_commit_checkout_safety_with_uncommitted_changes() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let repo_path = temp_dir.path();
@@ -278,6 +286,7 @@ async fn test_checkout_safety_error_handling() {
 
 /// Test checkout safety with various file modification patterns
 #[tokio::test]
+#[serial]
 async fn test_checkout_safety_mixed_changes() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let repo_path = temp_dir.path();

@@ -1275,7 +1275,11 @@ impl GitRepository {
         safety_info: &CheckoutSafety,
     ) -> Result<()> {
         // Check if we're in a non-interactive environment FIRST (before any output)
-        if std::env::var("CI").is_ok() || std::env::var("CHECKOUT_NO_CONFIRM").is_ok() {
+        let is_ci = std::env::var("CI").is_ok();
+        let no_confirm = std::env::var("CHECKOUT_NO_CONFIRM").is_ok();
+        let is_non_interactive = is_ci || no_confirm;
+        
+        if is_non_interactive {
             return Err(CascadeError::branch(
                 format!(
                     "Cannot checkout '{target}' with uncommitted changes in non-interactive mode. Commit your changes or use stash first."
