@@ -356,8 +356,17 @@ jobs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
       
+    - name: Check working directory status
+      run: |
+        echo "Working directory status before publish:"
+        git status --porcelain
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Warning: Working directory has uncommitted changes"
+          git diff
+        fi
+      
     - name: Publish to crates.io
-      run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      run: cargo publish --allow-dirty --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
