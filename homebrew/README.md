@@ -4,17 +4,24 @@ This directory contains the Homebrew formula for Cascade CLI.
 
 ## Installation Methods
 
-### Method 1: Direct URL Installation (Recommended)
-
-No tap required! Install directly from the formula URL:
+### Method 1: Download and Install (Works Immediately)
 
 ```bash
-brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+# Download the formula
+curl -O https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+
+# Install it
+brew install cascade-cli.rb
+
+# Clean up
+rm cascade-cli.rb
 ```
 
 To upgrade:
 ```bash
-brew upgrade https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+curl -O https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+brew upgrade cascade-cli.rb
+rm cascade-cli.rb
 ```
 
 ### Method 2: Local Installation
@@ -24,13 +31,21 @@ If you've cloned the repository:
 brew install ./homebrew/cascade-cli.rb
 ```
 
-### Method 3: Create a Tap (Optional)
+### Method 3: Create a Tap (Recommended for Long Term)
 
 If you prefer the traditional tap approach:
 
+Run the setup script:
+```bash
+./scripts/setup-homebrew-tap.sh
+```
+
+Or manually:
 1. Create a new repository at `github.com/JAManfredi/homebrew-cascade-cli`
-2. Move `cascade-cli.rb` to the root of that repository
-3. Users can then run:
+2. Create a `Formula` directory in that repo
+3. Copy `cascade-cli.rb` to `Formula/cascade-cli.rb`
+4. Push to GitHub
+5. Users can then run:
    ```bash
    brew tap JAManfredi/cascade-cli
    brew install cascade-cli

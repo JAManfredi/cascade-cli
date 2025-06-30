@@ -1,9 +1,13 @@
 # Homebrew Formula for Cascade CLI
 # 
-# Install directly with:
-# brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+# Install method 1 (download first):
+# curl -O https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+# brew install cascade-cli.rb
+# rm cascade-cli.rb
 #
-# No tap required! This formula can be installed directly from the URL.
+# Install method 2 (with tap - requires tap repository):
+# brew tap JAManfredi/cascade-cli
+# brew install cascade-cli
 
 class CascadeCli < Formula
   desc "Git-based development workflow tool for managing stacked branches"

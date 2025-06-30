@@ -106,8 +106,14 @@ $env:PATH += ";$env:USERPROFILE\bin"
 
 #### **macOS - Homebrew**
 ```bash
-# Install directly from formula URL (no tap required)
-brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+# Method 1: Download formula and install (works immediately)
+curl -O https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+brew install cascade-cli.rb
+rm cascade-cli.rb
+
+# Method 2: Using tap (requires tap repository setup)
+# brew tap JAManfredi/cascade-cli
+# brew install cascade-cli
 ```
 
 #### **Rust - Cargo**
@@ -375,8 +381,10 @@ cargo install --path . --force
 
 ### **Package Manager Updates**
 ```bash
-# Homebrew
-brew upgrade https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+# Homebrew (after downloading new formula)
+curl -O https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+brew upgrade cascade-cli.rb
+rm cascade-cli.rb
 
 # Cargo
 cargo install cascade-cli --force
