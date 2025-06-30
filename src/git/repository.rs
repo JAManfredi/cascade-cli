@@ -1,7 +1,9 @@
 use crate::errors::{CascadeError, Result};
+use chrono;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use git2::{Oid, Repository, Signature};
 use std::path::{Path, PathBuf};
-use tracing::info;
+use tracing::{info, warn};
 
 /// Repository information
 #[derive(Debug, Clone)]
@@ -11,6 +13,24 @@ pub struct RepositoryInfo {
     pub head_commit: Option<String>,
     pub is_dirty: bool,
     pub untracked_files: Vec<String>,
+}
+
+/// Backup information for force push operations
+#[derive(Debug, Clone)]
+struct ForceBackupInfo {
+    pub backup_branch_name: String,
+    pub remote_commit_id: String,
+    #[allow(dead_code)] // Used for logging/display purposes
+    pub commits_that_would_be_lost: usize,
+}
+
+/// Safety information for branch deletion operations
+#[derive(Debug, Clone)]
+struct BranchDeletionSafety {
+    pub unpushed_commits: Vec<String>,
+    pub remote_tracking_branch: Option<String>,
+    pub is_merged_to_main: bool,
+    pub main_branch_name: String,
 }
 
 /// Wrapper around git2::Repository with safe operations
@@ -615,7 +635,26 @@ impl GitRepository {
 
     /// Delete a local branch
     pub fn delete_branch(&self, name: &str) -> Result<()> {
-        tracing::info!("Deleting branch: {}", name);
+        self.delete_branch_with_options(name, false)
+    }
+
+    /// Delete a local branch with force option to bypass safety checks
+    pub fn delete_branch_unsafe(&self, name: &str) -> Result<()> {
+        self.delete_branch_with_options(name, true)
+    }
+
+    /// Internal branch deletion implementation with safety options
+    fn delete_branch_with_options(&self, name: &str, force_unsafe: bool) -> Result<()> {
+        info!("Attempting to delete branch: {}", name);
+
+        // Enhanced safety check: Detect unpushed commits before deletion
+        if !force_unsafe {
+            let safety_result = self.check_branch_deletion_safety(name)?;
+            if let Some(safety_info) = safety_result {
+                // Branch has unpushed commits, get user confirmation
+                self.handle_branch_deletion_confirmation(name, &safety_info)?;
+            }
+        }
 
         let mut branch = self
             .repo
@@ -626,7 +665,7 @@ impl GitRepository {
             .delete()
             .map_err(|e| CascadeError::branch(format!("Could not delete branch '{name}': {e}")))?;
 
-        tracing::info!("Deleted branch '{}'", name);
+        info!("Successfully deleted branch '{}'", name);
         Ok(())
     }
 
@@ -662,13 +701,38 @@ impl GitRepository {
     /// Force push one branch's content to another branch name
     /// This is used to preserve PR history while updating branch contents after rebase
     pub fn force_push_branch(&self, target_branch: &str, source_branch: &str) -> Result<()> {
+        self.force_push_branch_with_options(target_branch, source_branch, false)
+    }
+
+    /// Force push with explicit force flag to bypass safety checks
+    pub fn force_push_branch_unsafe(&self, target_branch: &str, source_branch: &str) -> Result<()> {
+        self.force_push_branch_with_options(target_branch, source_branch, true)
+    }
+
+    /// Internal force push implementation with safety options
+    fn force_push_branch_with_options(
+        &self,
+        target_branch: &str,
+        source_branch: &str,
+        force_unsafe: bool,
+    ) -> Result<()> {
         info!(
             "Force pushing {} content to {} to preserve PR history",
             source_branch, target_branch
         );
 
-        // Safety check: Detect potential data loss by checking divergence
-        self.check_force_push_safety(target_branch)?;
+        // Enhanced safety check: Detect potential data loss and get user confirmation
+        if !force_unsafe {
+            let safety_result = self.check_force_push_safety_enhanced(target_branch)?;
+            if let Some(backup_info) = safety_result {
+                // Create backup branch before force push
+                self.create_backup_branch(target_branch, &backup_info.remote_commit_id)?;
+                info!(
+                    "✅ Created backup branch: {}",
+                    backup_info.backup_branch_name
+                );
+            }
+        }
 
         // First, ensure we have the latest changes for the source branch
         let source_ref = self
@@ -738,14 +802,18 @@ impl GitRepository {
         Ok(())
     }
 
-    /// Check if a force push operation is safe by detecting potential data loss
-    fn check_force_push_safety(&self, target_branch: &str) -> Result<()> {
+    /// Enhanced safety check for force push operations with user confirmation
+    /// Returns backup info if data would be lost and user confirms
+    fn check_force_push_safety_enhanced(
+        &self,
+        target_branch: &str,
+    ) -> Result<Option<ForceBackupInfo>> {
         // First fetch latest remote changes to ensure we have up-to-date information
         match self.fetch() {
             Ok(_) => {}
             Err(e) => {
                 // If fetch fails, warn but don't block the operation
-                tracing::warn!("Could not fetch latest changes for safety check: {}", e);
+                warn!("Could not fetch latest changes for safety check: {}", e);
             }
         }
 
@@ -775,23 +843,340 @@ impl GitRepository {
 
                 // If merge base != remote commit, remote has commits that would be lost
                 if merge_base_oid != remote.id() {
-                    tracing::warn!(
+                    let commits_to_lose = self.count_commits_between(
+                        &merge_base_oid.to_string(),
+                        &remote.id().to_string(),
+                    )?;
+
+                    // Create backup branch name with timestamp
+                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+                    let backup_branch_name = format!("{target_branch}_backup_{timestamp}");
+
+                    warn!(
                         "⚠️  Force push to '{}' would overwrite {} commits on remote",
-                        target_branch,
-                        self.count_commits_between(
-                            &merge_base_oid.to_string(),
-                            &remote.id().to_string()
-                        )?
+                        target_branch, commits_to_lose
                     );
 
-                    // In a real-world scenario, you might want to prompt the user here
-                    // For now, we'll log the warning but allow the operation
-                    tracing::info!("Force push proceeding as part of stack rebase operation");
+                    // Check if we're in a non-interactive environment (CI/testing)
+                    if std::env::var("CI").is_ok() || std::env::var("FORCE_PUSH_NO_CONFIRM").is_ok()
+                    {
+                        info!(
+                            "Non-interactive environment detected, proceeding with backup creation"
+                        );
+                        return Ok(Some(ForceBackupInfo {
+                            backup_branch_name,
+                            remote_commit_id: remote.id().to_string(),
+                            commits_that_would_be_lost: commits_to_lose,
+                        }));
+                    }
+
+                    // Interactive confirmation
+                    println!("\n⚠️  FORCE PUSH WARNING ⚠️");
+                    println!("Force push to '{target_branch}' would overwrite {commits_to_lose} commits on remote:");
+
+                    // Show the commits that would be lost
+                    match self
+                        .get_commits_between(&merge_base_oid.to_string(), &remote.id().to_string())
+                    {
+                        Ok(commits) => {
+                            println!("\nCommits that would be lost:");
+                            for (i, commit) in commits.iter().take(5).enumerate() {
+                                let short_hash = &commit.id().to_string()[..8];
+                                let summary = commit.summary().unwrap_or("<no message>");
+                                println!("  {}. {} - {}", i + 1, short_hash, summary);
+                            }
+                            if commits.len() > 5 {
+                                println!("  ... and {} more commits", commits.len() - 5);
+                            }
+                        }
+                        Err(_) => {
+                            println!("  (Unable to retrieve commit details)");
+                        }
+                    }
+
+                    println!("\nA backup branch '{backup_branch_name}' will be created before proceeding.");
+
+                    let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Do you want to proceed with the force push?")
+                        .default(false)
+                        .interact()
+                        .map_err(|e| {
+                            CascadeError::config(format!("Failed to get user confirmation: {e}"))
+                        })?;
+
+                    if !confirmed {
+                        return Err(CascadeError::config(
+                            "Force push cancelled by user. Use --force to bypass this check."
+                                .to_string(),
+                        ));
+                    }
+
+                    return Ok(Some(ForceBackupInfo {
+                        backup_branch_name,
+                        remote_commit_id: remote.id().to_string(),
+                        commits_that_would_be_lost: commits_to_lose,
+                    }));
                 }
             }
         }
 
+        Ok(None)
+    }
+
+    /// Create a backup branch pointing to the remote commit that would be lost
+    fn create_backup_branch(&self, original_branch: &str, remote_commit_id: &str) -> Result<()> {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let backup_branch_name = format!("{original_branch}_backup_{timestamp}");
+
+        // Parse the commit ID
+        let commit_oid = Oid::from_str(remote_commit_id).map_err(|e| {
+            CascadeError::config(format!("Invalid commit ID {remote_commit_id}: {e}"))
+        })?;
+
+        // Find the commit
+        let commit = self.repo.find_commit(commit_oid).map_err(|e| {
+            CascadeError::config(format!("Failed to find commit {remote_commit_id}: {e}"))
+        })?;
+
+        // Create the backup branch
+        self.repo
+            .branch(&backup_branch_name, &commit, false)
+            .map_err(|e| {
+                CascadeError::config(format!(
+                    "Failed to create backup branch {backup_branch_name}: {e}"
+                ))
+            })?;
+
+        info!(
+            "✅ Created backup branch '{}' pointing to {}",
+            backup_branch_name,
+            &remote_commit_id[..8]
+        );
         Ok(())
+    }
+
+    /// Check if branch deletion is safe by detecting unpushed commits
+    /// Returns safety info if there are concerns that need user attention
+    fn check_branch_deletion_safety(
+        &self,
+        branch_name: &str,
+    ) -> Result<Option<BranchDeletionSafety>> {
+        // First, try to fetch latest remote changes
+        match self.fetch() {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(
+                    "Could not fetch latest changes for branch deletion safety check: {}",
+                    e
+                );
+            }
+        }
+
+        // Find the branch
+        let branch = self
+            .repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .map_err(|e| {
+                CascadeError::branch(format!("Could not find branch '{branch_name}': {e}"))
+            })?;
+
+        let _branch_commit = branch.get().peel_to_commit().map_err(|e| {
+            CascadeError::branch(format!(
+                "Could not get commit for branch '{branch_name}': {e}"
+            ))
+        })?;
+
+        // Determine the main branch (try common names)
+        let main_branch_name = self.detect_main_branch()?;
+
+        // Check if branch is merged to main
+        let is_merged_to_main = self.is_branch_merged_to_main(branch_name, &main_branch_name)?;
+
+        // Find the upstream/remote tracking branch
+        let remote_tracking_branch = self.get_remote_tracking_branch(branch_name);
+
+        let mut unpushed_commits = Vec::new();
+
+        // Check for unpushed commits compared to remote tracking branch
+        if let Some(ref remote_branch) = remote_tracking_branch {
+            match self.get_commits_between(remote_branch, branch_name) {
+                Ok(commits) => {
+                    unpushed_commits = commits.iter().map(|c| c.id().to_string()).collect();
+                }
+                Err(_) => {
+                    // If we can't compare with remote, check against main branch
+                    if !is_merged_to_main {
+                        if let Ok(commits) =
+                            self.get_commits_between(&main_branch_name, branch_name)
+                        {
+                            unpushed_commits = commits.iter().map(|c| c.id().to_string()).collect();
+                        }
+                    }
+                }
+            }
+        } else if !is_merged_to_main {
+            // No remote tracking branch, check against main
+            if let Ok(commits) = self.get_commits_between(&main_branch_name, branch_name) {
+                unpushed_commits = commits.iter().map(|c| c.id().to_string()).collect();
+            }
+        }
+
+        // If there are concerns, return safety info
+        if !unpushed_commits.is_empty() || (!is_merged_to_main && remote_tracking_branch.is_none())
+        {
+            Ok(Some(BranchDeletionSafety {
+                unpushed_commits,
+                remote_tracking_branch,
+                is_merged_to_main,
+                main_branch_name,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Handle user confirmation for branch deletion with safety concerns
+    fn handle_branch_deletion_confirmation(
+        &self,
+        branch_name: &str,
+        safety_info: &BranchDeletionSafety,
+    ) -> Result<()> {
+        // Check if we're in a non-interactive environment
+        if std::env::var("CI").is_ok() || std::env::var("BRANCH_DELETE_NO_CONFIRM").is_ok() {
+            return Err(CascadeError::branch(
+                format!(
+                    "Branch '{branch_name}' has {} unpushed commits and cannot be deleted in non-interactive mode. Use --force to override.",
+                    safety_info.unpushed_commits.len()
+                )
+            ));
+        }
+
+        // Interactive warning and confirmation
+        println!("\n⚠️  BRANCH DELETION WARNING ⚠️");
+        println!("Branch '{branch_name}' has potential issues:");
+
+        if !safety_info.unpushed_commits.is_empty() {
+            println!(
+                "\n🔍 Unpushed commits ({} total):",
+                safety_info.unpushed_commits.len()
+            );
+
+            // Show details of unpushed commits
+            for (i, commit_id) in safety_info.unpushed_commits.iter().take(5).enumerate() {
+                if let Ok(commit) = self.repo.find_commit(Oid::from_str(commit_id).unwrap()) {
+                    let short_hash = &commit_id[..8];
+                    let summary = commit.summary().unwrap_or("<no message>");
+                    println!("  {}. {} - {}", i + 1, short_hash, summary);
+                }
+            }
+
+            if safety_info.unpushed_commits.len() > 5 {
+                println!(
+                    "  ... and {} more commits",
+                    safety_info.unpushed_commits.len() - 5
+                );
+            }
+        }
+
+        if !safety_info.is_merged_to_main {
+            println!("\n📋 Branch status:");
+            println!("  • Not merged to '{}'", safety_info.main_branch_name);
+            if let Some(ref remote) = safety_info.remote_tracking_branch {
+                println!("  • Remote tracking branch: {remote}");
+            } else {
+                println!("  • No remote tracking branch");
+            }
+        }
+
+        println!("\n💡 Safer alternatives:");
+        if !safety_info.unpushed_commits.is_empty() {
+            if let Some(ref _remote) = safety_info.remote_tracking_branch {
+                println!("  • Push commits first: git push origin {branch_name}");
+            } else {
+                println!("  • Create and push to remote: git push -u origin {branch_name}");
+            }
+        }
+        if !safety_info.is_merged_to_main {
+            println!(
+                "  • Merge to {} first: git checkout {} && git merge {branch_name}",
+                safety_info.main_branch_name, safety_info.main_branch_name
+            );
+        }
+
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Do you want to proceed with deleting this branch?")
+            .default(false)
+            .interact()
+            .map_err(|e| CascadeError::branch(format!("Failed to get user confirmation: {e}")))?;
+
+        if !confirmed {
+            return Err(CascadeError::branch(
+                "Branch deletion cancelled by user. Use --force to bypass this check.".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Detect the main branch name (main, master, develop)
+    fn detect_main_branch(&self) -> Result<String> {
+        let main_candidates = ["main", "master", "develop", "trunk"];
+
+        for candidate in &main_candidates {
+            if self
+                .repo
+                .find_branch(candidate, git2::BranchType::Local)
+                .is_ok()
+            {
+                return Ok(candidate.to_string());
+            }
+        }
+
+        // Fallback to HEAD's target if it's a symbolic reference
+        if let Ok(head) = self.repo.head() {
+            if let Some(name) = head.shorthand() {
+                return Ok(name.to_string());
+            }
+        }
+
+        // Final fallback
+        Ok("main".to_string())
+    }
+
+    /// Check if a branch is merged to the main branch
+    fn is_branch_merged_to_main(&self, branch_name: &str, main_branch: &str) -> Result<bool> {
+        // Get the commits between main and the branch
+        match self.get_commits_between(main_branch, branch_name) {
+            Ok(commits) => Ok(commits.is_empty()),
+            Err(_) => {
+                // If we can't determine, assume not merged for safety
+                Ok(false)
+            }
+        }
+    }
+
+    /// Get the remote tracking branch for a local branch
+    fn get_remote_tracking_branch(&self, branch_name: &str) -> Option<String> {
+        // Try common remote tracking branch patterns
+        let remote_candidates = [
+            format!("origin/{branch_name}"),
+            format!("remotes/origin/{branch_name}"),
+        ];
+
+        for candidate in &remote_candidates {
+            if self
+                .repo
+                .find_reference(&format!(
+                    "refs/remotes/{}",
+                    candidate.replace("remotes/", "")
+                ))
+                .is_ok()
+            {
+                return Some(candidate.clone());
+            }
+        }
+
+        None
     }
 
     /// Count commits between two references

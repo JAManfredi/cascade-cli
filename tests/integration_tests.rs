@@ -3,8 +3,10 @@
 
 mod integration {
     mod bitbucket_api_tests;
+    mod branch_deletion_safety_tests;
     mod config_management_tests;
     mod end_to_end_tests;
+    mod force_push_safety_tests;
     mod hook_content_tests;
     mod multi_stack_tests;
     mod network_failure_tests;

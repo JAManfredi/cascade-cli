@@ -1,3 +1,4 @@
+use git2::{Repository, Signature, Time};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -24,6 +25,8 @@ pub async fn run_cli_with_timeout(
             .current_dir(&repo_path)
             .env("RUST_LOG", "info")
             .env("CI", "true") // Always set CI mode for consistent behavior
+            .env("_CC_COMPLETE", "") // Prevent shell completion activation
+            .env("COMPLETE", "") // Prevent alternative completion activation
             .output()
     });
 
@@ -186,7 +189,9 @@ pub fn assert_output_contains(
 
 /// Get binary path with caching for performance and CI compatibility
 pub fn get_binary_path() -> PathBuf {
-    let current_dir = std::env::current_dir().unwrap();
+    // Use a more stable approach that doesn't rely on current_dir
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let current_dir = PathBuf::from(manifest_dir);
 
     // CI environments usually build release binaries
     let release_binary = current_dir
@@ -406,6 +411,109 @@ impl TestFixture {
     #[allow(dead_code)]
     pub async fn create_commits(&self, count: u32, prefix: &str) {
         create_test_commits(&self.repo_path, count, prefix).await;
+    }
+}
+
+/// Create a test repository with specified number of commits using git2
+/// Returns (Repository, Vec<commit_oids>) to avoid lifetime issues
+#[allow(dead_code)]
+pub fn create_test_repo_with_commits(
+    repo_path: &Path,
+    commit_count: usize,
+) -> Result<(Repository, Vec<String>), String> {
+    // Initialize repository
+    let repo =
+        Repository::init(repo_path).map_err(|e| format!("Failed to initialize repository: {e}"))?;
+
+    // Set up configuration
+    let mut config = repo
+        .config()
+        .map_err(|e| format!("Failed to get repository config: {e}"))?;
+
+    config
+        .set_str("user.name", "Test User")
+        .map_err(|e| format!("Failed to set user.name: {e}"))?;
+    config
+        .set_str("user.email", "test@example.com")
+        .map_err(|e| format!("Failed to set user.email: {e}"))?;
+
+    let signature = Signature::new("Test User", "test@example.com", &Time::new(1234567890, 0))
+        .map_err(|e| format!("Failed to create signature: {e}"))?;
+
+    let mut commit_oids = Vec::new();
+    let mut parent_oid: Option<git2::Oid> = None;
+
+    for i in 0..commit_count {
+        // Create a test file
+        let filename = format!("test-file-{}.txt", i + 1);
+        let filepath = repo_path.join(&filename);
+        let content = format!("Content for commit {}\nTimestamp: {}", i + 1, i * 1000);
+
+        std::fs::write(&filepath, content)
+            .map_err(|e| format!("Failed to write test file: {e}"))?;
+
+        // Add file to index
+        let mut index = repo
+            .index()
+            .map_err(|e| format!("Failed to get repository index: {e}"))?;
+
+        index
+            .add_path(std::path::Path::new(&filename))
+            .map_err(|e| format!("Failed to add file to index: {e}"))?;
+
+        index
+            .write()
+            .map_err(|e| format!("Failed to write index: {e}"))?;
+
+        // Create tree from index
+        let tree_oid = index
+            .write_tree()
+            .map_err(|e| format!("Failed to write tree: {e}"))?;
+
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| format!("Failed to find tree: {e}"))?;
+
+        // Create commit
+        let message = format!("Test commit {}", i + 1);
+        let parents: Vec<git2::Commit> = if let Some(parent_oid) = parent_oid {
+            vec![repo
+                .find_commit(parent_oid)
+                .map_err(|e| format!("Failed to find parent commit: {e}"))?]
+        } else {
+            vec![] // First commit has no parents
+        };
+
+        let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
+
+        let commit_oid = repo
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                &message,
+                &tree,
+                &parent_refs,
+            )
+            .map_err(|e| format!("Failed to create commit: {e}"))?;
+
+        commit_oids.push(commit_oid.to_string());
+        parent_oid = Some(commit_oid);
+    }
+
+    Ok((repo, commit_oids))
+}
+
+/// Simplified version for most common use case
+#[allow(dead_code)]
+pub async fn run_cc_with_timeout(args: &[&str], timeout_ms: u64) -> std::process::Output {
+    let binary_path = get_binary_path();
+    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+    let timeout = Duration::from_millis(timeout_ms);
+
+    match run_cli_with_timeout(&binary_path, args, &current_dir, timeout).await {
+        Ok(output) => output,
+        Err(e) => panic!("CLI command failed: {e}"),
     }
 }
 
