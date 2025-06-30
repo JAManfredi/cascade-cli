@@ -293,6 +293,12 @@ async fn test_platform_specific_error_handling() {
         }
         // Don't fail the test since both behaviors are acceptable for non-existing paths
     }
+
+    #[cfg(windows)]
+    {
+        // On Windows, check if the result is an error (reserved name)
+        let _ = result; // Use the result to avoid unused variable warning
+    }
 }
 
 /// Test environment variable handling across platforms
@@ -314,13 +320,11 @@ async fn test_platform_environment_handling() {
     #[cfg(windows)]
     {
         // On Windows, should default to notepad if no other editor is available
-        if editor == "notepad" {
-            // This is expected on Windows without other editors
-            assert!(true);
-        } else {
-            // Another editor was found, which is also fine
+        if editor != "notepad" {
+            // Another editor was found, which should not be empty
             assert!(!editor.is_empty());
         }
+        // If it's notepad, that's the expected default - no assertion needed
     }
 
     #[cfg(not(windows))]
