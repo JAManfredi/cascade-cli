@@ -196,7 +196,14 @@ impl HooksManager {
             let content = fs::read_to_string(&hook_path)
                 .map_err(|e| CascadeError::config(format!("Failed to read hook file: {e}")))?;
 
-            if content.contains("# Cascade CLI Hook") {
+            // Check for platform-appropriate hook marker
+            let is_cascade_hook = if cfg!(windows) {
+                content.contains("rem Cascade CLI Hook")
+            } else {
+                content.contains("# Cascade CLI Hook")
+            };
+
+            if is_cascade_hook {
                 fs::remove_file(&hook_path).map_err(|e| {
                     CascadeError::config(format!("Failed to remove hook file: {e}"))
                 })?;
@@ -242,7 +249,14 @@ impl HooksManager {
             let hook_path = self.hooks_dir.join(hook.filename());
             let status = if hook_path.exists() {
                 let content = fs::read_to_string(&hook_path).unwrap_or_default();
-                if content.contains("# Cascade CLI Hook") {
+                // Check for platform-appropriate hook marker
+                let is_cascade_hook = if cfg!(windows) {
+                    content.contains("rem Cascade CLI Hook")
+                } else {
+                    content.contains("# Cascade CLI Hook")
+                };
+
+                if is_cascade_hook {
                     "✅ Cascade"
                 } else {
                     "⚠️ Custom "
@@ -990,17 +1004,25 @@ mod tests {
         let result = manager.install_hook(&hook_type);
         assert!(result.is_ok());
 
-        // Verify hook file exists
-        let hook_path = repo_path.join(".git/hooks/post-commit");
+        // Verify hook file exists with platform-appropriate filename
+        let hook_filename = hook_type.filename();
+        let hook_path = repo_path.join(".git/hooks").join(&hook_filename);
         assert!(hook_path.exists());
 
-        // Verify hook is executable
+        // Verify hook is executable (platform-specific)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let metadata = std::fs::metadata(&hook_path).unwrap();
             let permissions = metadata.permissions();
             assert!(permissions.mode() & 0o111 != 0); // Check executable bit
+        }
+
+        #[cfg(windows)]
+        {
+            // On Windows, verify it has .bat extension and file exists
+            assert!(hook_filename.ends_with(".bat"));
+            assert!(hook_path.exists());
         }
     }
 
@@ -1009,10 +1031,16 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let _manager = HooksManager::new(&repo_path).unwrap();
 
-        // Check if hook files exist (simplified test)
-        let post_commit_path = repo_path.join(".git/hooks/post-commit");
-        let pre_push_path = repo_path.join(".git/hooks/pre-push");
-        let commit_msg_path = repo_path.join(".git/hooks/commit-msg");
+        // Check if hook files exist with platform-appropriate filenames
+        let post_commit_path = repo_path
+            .join(".git/hooks")
+            .join(HookType::PostCommit.filename());
+        let pre_push_path = repo_path
+            .join(".git/hooks")
+            .join(HookType::PrePush.filename());
+        let commit_msg_path = repo_path
+            .join(".git/hooks")
+            .join(HookType::CommitMsg.filename());
 
         // Initially no hooks should be installed
         assert!(!post_commit_path.exists());
@@ -1046,7 +1074,7 @@ mod tests {
         let hook_type = HookType::PostCommit;
         manager.install_hook(&hook_type).unwrap();
 
-        let hook_path = repo_path.join(".git/hooks/post-commit");
+        let hook_path = repo_path.join(".git/hooks").join(hook_type.filename());
         assert!(hook_path.exists());
 
         let result = manager.uninstall_hook(&hook_type);
@@ -1064,22 +1092,57 @@ mod tests {
 
         // Test post-commit hook generation
         let post_commit_content = manager.generate_post_commit_hook(binary_name);
-        assert!(post_commit_content.contains("#!/bin/sh"));
+        #[cfg(windows)]
+        {
+            assert!(post_commit_content.contains("@echo off"));
+            assert!(post_commit_content.contains("rem Cascade CLI Hook"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(post_commit_content.contains("#!/bin/sh"));
+            assert!(post_commit_content.contains("# Cascade CLI Hook"));
+        }
         assert!(post_commit_content.contains(binary_name));
 
         // Test pre-push hook generation
         let pre_push_content = manager.generate_pre_push_hook(binary_name);
-        assert!(pre_push_content.contains("#!/bin/sh"));
+        #[cfg(windows)]
+        {
+            assert!(pre_push_content.contains("@echo off"));
+            assert!(pre_push_content.contains("rem Cascade CLI Hook"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(pre_push_content.contains("#!/bin/sh"));
+            assert!(pre_push_content.contains("# Cascade CLI Hook"));
+        }
         assert!(pre_push_content.contains(binary_name));
 
         // Test commit-msg hook generation (doesn't use binary, just validates)
         let commit_msg_content = manager.generate_commit_msg_hook(binary_name);
-        assert!(commit_msg_content.contains("#!/bin/sh"));
-        assert!(commit_msg_content.contains("Cascade CLI Hook")); // Check for hook identifier instead
+        #[cfg(windows)]
+        {
+            assert!(commit_msg_content.contains("@echo off"));
+            assert!(commit_msg_content.contains("rem Cascade CLI Hook"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(commit_msg_content.contains("#!/bin/sh"));
+            assert!(commit_msg_content.contains("# Cascade CLI Hook"));
+        }
 
         // Test prepare-commit-msg hook generation (does use binary)
         let prepare_commit_content = manager.generate_prepare_commit_msg_hook(binary_name);
-        assert!(prepare_commit_content.contains("#!/bin/sh"));
+        #[cfg(windows)]
+        {
+            assert!(prepare_commit_content.contains("@echo off"));
+            assert!(prepare_commit_content.contains("rem Cascade CLI Hook"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(prepare_commit_content.contains("#!/bin/sh"));
+            assert!(prepare_commit_content.contains("# Cascade CLI Hook"));
+        }
         assert!(prepare_commit_content.contains(binary_name));
     }
 
@@ -1110,9 +1173,16 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let manager = HooksManager::new(&repo_path).unwrap();
 
-        // Create a fake existing hook
-        let hook_path = repo_path.join(".git/hooks/post-commit");
-        std::fs::write(&hook_path, "#!/bin/sh\necho 'existing hook'").unwrap();
+        // Create a fake existing hook with platform-appropriate content
+        let hook_filename = HookType::PostCommit.filename();
+        let hook_path = repo_path.join(".git/hooks").join(&hook_filename);
+
+        #[cfg(windows)]
+        let existing_content = "@echo off\necho existing hook";
+        #[cfg(not(windows))]
+        let existing_content = "#!/bin/sh\necho 'existing hook'";
+
+        std::fs::write(&hook_path, existing_content).unwrap();
 
         // Install hook (should backup and replace existing)
         let hook_type = HookType::PostCommit;
@@ -1121,7 +1191,14 @@ mod tests {
 
         // Verify new content replaced old content
         let content = std::fs::read_to_string(&hook_path).unwrap();
-        assert!(content.contains("Cascade CLI Hook"));
+        #[cfg(windows)]
+        {
+            assert!(content.contains("rem Cascade CLI Hook"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(content.contains("# Cascade CLI Hook"));
+        }
         assert!(!content.contains("existing hook"));
 
         // Verify backup was created

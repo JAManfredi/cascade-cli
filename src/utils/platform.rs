@@ -384,11 +384,14 @@ mod tests {
 
         if cfg!(windows) {
             assert!(content.contains("@echo off"));
-            assert!(content.contains(".bat"));
+            assert!(content.contains("rem Cascade CLI Git Hook"));
             assert!(content.contains("ERRORLEVEL"));
+            assert!(content.contains("/usr/bin/cc"));
         } else {
             assert!(content.starts_with("#!/bin/sh"));
+            assert!(content.contains("# Cascade CLI Git Hook"));
             assert!(content.contains("exec"));
+            assert!(content.contains("/usr/bin/cc"));
         }
     }
 }
