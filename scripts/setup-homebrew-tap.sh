@@ -37,7 +37,8 @@ mkdir -p Formula
 # Copy the formula
 echo "Copying formula..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cp "$SCRIPT_DIR/../homebrew/cascade-cli.rb" ./Formula/cascade-cli.rb
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cp "$PROJECT_ROOT/homebrew/cascade-cli.rb" ./Formula/cascade-cli.rb
 
 # Create README
 cat > README.md << 'EOF'
