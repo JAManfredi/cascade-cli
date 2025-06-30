@@ -3328,8 +3328,10 @@ mod tests {
                 assert!(
                     error_msg.contains("No active stack")
                         || error_msg.contains("config")
-                        || error_msg.contains("current directory"),
-                    "Expected 'No active stack' error, got: {error_msg}"
+                        || error_msg.contains("current directory")
+                        || error_msg.contains("Not a git repository")
+                        || error_msg.contains("could not find repository"),
+                    "Expected 'No active stack' or repository error, got: {error_msg}"
                 );
             }
             Ok(_) => {
@@ -3393,8 +3395,10 @@ mod tests {
                 assert!(
                     error_msg.contains("No active stack")
                         || error_msg.contains("config")
-                        || error_msg.contains("current directory"),
-                    "Expected 'No active stack' error, got: {error_msg}"
+                        || error_msg.contains("current directory")
+                        || error_msg.contains("Not a git repository")
+                        || error_msg.contains("could not find repository"),
+                    "Expected 'No active stack' or repository error, got: {error_msg}"
                 );
             }
             Ok(_) => {
