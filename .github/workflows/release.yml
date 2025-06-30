@@ -94,12 +94,26 @@ jobs:
 
     - name: Generate shell completions (native target only)
       if: matrix.can-test
+      shell: bash
       run: |
         mkdir -p completions
-        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate bash > completions/cc.bash
-        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate zsh > completions/_cc
-        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate fish > completions/cc.fish
-        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate powershell > completions/cc.ps1
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          EXE_SUFFIX=".exe"
+        else
+          EXE_SUFFIX=""
+        fi
+        
+        BINARY_PATH="./target/${{ matrix.target }}/release/cc${EXE_SUFFIX}"
+        echo "Using binary at: $BINARY_PATH"
+        ls -la "$BINARY_PATH" || echo "Binary not found!"
+        
+        "$BINARY_PATH" completions generate bash > completions/cc.bash
+        "$BINARY_PATH" completions generate zsh > completions/_cc
+        "$BINARY_PATH" completions generate fish > completions/cc.fish
+        "$BINARY_PATH" completions generate powershell > completions/cc.ps1
+        
+        echo "Generated completions:"
+        ls -la completions/
 
     - name: Run tests (if supported)
       if: matrix.can-test
