@@ -334,7 +334,7 @@ mod tests {
         let _ = env::set_current_dir(original_dir);
 
         if let Err(e) = &result {
-            eprintln!("Doctor command failed: {}", e);
+            eprintln!("Doctor command failed: {e}");
         }
         assert!(result.is_ok());
     }
@@ -354,7 +354,7 @@ mod tests {
         let _ = env::set_current_dir(original_dir);
 
         if let Err(e) = &result {
-            eprintln!("Doctor command failed: {}", e);
+            eprintln!("Doctor command failed: {e}");
         }
         assert!(result.is_ok());
     }
