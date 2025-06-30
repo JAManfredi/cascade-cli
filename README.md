@@ -154,11 +154,11 @@ curl -fsSL https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/insta
 
 **Package Managers:**
 ```bash
+# macOS - Homebrew (direct from formula URL)
+brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+
 # Rust users
 cargo install cascade-cli
-
-# macOS - Homebrew (coming soon - tap repository setup required)
-# For now, use the universal script above or manual installation below
 ```
 
 #### **Manual Installation**

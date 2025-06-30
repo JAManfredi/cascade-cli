@@ -104,10 +104,10 @@ $env:PATH += ";$env:USERPROFILE\bin"
 
 ### **Option 3: Package Managers**
 
-#### **macOS - Homebrew** *(Coming Soon)*
+#### **macOS - Homebrew**
 ```bash
-# Homebrew tap repository setup in progress
-# For now, use the universal installer script or manual installation
+# Install directly from formula URL (no tap required)
+brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
 ```
 
 #### **Rust - Cargo**
@@ -375,8 +375,8 @@ cargo install --path . --force
 
 ### **Package Manager Updates**
 ```bash
-# Homebrew (when available)
-# brew upgrade cascade-cli
+# Homebrew
+brew upgrade https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
 
 # Cargo
 cargo install cascade-cli --force

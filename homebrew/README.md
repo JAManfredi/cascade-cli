@@ -1,14 +1,32 @@
-# Homebrew Formula Setup
+# Homebrew Formula for Cascade CLI
 
-This directory contains the Homebrew formula for Cascade CLI, but it requires additional setup to work properly.
+This directory contains the Homebrew formula for Cascade CLI.
 
-## Current Status
+## Installation Methods
 
-The formula is ready but **not yet functional** because Homebrew requires tap formulas to be in a separate repository.
+### Method 1: Direct URL Installation (Recommended)
 
-## Required Setup
+No tap required! Install directly from the formula URL:
 
-To make `brew install JAManfredi/cascade-cli/cascade-cli` work:
+```bash
+brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+```
+
+To upgrade:
+```bash
+brew upgrade https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
+```
+
+### Method 2: Local Installation
+
+If you've cloned the repository:
+```bash
+brew install ./homebrew/cascade-cli.rb
+```
+
+### Method 3: Create a Tap (Optional)
+
+If you prefer the traditional tap approach:
 
 1. Create a new repository at `github.com/JAManfredi/homebrew-cascade-cli`
 2. Move `cascade-cli.rb` to the root of that repository
@@ -18,30 +36,26 @@ To make `brew install JAManfredi/cascade-cli/cascade-cli` work:
    brew install cascade-cli
    ```
 
-## Alternative (Simpler) Approach
+## Formula Details
 
-Instead of creating a tap, you could:
+The formula:
+- Automatically detects ARM64 vs x64 architecture
+- Installs shell completions for bash, zsh, and fish
+- Includes post-install instructions
+- Has basic tests to verify installation
 
-1. Submit the formula to homebrew-core (requires meeting their acceptance criteria)
-2. Then users can simply run: `brew install cascade-cli`
+## Updating the Formula
 
-## Current Installation Method
+When releasing a new version:
+1. Update the `version` field
+2. Update the `url` fields to point to the new release
+3. Update the `sha256` checksums for both architectures
 
-Until the Homebrew tap is set up, users should install via:
-
+To calculate new checksums:
 ```bash
-# Universal installer script
-curl -fsSL https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/install.sh | bash
+# For ARM64
+shasum -a 256 cc-macos-arm64.tar.gz
 
-# Or manual download
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
-sudo mv cc /usr/local/bin/
-```
-
-## Testing the Formula Locally
-
-To test this formula without setting up a tap:
-
-```bash
-brew install --build-from-source ./homebrew/cascade-cli.rb
+# For x64
+shasum -a 256 cc-macos-x64.tar.gz
 ```

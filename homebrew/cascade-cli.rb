@@ -1,10 +1,9 @@
 # Homebrew Formula for Cascade CLI
-# NOTE: This formula requires a separate homebrew tap repository to work.
-# To use this formula, it needs to be in a repository named "homebrew-cascade-cli"
-# at github.com/JAManfredi/homebrew-cascade-cli
+# 
+# Install directly with:
+# brew install https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/homebrew/cascade-cli.rb
 #
-# Until the tap repository is created, users should install via:
-# curl -fsSL https://raw.githubusercontent.com/JAManfredi/cascade-cli/master/install.sh | bash
+# No tap required! This formula can be installed directly from the URL.
 
 class CascadeCli < Formula
   desc "Git-based development workflow tool for managing stacked branches"
