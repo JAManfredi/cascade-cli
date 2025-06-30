@@ -20,20 +20,25 @@ async fn test_branch_deletion_safety_with_unpushed_commits() {
     // Switch to feature branch and add a new commit to create unpushed commits
     repo.set_head("refs/heads/feature/test-branch")
         .expect("Failed to switch to feature branch");
-    
+
     // Add a new commit that makes the branch diverge from main
     std::fs::write(repo_path.join("unpushed-test.txt"), "Unpushed content")
         .expect("Failed to create test file");
     let mut index = repo.index().expect("Failed to get index");
-    index.add_path(std::path::Path::new("unpushed-test.txt"))
+    index
+        .add_path(std::path::Path::new("unpushed-test.txt"))
         .expect("Failed to add file to index");
     index.write().expect("Failed to write index");
-    
+
     let tree_oid = index.write_tree().expect("Failed to write tree");
     let tree = repo.find_tree(tree_oid).expect("Failed to find tree");
-    let signature = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(1234567890, 0))
-        .expect("Failed to create signature");
-    
+    let signature = git2::Signature::new(
+        "Test User",
+        "test@example.com",
+        &git2::Time::new(1234567890, 0),
+    )
+    .expect("Failed to create signature");
+
     repo.commit(
         Some("HEAD"),
         &signature,
@@ -41,8 +46,9 @@ async fn test_branch_deletion_safety_with_unpushed_commits() {
         "Add unpushed test commit",
         &tree,
         &[&head_commit],
-    ).expect("Failed to create commit");
-    
+    )
+    .expect("Failed to create commit");
+
     // Switch back to main
     repo.set_head("refs/heads/main")
         .expect("Failed to switch back to main");
@@ -109,24 +115,29 @@ async fn test_branch_deletion_safety_ci_environment() {
     let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
     repo.branch("feature/ci-test-branch", &head_commit, false)
         .expect("Failed to create feature branch");
-    
+
     // Switch to the feature branch and add a new commit
     repo.set_head("refs/heads/feature/ci-test-branch")
         .expect("Failed to switch to feature branch");
-    
+
     // Add a new commit that makes the branch diverge from main
     std::fs::write(repo_path.join("ci-test.txt"), "CI test content")
         .expect("Failed to create test file");
     let mut index = repo.index().expect("Failed to get index");
-    index.add_path(std::path::Path::new("ci-test.txt"))
+    index
+        .add_path(std::path::Path::new("ci-test.txt"))
         .expect("Failed to add file to index");
     index.write().expect("Failed to write index");
-    
+
     let tree_oid = index.write_tree().expect("Failed to write tree");
     let tree = repo.find_tree(tree_oid).expect("Failed to find tree");
-    let signature = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(1234567890, 0))
-        .expect("Failed to create signature");
-    
+    let signature = git2::Signature::new(
+        "Test User",
+        "test@example.com",
+        &git2::Time::new(1234567890, 0),
+    )
+    .expect("Failed to create signature");
+
     repo.commit(
         Some("HEAD"),
         &signature,
@@ -134,8 +145,9 @@ async fn test_branch_deletion_safety_ci_environment() {
         "Add CI test commit",
         &tree,
         &[&head_commit],
-    ).expect("Failed to create commit");
-    
+    )
+    .expect("Failed to create commit");
+
     // Switch back to main
     repo.set_head("refs/heads/main")
         .expect("Failed to switch back to main");
@@ -318,7 +330,7 @@ async fn test_cli_branch_deletion_safety_integration() {
 
     // Save the original directory
     let original_dir = env::current_dir().expect("Failed to get current directory");
-    
+
     // Change to the repository directory
     env::set_current_dir(repo_path).expect("Failed to change directory");
 

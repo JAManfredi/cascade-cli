@@ -1836,13 +1836,13 @@ mod tests {
         assert!(safety_result.is_ok());
         let safety_info = safety_result.unwrap();
         assert!(safety_info.is_some());
-        
+
         let info = safety_info.unwrap();
         assert!(!info.modified_files.is_empty());
         assert!(info.modified_files.contains(&"README.md".to_string()));
     }
 
-    #[test] 
+    #[test]
     fn test_unsafe_checkout_methods() {
         let (_temp_dir, repo_path) = create_test_repo();
         let repo = GitRepository::open(&repo_path).unwrap();
@@ -1862,7 +1862,7 @@ mod tests {
         let _result = repo.checkout_branch_unsafe("master");
         // Note: This might still fail due to git2 restrictions, but shouldn't hit our safety code
         // The important thing is that it doesn't trigger our safety confirmation
-        
+
         // Test unsafe commit checkout
         let head_commit = repo.get_head_commit().unwrap();
         let commit_hash = head_commit.id().to_string();
@@ -1935,10 +1935,10 @@ mod tests {
             .current_dir(&repo_path)
             .output()
             .unwrap();
-        
+
         // Add another commit to the test branch to make it different from master
         create_commit(&repo_path, "Branch-specific commit", "branch.txt");
-        
+
         // Go back to master
         Command::new("git")
             .args(["checkout", "master"])

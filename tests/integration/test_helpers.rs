@@ -27,13 +27,13 @@ pub async fn run_cli_with_timeout(
             .env("CI", "true") // Always set CI mode for consistent behavior
             .env("_CC_COMPLETE", "") // Prevent shell completion activation
             .env("COMPLETE", ""); // Prevent alternative completion activation
-        
+
         // Windows-specific environment setup
         if cfg!(windows) {
             cmd.env("HOME", std::env::var("USERPROFILE").unwrap_or_default())
-               .env("TERM", "xterm"); // Some CLI tools expect TERM to be set
+                .env("TERM", "xterm"); // Some CLI tools expect TERM to be set
         }
-        
+
         cmd.output()
     });
 
@@ -63,13 +63,13 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
         vec!["config", "core.autocrlf", "false"], // Prevent line ending issues
         vec!["config", "core.filemode", "false"], // Prevent file mode issues
     ];
-    
+
     // Windows-specific git configuration
     if cfg!(windows) {
         git_commands.extend(vec![
             vec!["config", "core.longpaths", "true"], // Support long paths on Windows
             vec!["config", "core.preloadindex", "true"], // Performance optimization
-            vec!["config", "core.fscache", "true"], // File system cache for Windows
+            vec!["config", "core.fscache", "true"],   // File system cache for Windows
         ]);
     }
 

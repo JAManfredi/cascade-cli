@@ -366,7 +366,7 @@ async fn test_cli_checkout_safety_integration() {
 
     // Save the original directory
     let original_dir = env::current_dir().expect("Failed to get current directory");
-    
+
     // Change to the repository directory
     env::set_current_dir(repo_path).expect("Failed to change directory");
 
