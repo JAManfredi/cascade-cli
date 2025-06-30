@@ -22,7 +22,7 @@ jobs:
         with:
           repository: JAManfredi/homebrew-cascade-cli
           path: homebrew-tap
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
       
       - name: Update formula version
         run: |
