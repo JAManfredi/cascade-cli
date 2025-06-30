@@ -2951,6 +2951,10 @@ mod tests {
     async fn test_create_stack() {
         let (_temp_dir, repo_path) = create_test_repo().await;
 
+        // Initialize cascade in the test repo
+        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
+            .expect("Failed to initialize Cascade in test repo");
+
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
         match env::set_current_dir(&repo_path) {
@@ -2967,7 +2971,10 @@ mod tests {
                     let _ = env::set_current_dir(orig);
                 }
 
-                assert!(result.is_ok());
+                assert!(
+                    result.is_ok(),
+                    "Stack creation should succeed in initialized repository"
+                );
             }
             Err(_) => {
                 // Skip test if we can't change directories (CI environment issue)
@@ -2980,6 +2987,10 @@ mod tests {
     async fn test_list_empty_stacks() {
         let (_temp_dir, repo_path) = create_test_repo().await;
 
+        // Initialize cascade in the test repo
+        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
+            .expect("Failed to initialize Cascade in test repo");
+
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
         match env::set_current_dir(&repo_path) {
@@ -2991,7 +3002,10 @@ mod tests {
                     let _ = env::set_current_dir(orig);
                 }
 
-                assert!(result.is_ok());
+                assert!(
+                    result.is_ok(),
+                    "Listing stacks should succeed in initialized repository"
+                );
             }
             Err(_) => {
                 // Skip test if we can't change directories (CI environment issue)
@@ -3140,6 +3154,10 @@ mod tests {
         // Test that auto_land_stack correctly calls land_stack with auto=true
         let (_temp_dir, repo_path) = create_test_repo().await;
 
+        // Initialize cascade in the test repo
+        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
+            .expect("Failed to initialize Cascade in test repo");
+
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
         match env::set_current_dir(&repo_path) {
             Ok(_) => {
@@ -3157,7 +3175,10 @@ mod tests {
 
                 // For now, just test that the function can be called without panic
                 // (It will fail due to missing Bitbucket config, but that's expected)
-                assert!(result.is_ok());
+                assert!(
+                    result.is_ok(),
+                    "Stack creation should succeed in initialized repository"
+                );
             }
             Err(_) => {
                 println!("Skipping test due to directory access restrictions");
