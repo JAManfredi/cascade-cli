@@ -171,11 +171,10 @@ pub fn create_git_hook_content(hook_name: &str, command: &str) -> String {
     {
         format!(
             "@echo off\n\
-             rem Cascade CLI Git Hook: {}\n\
+             rem Cascade CLI Git Hook: {hook_name}\n\
              rem Generated automatically - do not edit manually\n\n\
-             \"{}\" %*\n\
-             if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%\n",
-            hook_name, command
+             \"{command}\" %*\n\
+             if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%\n"
         )
     }
 
