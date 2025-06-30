@@ -160,6 +160,9 @@ async fn test_cli_force_push_safety_integration() {
     let (_repo, _commit_oids) =
         create_test_repo_with_commits(repo_path, 3).expect("Failed to create test repository");
 
+    // Save the original directory
+    let original_dir = env::current_dir().expect("Failed to get current directory");
+    
     // Change to the repository directory
     env::set_current_dir(repo_path).expect("Failed to change directory");
 
@@ -170,7 +173,8 @@ async fn test_cli_force_push_safety_integration() {
     // Test CLI commands that might trigger force push safety
     // This would test the end-to-end integration when we add CLI flags
 
-    env::set_current_dir("/").expect("Reset directory");
+    // Restore original directory
+    env::set_current_dir(original_dir).expect("Failed to restore directory");
 }
 
 /// Test concurrent force push safety operations

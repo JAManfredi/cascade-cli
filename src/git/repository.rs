@@ -1277,7 +1277,7 @@ impl GitRepository {
         target: &str,
         safety_info: &CheckoutSafety,
     ) -> Result<()> {
-        // Check if we're in a non-interactive environment
+        // Check if we're in a non-interactive environment FIRST (before any output)
         if std::env::var("CI").is_ok() || std::env::var("CHECKOUT_NO_CONFIRM").is_ok() {
             return Err(CascadeError::branch(
                 format!(

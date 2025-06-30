@@ -9,20 +9,43 @@ async fn test_branch_deletion_safety_with_unpushed_commits() {
     let repo_path = temp_dir.path();
 
     // Create a test repository with commits
-    let (repo, commit_oids) =
+    let (repo, _commit_oids) =
         create_test_repo_with_commits(repo_path, 3).expect("Failed to create test repository");
 
-    // Create a feature branch from first commit
-    let first_commit_oid = git2::Oid::from_str(&commit_oids[0]).expect("Valid commit OID");
-    let first_commit = repo
-        .find_commit(first_commit_oid)
-        .expect("Should find commit");
-    repo.branch("feature/test-branch", &first_commit, false)
+    // Create a feature branch from head
+    let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+    repo.branch("feature/test-branch", &head_commit, false)
         .expect("Failed to create feature branch");
 
-    // Switch to feature branch and add commits
+    // Switch to feature branch and add a new commit to create unpushed commits
     repo.set_head("refs/heads/feature/test-branch")
         .expect("Failed to switch to feature branch");
+    
+    // Add a new commit that makes the branch diverge from main
+    std::fs::write(repo_path.join("unpushed-test.txt"), "Unpushed content")
+        .expect("Failed to create test file");
+    let mut index = repo.index().expect("Failed to get index");
+    index.add_path(std::path::Path::new("unpushed-test.txt"))
+        .expect("Failed to add file to index");
+    index.write().expect("Failed to write index");
+    
+    let tree_oid = index.write_tree().expect("Failed to write tree");
+    let tree = repo.find_tree(tree_oid).expect("Failed to find tree");
+    let signature = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(1234567890, 0))
+        .expect("Failed to create signature");
+    
+    repo.commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        "Add unpushed test commit",
+        &tree,
+        &[&head_commit],
+    ).expect("Failed to create commit");
+    
+    // Switch back to main
+    repo.set_head("refs/heads/main")
+        .expect("Failed to switch back to main");
 
     // Set environment variable to skip interactive confirmation in tests
     env::set_var("BRANCH_DELETE_NO_CONFIRM", "1");
@@ -79,16 +102,43 @@ async fn test_branch_deletion_safety_ci_environment() {
     let repo_path = temp_dir.path();
 
     // Create a test repository with commits
-    let (repo, commit_oids) =
+    let (repo, _commit_oids) =
         create_test_repo_with_commits(repo_path, 3).expect("Failed to create test repository");
 
     // Create a feature branch with unpushed commits
-    let first_commit_oid = git2::Oid::from_str(&commit_oids[0]).expect("Valid commit OID");
-    let first_commit = repo
-        .find_commit(first_commit_oid)
-        .expect("Should find commit");
-    repo.branch("feature/ci-test-branch", &first_commit, false)
+    let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+    repo.branch("feature/ci-test-branch", &head_commit, false)
         .expect("Failed to create feature branch");
+    
+    // Switch to the feature branch and add a new commit
+    repo.set_head("refs/heads/feature/ci-test-branch")
+        .expect("Failed to switch to feature branch");
+    
+    // Add a new commit that makes the branch diverge from main
+    std::fs::write(repo_path.join("ci-test.txt"), "CI test content")
+        .expect("Failed to create test file");
+    let mut index = repo.index().expect("Failed to get index");
+    index.add_path(std::path::Path::new("ci-test.txt"))
+        .expect("Failed to add file to index");
+    index.write().expect("Failed to write index");
+    
+    let tree_oid = index.write_tree().expect("Failed to write tree");
+    let tree = repo.find_tree(tree_oid).expect("Failed to find tree");
+    let signature = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(1234567890, 0))
+        .expect("Failed to create signature");
+    
+    repo.commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        "Add CI test commit",
+        &tree,
+        &[&head_commit],
+    ).expect("Failed to create commit");
+    
+    // Switch back to main
+    repo.set_head("refs/heads/main")
+        .expect("Failed to switch back to main");
 
     // Set CI environment variable
     env::set_var("CI", "true");
@@ -266,6 +316,9 @@ async fn test_cli_branch_deletion_safety_integration() {
     let (_repo, _commit_oids) =
         create_test_repo_with_commits(repo_path, 3).expect("Failed to create test repository");
 
+    // Save the original directory
+    let original_dir = env::current_dir().expect("Failed to get current directory");
+    
     // Change to the repository directory
     env::set_current_dir(repo_path).expect("Failed to change directory");
 
@@ -276,7 +329,8 @@ async fn test_cli_branch_deletion_safety_integration() {
     // Test CLI commands that might trigger branch deletion safety
     // This would test the end-to-end integration when we add CLI flags for deletion
 
-    env::set_current_dir("/").expect("Reset directory");
+    // Restore original directory
+    env::set_current_dir(original_dir).expect("Failed to restore directory");
 }
 
 /// Test platform-specific behavior for branch deletion safety
