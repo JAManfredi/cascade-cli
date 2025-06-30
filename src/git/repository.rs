@@ -255,11 +255,11 @@ impl GitRepository {
 
         // Enhanced safety check: Detect uncommitted work before checkout
         if !force_unsafe {
-            let safety_result = self.check_checkout_safety(&format!("commit:{}", commit_hash))?;
+            let safety_result = self.check_checkout_safety(&format!("commit:{commit_hash}"))?;
             if let Some(safety_info) = safety_result {
                 // Repository has uncommitted changes, get user confirmation
                 self.handle_checkout_confirmation(
-                    &format!("commit {}", commit_hash),
+                    &format!("commit {commit_hash}"),
                     &safety_info,
                 )?;
             }
@@ -1281,8 +1281,7 @@ impl GitRepository {
         if std::env::var("CI").is_ok() || std::env::var("CHECKOUT_NO_CONFIRM").is_ok() {
             return Err(CascadeError::branch(
                 format!(
-                    "Cannot checkout '{}' with uncommitted changes in non-interactive mode. Commit your changes or use stash first.",
-                    target
+                    "Cannot checkout '{target}' with uncommitted changes in non-interactive mode. Commit your changes or use stash first."
                 )
             ));
         }
@@ -1297,7 +1296,7 @@ impl GitRepository {
                 safety_info.modified_files.len()
             );
             for file in safety_info.modified_files.iter().take(10) {
-                println!("   - {}", file);
+                println!("   - {file}");
             }
             if safety_info.modified_files.len() > 10 {
                 println!("   ... and {} more", safety_info.modified_files.len() - 10);
@@ -1307,7 +1306,7 @@ impl GitRepository {
         if !safety_info.staged_files.is_empty() {
             println!("\n📁 Staged files ({}):", safety_info.staged_files.len());
             for file in safety_info.staged_files.iter().take(10) {
-                println!("   - {}", file);
+                println!("   - {file}");
             }
             if safety_info.staged_files.len() > 10 {
                 println!("   ... and {} more", safety_info.staged_files.len() - 10);
@@ -1320,7 +1319,7 @@ impl GitRepository {
                 safety_info.untracked_files.len()
             );
             for file in safety_info.untracked_files.iter().take(5) {
-                println!("   - {}", file);
+                println!("   - {file}");
             }
             if safety_info.untracked_files.len() > 5 {
                 println!("   ... and {} more", safety_info.untracked_files.len() - 5);
@@ -1347,11 +1346,11 @@ impl GitRepository {
 
             match self.create_stash(&stash_message) {
                 Ok(stash_oid) => {
-                    println!("✅ Created stash: {} ({})", stash_message, stash_oid);
+                    println!("✅ Created stash: {stash_message} ({stash_oid})");
                     println!("💡 You can restore with: git stash pop");
                 }
                 Err(e) => {
-                    println!("❌ Failed to create stash: {}", e);
+                    println!("❌ Failed to create stash: {e}");
 
                     let force_confirm = Confirm::with_theme(&ColorfulTheme::default())
                         .with_prompt("Stash failed. Force checkout anyway? (WILL LOSE CHANGES)")
@@ -1383,8 +1382,7 @@ impl GitRepository {
 
         warn!("Automatic stashing not yet implemented - please stash manually");
         Err(CascadeError::branch(format!(
-            "Please manually stash your changes first: git stash push -m \"{}\"",
-            message
+            "Please manually stash your changes first: git stash push -m \"{message}\""
         )))
     }
 

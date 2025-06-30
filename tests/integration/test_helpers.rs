@@ -24,7 +24,6 @@ pub async fn run_cli_with_timeout(
         cmd.args(&args)
             .current_dir(&repo_path)
             .env("RUST_LOG", "info")
-            .env("CI", "true") // Always set CI mode for consistent behavior
             .env("_CC_COMPLETE", "") // Prevent shell completion activation
             .env("COMPLETE", ""); // Prevent alternative completion activation
 
@@ -54,7 +53,7 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path().to_path_buf();
 
-    // Initialize git with CI-compatible config
+    // Initialize git with standard config
     let mut git_commands = vec![
         vec!["init"],
         vec!["config", "user.name", "Test User"],
@@ -110,7 +109,7 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
 pub async fn create_test_cascade_repo(bitbucket_url: Option<String>) -> (TempDir, PathBuf) {
     let (temp_dir, repo_path) = create_test_git_repo().await;
 
-    // Initialize cascade with retry logic for CI stability
+    // Initialize cascade with retry logic for reliability
     let url = bitbucket_url.unwrap_or_else(|| "https://test.bitbucket.com".to_string());
 
     for attempt in 1..=3 {
@@ -203,7 +202,7 @@ pub fn assert_output_contains(
     );
 }
 
-/// Get binary path with caching for performance and CI compatibility
+/// Get binary path with caching for performance
 pub fn get_binary_path() -> PathBuf {
     // Use a more stable approach that doesn't rely on current_dir
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -217,7 +216,7 @@ pub fn get_binary_path() -> PathBuf {
         .join("target/debug")
         .join(cascade_cli::utils::platform::executable_name("cc"));
 
-    // Try release first (for CI compatibility), then debug
+    // Try release first, then debug
     if release_binary.exists() && cascade_cli::utils::platform::is_executable(&release_binary) {
         release_binary
     } else if debug_binary.exists() && cascade_cli::utils::platform::is_executable(&debug_binary) {
@@ -279,13 +278,7 @@ where
     // Limit concurrency based on environment and platform
     let max_concurrency = std::env::var("INTEGRATION_TEST_CONCURRENCY")
         .unwrap_or_else(|_| {
-            if std::env::var("CI").is_ok() {
-                if cfg!(windows) {
-                    "1".to_string() // Very conservative for Windows CI
-                } else {
-                    "1".to_string() // Conservative for all CI
-                }
-            } else if cfg!(windows) {
+            if cfg!(windows) {
                 "1".to_string() // Windows is more sensitive to concurrency
             } else {
                 "2".to_string() // Unix can handle more concurrency
@@ -307,17 +300,11 @@ where
                 .await
                 .expect("Semaphore should not be closed");
 
-            // Add jitter to prevent thundering herd - platform and environment aware
-            let jitter_max = if std::env::var("CI").is_ok() {
-                if cfg!(windows) {
-                    300 // Extra long delays for Windows CI
-                } else {
-                    200 // Longer delays in CI to reduce race conditions
-                }
-            } else if cfg!(windows) {
-                150 // Windows needs longer delays locally too
+            // Add jitter to prevent thundering herd
+            let jitter_max = if cfg!(windows) {
+                150 // Windows needs longer delays
             } else {
-                100 // Moderate delays for Unix locally
+                50 // Shorter delays for Unix
             };
             let jitter = Duration::from_millis(fastrand::u64(0..jitter_max));
             tokio::time::sleep(jitter).await;
@@ -361,7 +348,7 @@ where
     results
 }
 
-/// Test fixture with automatic cleanup and CI-compatible configuration
+/// Test fixture with automatic cleanup and standard configuration
 pub struct TestFixture {
     #[allow(dead_code)]
     pub temp_dir: TempDir,
@@ -395,7 +382,7 @@ impl TestFixture {
         }
     }
 
-    /// Run CLI command with CI-compatible timeout
+    /// Run CLI command with timeout
     #[allow(dead_code)]
     pub async fn run_cli(&self, args: &[&str]) -> std::process::Output {
         let timeout = Duration::from_secs(
