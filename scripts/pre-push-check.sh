@@ -77,14 +77,14 @@ fi
 
 # 5. Integration tests (allow failures like CI does)
 print_step "Integration Tests"
-if cargo test --test '*' --verbose; then
+if cargo test --test '*' --verbose -- --test-threads=1; then
     print_success "Integration tests passed"
 else
     print_warning "Integration tests failed (allowed in CI)"
 fi
 
 # 6. CLI binary test
-if ! run_check "CLI Binary Test" "cargo build --release && ./target/release/cc --help > /dev/null"; then
+if ! run_check "CLI Binary Test" "cargo build --release && ./target/release/csc --help > /dev/null"; then
     FAILED_CHECKS+=("cli-binary")
 fi
 

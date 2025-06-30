@@ -74,7 +74,7 @@ jobs:
       run: cargo build --release
 
     - name: Run integration tests
-      run: cargo test --test '*' --verbose
+      run: cargo test --test '*' --verbose -- --test-threads=1
 
     - name: Test CLI binary
       run: ./target/release/csc --help
