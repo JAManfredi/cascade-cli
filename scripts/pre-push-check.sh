@@ -65,7 +65,16 @@ if ! run_check "Clippy Linting" "cargo clippy --all-targets --all-features -- -D
     print_warning "Fix clippy warnings or run 'cargo clippy --fix' for auto-fixes"
 fi
 
-# 2b. Run Clippy with beta if available (matches CI matrix)
+# 2b. Platform-specific code reminder
+print_step "Platform-specific Code Check"
+if grep -r "#\[cfg(windows)\]" src/ >/dev/null 2>&1; then
+    print_warning "Platform-specific code detected - ensure testing on CI"
+    print_warning "Windows-specific code may behave differently in CI"
+else
+    print_success "No platform-specific code found"
+fi
+
+# 2c. Run Clippy with beta if available (matches CI matrix)
 if rustup toolchain list | grep -q "beta"; then
     print_step "Clippy Beta (CI compatibility check)"
     if rustup run beta cargo clippy --all-targets --all-features -- -D warnings 2>/dev/null; then
