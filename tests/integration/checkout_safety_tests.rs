@@ -27,9 +27,12 @@ async fn test_checkout_safety_with_modified_files() {
 
     // Set environment variable to skip interactive confirmation in tests
     env::set_var("CHECKOUT_NO_CONFIRM", "1");
-    
+
     // Ensure the environment variable is set
-    assert!(env::var("CHECKOUT_NO_CONFIRM").is_ok(), "CHECKOUT_NO_CONFIRM should be set");
+    assert!(
+        env::var("CHECKOUT_NO_CONFIRM").is_ok(),
+        "CHECKOUT_NO_CONFIRM should be set"
+    );
 
     use cascade_cli::git::GitRepository;
     let git_repo = GitRepository::open(repo_path).expect("Failed to open repository");
@@ -46,7 +49,8 @@ async fn test_checkout_safety_with_modified_files() {
     let error_msg = result.unwrap_err().to_string();
     assert!(
         error_msg.contains("uncommitted changes"),
-        "Error should mention uncommitted changes, but got: {}", error_msg
+        "Error should mention uncommitted changes, but got: {}",
+        error_msg
     );
 
     // Test that unsafe checkout works

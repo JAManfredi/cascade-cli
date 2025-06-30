@@ -1278,7 +1278,7 @@ impl GitRepository {
         let is_ci = std::env::var("CI").is_ok();
         let no_confirm = std::env::var("CHECKOUT_NO_CONFIRM").is_ok();
         let is_non_interactive = is_ci || no_confirm;
-        
+
         if is_non_interactive {
             return Err(CascadeError::branch(
                 format!(
