@@ -28,6 +28,30 @@ cargo test -- --test-threads=1
 ./scripts/pre-push-check.sh
 ```
 
+### Git Hook Setup
+To automatically run formatting and linting checks before pushing:
+```bash
+# Install the pre-push Git hook (one-time setup)
+cp .git/hooks/pre-push.sample .git/hooks/pre-push 2>/dev/null || true
+cat > .git/hooks/pre-push << 'EOF'
+#!/bin/bash
+GIT_DIR=$(git rev-parse --show-toplevel)
+if [ -f "$GIT_DIR/scripts/pre-push-check.sh" ]; then
+    echo "Running pre-push checks..."
+    "$GIT_DIR/scripts/pre-push-check.sh"
+    exit $?
+fi
+EOF
+chmod +x .git/hooks/pre-push
+```
+
+The pre-push hook will automatically run:
+- `cargo fmt --all -- --check` (formatting check)
+- `cargo clippy --all-targets --all-features -- -D warnings` (linting)
+- All other CI checks before allowing push
+
+If any check fails, the push will be prevented.
+
 ### Linting and Formatting
 ```bash
 # Check formatting
@@ -195,3 +219,15 @@ Configuration loading includes validation and corruption recovery mechanisms.
 - Includes shell completion installation option
 
 Usage: `powershell -ExecutionPolicy Bypass -File install.ps1`
+
+## Important Notes
+
+### Pre-Push Validation
+**ALWAYS run `./scripts/pre-push-check.sh` before pushing changes.** This script runs:
+- Formatting checks (`cargo fmt`)
+- Linting (`cargo clippy`)
+- Build verification
+- Unit and integration tests
+- Documentation checks
+
+The Git hook setup (see above) will automate this, but if working without hooks, manual execution is critical to prevent CI failures.

@@ -258,10 +258,7 @@ impl GitRepository {
             let safety_result = self.check_checkout_safety(&format!("commit:{commit_hash}"))?;
             if let Some(safety_info) = safety_result {
                 // Repository has uncommitted changes, get user confirmation
-                self.handle_checkout_confirmation(
-                    &format!("commit {commit_hash}"),
-                    &safety_info,
-                )?;
+                self.handle_checkout_confirmation(&format!("commit {commit_hash}"), &safety_info)?;
             }
         }
 
