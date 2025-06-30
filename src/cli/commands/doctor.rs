@@ -288,10 +288,11 @@ mod tests {
         // Initialize git repository
         let repo = Repository::init(&repo_path).unwrap();
 
-        // Configure git user
+        // Configure git user and default branch
         let mut config = repo.config().unwrap();
         config.set_str("user.name", "Test User").unwrap();
         config.set_str("user.email", "test@example.com").unwrap();
+        config.set_str("init.defaultBranch", "main").unwrap();
 
         // Create initial commit
         let signature = Signature::now("Test User", "test@example.com").unwrap();
@@ -301,8 +302,8 @@ mod tests {
         };
         let tree = repo.find_tree(tree_id).unwrap();
 
-        repo.commit(
-            Some("HEAD"),
+        let commit_oid = repo.commit(
+            None, // Create initial commit without updating HEAD
             &signature,
             &signature,
             "Initial commit",
@@ -310,6 +311,12 @@ mod tests {
             &[],
         )
         .unwrap();
+
+        // Create main branch and set HEAD
+        let commit = repo.find_commit(commit_oid).unwrap();
+        repo.branch("main", &commit, false).unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+        repo.checkout_head(None).unwrap();
 
         (temp_dir, repo_path)
     }
@@ -325,6 +332,9 @@ mod tests {
 
         let _ = env::set_current_dir(original_dir);
 
+        if let Err(e) = &result {
+            eprintln!("Doctor command failed: {}", e);
+        }
         assert!(result.is_ok());
     }
 
@@ -342,6 +352,9 @@ mod tests {
 
         let _ = env::set_current_dir(original_dir);
 
+        if let Err(e) = &result {
+            eprintln!("Doctor command failed: {}", e);
+        }
         assert!(result.is_ok());
     }
 }
