@@ -324,7 +324,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_doctor_uninitialized() {
-        let (_temp_dir, repo_path) = create_test_repo().await;
+        let (temp_dir, repo_path) = create_test_repo().await;
 
         let original_dir = env::current_dir().unwrap();
         env::set_current_dir(&repo_path).unwrap();
@@ -332,6 +332,9 @@ mod tests {
         let result = run().await;
 
         let _ = env::set_current_dir(original_dir);
+
+        // Keep temp_dir alive until after the operation completes
+        drop(temp_dir);
 
         if let Err(e) = &result {
             eprintln!("Doctor command failed: {e}");
@@ -341,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_doctor_initialized() {
-        let (_temp_dir, repo_path) = create_test_repo().await;
+        let (temp_dir, repo_path) = create_test_repo().await;
 
         // Initialize Cascade
         initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
@@ -352,6 +355,9 @@ mod tests {
         let result = run().await;
 
         let _ = env::set_current_dir(original_dir);
+
+        // Keep temp_dir alive until after the operation completes
+        drop(temp_dir);
 
         if let Err(e) = &result {
             eprintln!("Doctor command failed: {e}");
