@@ -3,6 +3,9 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 
+/// Platform-specific utilities for cross-platform compatibility
+pub mod platform;
+
 /// Atomic file operations to prevent corruption during writes
 pub mod atomic_file {
     use super::*;

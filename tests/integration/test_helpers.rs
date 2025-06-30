@@ -189,13 +189,17 @@ pub fn get_binary_path() -> PathBuf {
     let current_dir = std::env::current_dir().unwrap();
 
     // CI environments usually build release binaries
-    let release_binary = current_dir.join("target/release/cc");
-    let debug_binary = current_dir.join("target/debug/cc");
+    let release_binary = current_dir
+        .join("target/release")
+        .join(cascade_cli::utils::platform::executable_name("cc"));
+    let debug_binary = current_dir
+        .join("target/debug")
+        .join(cascade_cli::utils::platform::executable_name("cc"));
 
     // Try release first (for CI compatibility), then debug
-    if release_binary.exists() && is_executable(&release_binary) {
+    if release_binary.exists() && cascade_cli::utils::platform::is_executable(&release_binary) {
         release_binary
-    } else if debug_binary.exists() && is_executable(&debug_binary) {
+    } else if debug_binary.exists() && cascade_cli::utils::platform::is_executable(&debug_binary) {
         debug_binary
     } else {
         panic!(
@@ -203,25 +207,6 @@ pub fn get_binary_path() -> PathBuf {
             release_binary.display(),
             debug_binary.display()
         );
-    }
-}
-
-/// Check if a file is executable (cross-platform)
-fn is_executable(path: &Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(metadata) = std::fs::metadata(path) {
-            metadata.permissions().mode() & 0o111 != 0
-        } else {
-            false
-        }
-    }
-
-    #[cfg(not(unix))]
-    {
-        // On Windows, assume files are executable if they exist
-        path.exists()
     }
 }
 

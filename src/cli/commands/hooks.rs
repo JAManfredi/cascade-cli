@@ -63,13 +63,18 @@ pub enum HookType {
 }
 
 impl HookType {
-    fn filename(&self) -> &'static str {
-        match self {
+    fn filename(&self) -> String {
+        let base_name = match self {
             HookType::PostCommit => "post-commit",
             HookType::PrePush => "pre-push",
             HookType::CommitMsg => "commit-msg",
             HookType::PrepareCommitMsg => "prepare-commit-msg",
-        }
+        };
+        format!(
+            "{}{}",
+            base_name,
+            crate::utils::platform::git_hook_extension()
+        )
     }
 
     fn description(&self) -> &'static str {
@@ -155,26 +160,9 @@ impl HooksManager {
         fs::write(&hook_path, hook_content)
             .map_err(|e| CascadeError::config(format!("Failed to write hook file: {e}")))?;
 
-        // Make executable (Unix only - Windows doesn't need this)
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&hook_path)
-                .map_err(|e| {
-                    CascadeError::config(format!("Failed to get hook file metadata: {e}"))
-                })?
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&hook_path, perms).map_err(|e| {
-                CascadeError::config(format!("Failed to make hook executable: {e}"))
-            })?;
-        }
-
-        #[cfg(windows)]
-        {
-            // On Windows, .sh files are executed by Git Bash automatically
-            // No need to set executable permissions
-        }
+        // Make executable (platform-specific)
+        crate::utils::platform::make_executable(&hook_path)
+            .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {e}")))?;
 
         println!("✅ Installed {} hook", hook_type.filename());
         Ok(())
@@ -276,7 +264,7 @@ impl HooksManager {
     }
 
     /// Generate hook script content
-    fn generate_hook_script(&self, hook_type: &HookType) -> Result<String> {
+    pub fn generate_hook_script(&self, hook_type: &HookType) -> Result<String> {
         let cascade_cli = env::current_exe()
             .map_err(|e| {
                 CascadeError::config(format!("Failed to get current executable path: {e}"))
@@ -295,96 +283,224 @@ impl HooksManager {
     }
 
     fn generate_post_commit_hook(&self, cascade_cli: &str) -> String {
-        format!(
-            r#"#!/bin/sh
-# Cascade CLI Hook - Post Commit
-# Automatically adds new commits to the active stack
+        #[cfg(windows)]
+        {
+            format!(
+                "@echo off\n\
+                 rem Cascade CLI Hook - Post Commit\n\
+                 rem Automatically adds new commits to the active stack\n\n\
+                 rem Get the commit hash and message\n\
+                 for /f \"tokens=*\" %%i in ('git rev-parse HEAD') do set COMMIT_HASH=%%i\n\
+                 for /f \"tokens=*\" %%i in ('git log --format=%%s -n 1 HEAD') do set COMMIT_MSG=%%i\n\n\
+                 rem Check if Cascade is initialized\n\
+                 if not exist \".cascade\" (\n\
+                     echo ℹ️ Cascade not initialized, skipping stack management\n\
+                     echo 💡 Run 'cc init' to start using stacked diffs\n\
+                     exit /b 0\n\
+                 )\n\n\
+                 rem Check if there's an active stack\n\
+                 \"{cascade_cli}\" stack list --active >nul 2>&1\n\
+                 if %ERRORLEVEL% neq 0 (\n\
+                     echo ℹ️ No active stack found, commit will not be added to any stack\n\
+                     echo 💡 Use 'cc stack create ^<name^>' to create a stack for this commit\n\
+                     exit /b 0\n\
+                 )\n\n\
+                 rem Add commit to active stack\n\
+                 echo 🪝 Adding commit to active stack...\n\
+                 echo 📝 Commit: %COMMIT_MSG%\n\
+                 \"{cascade_cli}\" stack push --commit \"%COMMIT_HASH%\" --message \"%COMMIT_MSG%\"\n\
+                 if %ERRORLEVEL% equ 0 (\n\
+                     echo ✅ Commit added to stack successfully\n\
+                     echo 💡 Next: 'cc submit' to create PRs when ready\n\
+                 ) else (\n\
+                     echo ⚠️ Failed to add commit to stack\n\
+                     echo 💡 You can manually add it with: cc push --commit %COMMIT_HASH%\n\
+                 )\n"
+            )
+        }
 
-set -e
-
-# Get the commit hash and message
-COMMIT_HASH=$(git rev-parse HEAD)
-COMMIT_MSG=$(git log --format=%s -n 1 HEAD)
-
-# Check if Cascade is initialized
-if [ ! -d ".cascade" ]; then
-    echo "ℹ️ Cascade not initialized, skipping stack management"
-    echo "💡 Run 'cc init' to start using stacked diffs"
-    exit 0
-fi
-
-# Check if there's an active stack
-if ! "{cascade_cli}" stack list --active > /dev/null 2>&1; then
-    echo "ℹ️ No active stack found, commit will not be added to any stack"
-    echo "💡 Use 'cc stack create <name>' to create a stack for this commit"
-    exit 0
-fi
-
-# Add commit to active stack (using specific commit targeting)
-echo "🪝 Adding commit to active stack..."
-echo "📝 Commit: $COMMIT_MSG"
-if "{cascade_cli}" stack push --commit "$COMMIT_HASH" --message "$COMMIT_MSG"; then
-    echo "✅ Commit added to stack successfully"
-    echo "💡 Next: 'cc submit' to create PRs when ready"
-else
-    echo "⚠️ Failed to add commit to stack"
-    echo "💡 You can manually add it with: cc push --commit $COMMIT_HASH"
-fi
-"#
-        )
+        #[cfg(not(windows))]
+        {
+            format!(
+                "#!/bin/sh\n\
+                 # Cascade CLI Hook - Post Commit\n\
+                 # Automatically adds new commits to the active stack\n\n\
+                 set -e\n\n\
+                 # Get the commit hash and message\n\
+                 COMMIT_HASH=$(git rev-parse HEAD)\n\
+                 COMMIT_MSG=$(git log --format=%s -n 1 HEAD)\n\n\
+                 # Check if Cascade is initialized\n\
+                 if [ ! -d \".cascade\" ]; then\n\
+                     echo \"ℹ️ Cascade not initialized, skipping stack management\"\n\
+                     echo \"💡 Run 'cc init' to start using stacked diffs\"\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Check if there's an active stack\n\
+                 if ! \"{cascade_cli}\" stack list --active > /dev/null 2>&1; then\n\
+                     echo \"ℹ️ No active stack found, commit will not be added to any stack\"\n\
+                     echo \"💡 Use 'cc stack create <name>' to create a stack for this commit\"\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Add commit to active stack (using specific commit targeting)\n\
+                 echo \"🪝 Adding commit to active stack...\"\n\
+                 echo \"📝 Commit: $COMMIT_MSG\"\n\
+                 if \"{cascade_cli}\" stack push --commit \"$COMMIT_HASH\" --message \"$COMMIT_MSG\"; then\n\
+                     echo \"✅ Commit added to stack successfully\"\n\
+                     echo \"💡 Next: 'cc submit' to create PRs when ready\"\n\
+                 else\n\
+                     echo \"⚠️ Failed to add commit to stack\"\n\
+                     echo \"💡 You can manually add it with: cc push --commit $COMMIT_HASH\"\n\
+                 fi\n"
+            )
+        }
     }
 
     fn generate_pre_push_hook(&self, cascade_cli: &str) -> String {
-        format!(
-            r#"#!/bin/sh
-# Cascade CLI Hook - Pre Push
-# Prevents force pushes and validates stack state
+        #[cfg(windows)]
+        {
+            format!(
+                "@echo off\n\
+                 rem Cascade CLI Hook - Pre Push\n\
+                 rem Prevents force pushes and validates stack state\n\n\
+                 rem Check for force push\n\
+                 echo %* | findstr /C:\"--force\" /C:\"--force-with-lease\" /C:\"-f\" >nul\n\
+                 if %ERRORLEVEL% equ 0 (\n\
+                     echo ❌ Force push detected!\n\
+                     echo 🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity\n\
+                     echo.\n\
+                     echo 💡 Instead of force pushing, try these streamlined commands:\n\
+                     echo    • cc sync      - Sync with remote changes ^(handles rebasing^)\n\
+                     echo    • cc push      - Push all unpushed commits ^(new default^)\n\
+                     echo    • cc submit    - Submit all entries for review ^(new default^)\n\
+                     echo    • cc autoland  - Auto-merge when approved + builds pass\n\
+                     echo.\n\
+                     echo 🚨 If you really need to force push, run:\n\
+                     echo    git push --force-with-lease [remote] [branch]\n\
+                     echo    ^(But consider if this will affect other stack entries^)\n\
+                     exit /b 1\n\
+                 )\n\n\
+                 rem Check if Cascade is initialized\n\
+                 if not exist \".cascade\" (\n\
+                     echo ℹ️ Cascade not initialized, allowing push\n\
+                     exit /b 0\n\
+                 )\n\n\
+                 rem Validate stack state\n\
+                 echo 🪝 Validating stack state before push...\n\
+                 \"{cascade_cli}\" stack validate\n\
+                 if %ERRORLEVEL% equ 0 (\n\
+                     echo ✅ Stack validation passed\n\
+                 ) else (\n\
+                     echo ❌ Stack validation failed\n\
+                     echo 💡 Fix validation errors before pushing:\n\
+                     echo    • cc doctor       - Check overall health\n\
+                     echo    • cc status       - Check current stack status\n\
+                     echo    • cc sync         - Sync with remote and rebase if needed\n\
+                     exit /b 1\n\
+                 )\n\n\
+                 echo ✅ Pre-push validation complete\n"
+            )
+        }
 
-set -e
-
-# Check for force push
-if echo "$*" | grep -q -- "--force\|--force-with-lease\|-f"; then
-    echo "❌ Force push detected!"
-    echo "🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity"
-    echo ""
-    echo "💡 Instead of force pushing, try these streamlined commands:"
-    echo "   • cc sync      - Sync with remote changes (handles rebasing)"
-    echo "   • cc push      - Push all unpushed commits (new default)"
-    echo "   • cc submit    - Submit all entries for review (new default)"
-    echo "   • cc autoland  - Auto-merge when approved + builds pass"
-    echo ""
-    echo "🚨 If you really need to force push, run:"
-    echo "   git push --force-with-lease [remote] [branch]"
-    echo "   (But consider if this will affect other stack entries)"
-    exit 1
-fi
-
-# Check if Cascade is initialized
-if [ ! -d ".cascade" ]; then
-    echo "ℹ️ Cascade not initialized, allowing push"
-    exit 0
-fi
-
-# Validate stack state
-echo "🪝 Validating stack state before push..."
-if "{cascade_cli}" stack validate; then
-    echo "✅ Stack validation passed"
-else
-    echo "❌ Stack validation failed"
-    echo "💡 Fix validation errors before pushing:"
-    echo "   • cc doctor       - Check overall health"
-    echo "   • cc status       - Check current stack status" 
-    echo "   • cc sync         - Sync with remote and rebase if needed"
-    exit 1
-fi
-
-echo "✅ Pre-push validation complete"
-"#
-        )
+        #[cfg(not(windows))]
+        {
+            format!(
+                "#!/bin/sh\n\
+                 # Cascade CLI Hook - Pre Push\n\
+                 # Prevents force pushes and validates stack state\n\n\
+                 set -e\n\n\
+                 # Check for force push\n\
+                 if echo \"$*\" | grep -q -- \"--force\\|--force-with-lease\\|-f\"; then\n\
+                     echo \"❌ Force push detected!\"\n\
+                     echo \"🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity\"\n\
+                     echo \"\"\n\
+                     echo \"💡 Instead of force pushing, try these streamlined commands:\"\n\
+                     echo \"   • cc sync      - Sync with remote changes (handles rebasing)\"\n\
+                     echo \"   • cc push      - Push all unpushed commits (new default)\"\n\
+                     echo \"   • cc submit    - Submit all entries for review (new default)\"\n\
+                     echo \"   • cc autoland  - Auto-merge when approved + builds pass\"\n\
+                     echo \"\"\n\
+                     echo \"🚨 If you really need to force push, run:\"\n\
+                     echo \"   git push --force-with-lease [remote] [branch]\"\n\
+                     echo \"   (But consider if this will affect other stack entries)\"\n\
+                     exit 1\n\
+                 fi\n\n\
+                 # Check if Cascade is initialized\n\
+                 if [ ! -d \".cascade\" ]; then\n\
+                     echo \"ℹ️ Cascade not initialized, allowing push\"\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Validate stack state\n\
+                 echo \"🪝 Validating stack state before push...\"\n\
+                 if \"{cascade_cli}\" stack validate; then\n\
+                     echo \"✅ Stack validation passed\"\n\
+                 else\n\
+                     echo \"❌ Stack validation failed\"\n\
+                     echo \"💡 Fix validation errors before pushing:\"\n\
+                     echo \"   • cc doctor       - Check overall health\"\n\
+                     echo \"   • cc status       - Check current stack status\"\n\
+                     echo \"   • cc sync         - Sync with remote and rebase if needed\"\n\
+                     exit 1\n\
+                 fi\n\n\
+                 echo \"✅ Pre-push validation complete\"\n"
+            )
+        }
     }
 
     fn generate_commit_msg_hook(&self, _cascade_cli: &str) -> String {
-        r#"#!/bin/sh
+        #[cfg(windows)]
+        {
+            r#"@echo off
+rem Cascade CLI Hook - Commit Message
+rem Validates commit message format
+
+set COMMIT_MSG_FILE=%1
+if "%COMMIT_MSG_FILE%"=="" (
+    echo ❌ No commit message file provided
+    exit /b 1
+)
+
+rem Read commit message (Windows batch is limited, but this covers basic cases)
+for /f "delims=" %%i in ('type "%COMMIT_MSG_FILE%"') do set COMMIT_MSG=%%i
+
+rem Skip validation for merge commits, fixup commits, etc.
+echo %COMMIT_MSG% | findstr /B /C:"Merge" /C:"Revert" /C:"fixup!" /C:"squash!" >nul
+if %ERRORLEVEL% equ 0 exit /b 0
+
+rem Check if Cascade is initialized
+if not exist ".cascade" exit /b 0
+
+rem Basic commit message validation
+echo %COMMIT_MSG% | findstr /R "^..........*" >nul
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Commit message too short (minimum 10 characters)
+    echo 💡 Write a descriptive commit message for better stack management
+    exit /b 1
+)
+
+rem Check for very long messages (approximate check in batch)
+echo %COMMIT_MSG% | findstr /R "^..................................................................................*" >nul
+if %ERRORLEVEL% equ 0 (
+    echo ⚠️ Warning: Commit message longer than 72 characters
+    echo 💡 Consider keeping the first line short for better readability
+)
+
+rem Check for conventional commit format (optional)
+echo %COMMIT_MSG% | findstr /R "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build)" >nul
+if %ERRORLEVEL% neq 0 (
+    echo 💡 Consider using conventional commit format:
+    echo    feat: add new feature
+    echo    fix: resolve bug
+    echo    docs: update documentation
+    echo    etc.
+)
+
+echo ✅ Commit message validation passed
+"#.to_string()
+        }
+
+        #[cfg(not(windows))]
+        {
+            r#"#!/bin/sh
 # Cascade CLI Hook - Commit Message
 # Validates commit message format
 
@@ -426,51 +542,80 @@ fi
 
 echo "✅ Commit message validation passed"
 "#.to_string()
+        }
     }
 
     fn generate_prepare_commit_msg_hook(&self, cascade_cli: &str) -> String {
-        format!(
-            r#"#!/bin/sh
-# Cascade CLI Hook - Prepare Commit Message
-# Adds stack context to commit messages
+        #[cfg(windows)]
+        {
+            format!(
+                "@echo off\n\
+                 rem Cascade CLI Hook - Prepare Commit Message\n\
+                 rem Adds stack context to commit messages\n\n\
+                 set COMMIT_MSG_FILE=%1\n\
+                 set COMMIT_SOURCE=%2\n\
+                 set COMMIT_SHA=%3\n\n\
+                 rem Only modify message if it's a regular commit (not merge, template, etc.)\n\
+                 if not \"%COMMIT_SOURCE%\"==\"\" if not \"%COMMIT_SOURCE%\"==\"message\" exit /b 0\n\n\
+                 rem Check if Cascade is initialized\n\
+                 if not exist \".cascade\" exit /b 0\n\n\
+                 rem Get active stack info\n\
+                 for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" stack list --active --format=name 2^>nul') do set ACTIVE_STACK=%%i\n\n\
+                 if not \"%ACTIVE_STACK%\"==\"\" (\n\
+                     rem Get current commit message\n\
+                     set /p CURRENT_MSG=<%COMMIT_MSG_FILE%\n\n\
+                     rem Skip if message already has stack context\n\
+                     echo !CURRENT_MSG! | findstr \"[stack:\" >nul\n\
+                     if %ERRORLEVEL% equ 0 exit /b 0\n\n\
+                     rem Add stack context to commit message\n\
+                     echo.\n\
+                     echo # Stack: %ACTIVE_STACK%\n\
+                     echo # This commit will be added to the active stack automatically.\n\
+                     echo # Use 'cc stack status' to see the current stack state.\n\
+                     type \"%COMMIT_MSG_FILE%\"\n\
+                 ) > \"%COMMIT_MSG_FILE%.tmp\"\n\
+                 move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n"
+            )
+        }
 
-set -e
-
-COMMIT_MSG_FILE="$1"
-COMMIT_SOURCE="$2"
-COMMIT_SHA="$3"
-
-# Only modify message if it's a regular commit (not merge, template, etc.)
-if [ "$COMMIT_SOURCE" != "" ] && [ "$COMMIT_SOURCE" != "message" ]; then
-    exit 0
-fi
-
-# Check if Cascade is initialized
-if [ ! -d ".cascade" ]; then
-    exit 0
-fi
-
-# Get active stack info
-ACTIVE_STACK=$("{cascade_cli}" stack list --active --format=name 2>/dev/null || echo "")
-
-if [ -n "$ACTIVE_STACK" ]; then
-    # Get current commit message
-    CURRENT_MSG=$(cat "$COMMIT_MSG_FILE")
-    
-    # Skip if message already has stack context
-    if echo "$CURRENT_MSG" | grep -q "\[stack:"; then
-        exit 0
-    fi
-    
-    # Add stack context to commit message
-    echo "
-# Stack: $ACTIVE_STACK
-# This commit will be added to the active stack automatically.
-# Use 'cc stack status' to see the current stack state.
-$CURRENT_MSG" > "$COMMIT_MSG_FILE"
-fi
-"#
-        )
+        #[cfg(not(windows))]
+        {
+            format!(
+                "#!/bin/sh\n\
+                 # Cascade CLI Hook - Prepare Commit Message\n\
+                 # Adds stack context to commit messages\n\n\
+                 set -e\n\n\
+                 COMMIT_MSG_FILE=\"$1\"\n\
+                 COMMIT_SOURCE=\"$2\"\n\
+                 COMMIT_SHA=\"$3\"\n\n\
+                 # Only modify message if it's a regular commit (not merge, template, etc.)\n\
+                 if [ \"$COMMIT_SOURCE\" != \"\" ] && [ \"$COMMIT_SOURCE\" != \"message\" ]; then\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Check if Cascade is initialized\n\
+                 if [ ! -d \".cascade\" ]; then\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Get active stack info\n\
+                 ACTIVE_STACK=$(\"{cascade_cli}\" stack list --active --format=name 2>/dev/null || echo \"\")\n\n\
+                 if [ -n \"$ACTIVE_STACK\" ]; then\n\
+                     # Get current commit message\n\
+                     CURRENT_MSG=$(cat \"$COMMIT_MSG_FILE\")\n\
+                     \n\
+                     # Skip if message already has stack context\n\
+                     if echo \"$CURRENT_MSG\" | grep -q \"\\[stack:\"; then\n\
+                         exit 0\n\
+                     fi\n\
+                     \n\
+                     # Add stack context to commit message\n\
+                     echo \"\n\
+                 # Stack: $ACTIVE_STACK\n\
+                 # This commit will be added to the active stack automatically.\n\
+                 # Use 'cc stack status' to see the current stack state.\n\
+                 $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
+                 fi\n"
+            )
+        }
     }
 
     /// Detect repository type from remote URLs

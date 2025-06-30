@@ -5,8 +5,10 @@ mod integration {
     mod bitbucket_api_tests;
     mod config_management_tests;
     mod end_to_end_tests;
+    mod hook_content_tests;
     mod multi_stack_tests;
     mod network_failure_tests;
+    mod platform_tests;
     mod squash_and_push_tests;
     mod test_helpers;
 }

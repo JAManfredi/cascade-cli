@@ -91,11 +91,11 @@ fn detect_available_shells() -> Vec<Shell> {
 fn which_shell(shell: &str) -> Option<PathBuf> {
     std::env::var("PATH")
         .ok()?
-        .split(':')
+        .split(crate::utils::platform::path_separator())
         .map(PathBuf::from)
         .find_map(|path| {
-            let shell_path = path.join(shell);
-            if shell_path.exists() {
+            let shell_path = path.join(crate::utils::platform::executable_name(shell));
+            if crate::utils::platform::is_executable(&shell_path) {
                 Some(shell_path)
             } else {
                 None
@@ -105,42 +105,71 @@ fn which_shell(shell: &str) -> Option<PathBuf> {
 
 /// Install completion for a specific shell
 fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
-    let home_dir =
-        dirs::home_dir().ok_or_else(|| CascadeError::config("Could not find home directory"))?;
+    // Get platform-specific completion directories
+    let completion_dirs = crate::utils::platform::shell_completion_dirs();
 
     let (completion_dir, filename) = match shell {
         Shell::Bash => {
-            // Try multiple common bash completion directories
-            let dirs = vec![
-                home_dir.join(".bash_completion.d"),
-                PathBuf::from("/usr/local/etc/bash_completion.d"),
-                PathBuf::from("/etc/bash_completion.d"),
-            ];
+            // Find the first suitable bash completion directory
+            let bash_dirs: Vec<_> = completion_dirs
+                .iter()
+                .filter(|(name, _)| name.contains("bash"))
+                .map(|(_, path)| path.clone())
+                .collect();
 
-            let dir = dirs
+            let dir = bash_dirs
                 .into_iter()
                 .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
-                .unwrap_or_else(|| home_dir.join(".bash_completion.d"));
+                .or_else(|| {
+                    // Fallback to user-specific directory
+                    dirs::home_dir().map(|h| h.join(".bash_completion.d"))
+                })
+                .ok_or_else(|| {
+                    CascadeError::config("Could not find suitable bash completion directory")
+                })?;
 
             (dir, "cc")
         }
         Shell::Zsh => {
-            // Check for oh-my-zsh first, then standard locations
-            let dirs = vec![
-                home_dir.join(".oh-my-zsh/completions"),
-                home_dir.join(".zsh/completions"),
-                PathBuf::from("/usr/local/share/zsh/site-functions"),
-            ];
+            // Find the first suitable zsh completion directory
+            let zsh_dirs: Vec<_> = completion_dirs
+                .iter()
+                .filter(|(name, _)| name.contains("zsh"))
+                .map(|(_, path)| path.clone())
+                .collect();
 
-            let dir = dirs
+            let dir = zsh_dirs
                 .into_iter()
                 .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
-                .unwrap_or_else(|| home_dir.join(".zsh/completions"));
+                .or_else(|| {
+                    // Fallback to user-specific directory
+                    dirs::home_dir().map(|h| h.join(".zsh/completions"))
+                })
+                .ok_or_else(|| {
+                    CascadeError::config("Could not find suitable zsh completion directory")
+                })?;
 
             (dir, "_cc")
         }
         Shell::Fish => {
-            let dir = home_dir.join(".config/fish/completions");
+            // Find the first suitable fish completion directory
+            let fish_dirs: Vec<_> = completion_dirs
+                .iter()
+                .filter(|(name, _)| name.contains("fish"))
+                .map(|(_, path)| path.clone())
+                .collect();
+
+            let dir = fish_dirs
+                .into_iter()
+                .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+                .or_else(|| {
+                    // Fallback to user-specific directory
+                    dirs::home_dir().map(|h| h.join(".config/fish/completions"))
+                })
+                .ok_or_else(|| {
+                    CascadeError::config("Could not find suitable fish completion directory")
+                })?;
+
             (dir, "cc.fish")
         }
         _ => {
