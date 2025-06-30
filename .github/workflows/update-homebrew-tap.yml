@@ -40,14 +40,14 @@ jobs:
           
           # Download release assets to calculate checksums
           echo "Downloading release assets..."
-          curl -L -o cc-macos-arm64.tar.gz \
-            "https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/cc-macos-arm64.tar.gz"
-          curl -L -o cc-macos-x64.tar.gz \
-            "https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/cc-macos-x64.tar.gz"
+          curl -L -o csc-macos-arm64.tar.gz \
+            "https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/csc-macos-arm64.tar.gz"
+          curl -L -o csc-macos-x64.tar.gz \
+            "https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/csc-macos-x64.tar.gz"
           
           # Calculate checksums
-          ARM64_SHA=$(shasum -a 256 cc-macos-arm64.tar.gz | cut -d' ' -f1)
-          X64_SHA=$(shasum -a 256 cc-macos-x64.tar.gz | cut -d' ' -f1)
+          ARM64_SHA=$(shasum -a 256 csc-macos-arm64.tar.gz | cut -d' ' -f1)
+          X64_SHA=$(shasum -a 256 csc-macos-x64.tar.gz | cut -d' ' -f1)
           
           echo "ARM64 SHA256: $ARM64_SHA"
           echo "X64 SHA256: $X64_SHA"

@@ -17,23 +17,25 @@ class CascadeCli < Formula
 
   # Apple Silicon (ARM64) - Default
   if Hardware::CPU.arm?
-    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.4/cc-macos-arm64.tar.gz"
-    sha256 "493938d29f18a1f47a48800cf7c5662f0c8f7b19ae3c8ac0f84037f7402b5652"
-    version "0.1.4"
+    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.5/csc-macos-arm64.tar.gz"
+    sha256 "TBD_ARM64_SHA"
+    version "0.1.5"
   else
     # Intel (x64)
-    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.4/cc-macos-x64.tar.gz"
-    sha256 "5287e10b6103094e2349b24237c7015f57d4054d5726f651fef9c9985a445281"
-    version "0.1.4"
+    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.5/csc-macos-x64.tar.gz"
+    sha256 "TBD_X64_SHA"
+    version "0.1.5"
   end
 
   depends_on "git"
 
   def install
-    bin.install "cc"
+    bin.install "csc"
     
-    # Note: Shell completions will be added in future release
-    # when completion generation in CI is fixed
+    # Install shell completions
+    bash_completion.install "completions/csc.bash" => "csc"
+    zsh_completion.install "completions/_csc"
+    fish_completion.install "completions/csc.fish"
   end
 
   def post_install
@@ -42,28 +44,28 @@ class CascadeCli < Formula
       
       Quick Start:
         1. Navigate to your Git repository: cd your-project
-        2. Initialize Cascade: cc init
-        3. Create your first stack: cc stack create "my-feature"
-        4. Add commits to stack: cc stack push
+        2. Initialize Cascade: csc init
+        3. Create your first stack: csc stack create "my-feature"
+        4. Add commits to stack: csc stack push
       
       Learn More:
-        cc --help                    # Show all commands
-        cc doctor                    # Check system setup
-        cc stack --help             # Stack management help
+        csc --help                    # Show all commands
+        csc doctor                    # Check system setup
+        csc stack --help             # Stack management help
         
       Documentation:
         https://github.com/JAManfredi/cascade-cli/blob/main/docs/USER_MANUAL.md
         https://github.com/JAManfredi/cascade-cli/blob/main/docs/ONBOARDING.md
       
       Shell Completions:
-        Completions are automatically installed for Bash, Zsh, and Fish.
+        Completions have been installed for Bash, Zsh, and Fish.
         Restart your shell or source your profile to enable them.
     EOS
   end
 
   test do
-    system "#{bin}/cc", "--version"
-    system "#{bin}/cc", "--help"
+    system "#{bin}/csc", "--version"
+    system "#{bin}/csc", "--help"
     
     # Test basic functionality
     (testpath/"test-repo").mkpath
@@ -75,8 +77,8 @@ class CascadeCli < Formula
       system "git", "add", "README.md"
       system "git", "commit", "-m", "Initial commit"
       
-      # Test cc doctor (should detect git repo but no cascade config)
-      output = shell_output("#{bin}/cc doctor 2>&1", 1)
+      # Test csc doctor (should detect git repo but no cascade config)
+      output = shell_output("#{bin}/csc doctor 2>&1", 1)
       assert_match "Git repository:", output
     end
   end

@@ -69,14 +69,14 @@ cargo test --no-default-features
 cargo build --release
 
 # Manual testing
-./target/release/cc --version
-./target/release/cc --help
-./target/release/cc stack --help
+./target/release/csc --version
+./target/release/csc --help
+./target/release/csc stack --help
 
 # Test core workflows
-./target/release/cc init
-./target/release/cc stacks create test-stack
-./target/release/cc stacks list
+./target/release/csc init
+./target/release/csc stacks create test-stack
+./target/release/csc stacks list
 ```
 
 ---
@@ -123,7 +123,7 @@ Follow [Semantic Versioning](https://semver.org/):
 **Examples:**
 - `v0.1.1` - Bug fixes and CI improvements
 - `v0.1.0` - Initial Beta release
-- `v1.1.0` - Added new `cc stacks merge` command
+- `v1.1.0` - Added new `csc stacks merge` command
 - `v1.0.1` - Fixed critical bug in rebase logic
 - `v2.0.0` - Changed CLI interface (breaking)
 
@@ -139,7 +139,7 @@ open https://github.com/JAManfredi/cascade-cli/releases
 
 # Test installation from release
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-x64.tar.gz | tar -xz
-./cc --version
+./csc --version
 ```
 
 ### **Update Documentation**

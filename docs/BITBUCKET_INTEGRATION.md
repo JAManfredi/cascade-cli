@@ -10,18 +10,18 @@ The auto-land functionality allows you to automatically merge pull requests when
 
 ```bash
 # Simple auto-land all ready PRs
-cc stacks autoland
+csc stacks autoland
 
 # Auto-land with custom settings
-cc stacks autoland --wait-for-builds --strategy merge
+csc stacks autoland --wait-for-builds --strategy merge
 
 # Traditional syntax (equivalent to autoland)
-cc stacks land --auto
+csc stacks land --auto
 ```
 
 ### Command Variants
 
-#### `cc stacks autoland` (Recommended)
+#### `csc stacks autoland` (Recommended)
 **Shorthand for auto-landing** - automatically lands all ready PRs using Bitbucket's authoritative merge endpoint:
 
 - ✅ **Server-side validation**: Uses Bitbucket's merge endpoint to check all requirements
@@ -80,7 +80,7 @@ Your Bitbucket server requires 2 approvals + 2 passing builds:
 
 ```bash
 # Perfect - respects all server requirements automatically
-cc stacks autoland
+csc stacks autoland
 ```
 
 #### Scenario 2: Personal Repository
@@ -88,7 +88,7 @@ Minimal server restrictions, you only care about builds:
 
 ```bash
 # Skip server validation, just wait for builds
-cc stacks autoland --wait-for-builds
+csc stacks autoland --wait-for-builds
 ```
 
 #### Scenario 3: Trusted Authors Only
@@ -108,91 +108,91 @@ Only auto-land PRs from specific team members:
 #### Basic Stack Management
 ```bash
 # 📊 Check if your stack needs updates (read-only)
-cc stacks check
+csc stacks check
 
 # 🔄 Sync with remote changes (recommended daily workflow)
-cc stacks sync
+csc stacks sync
 
 # 🔄 Force sync even if there are issues
-cc stacks sync --force
+csc stacks sync --force
 
 # 🔄 Interactive sync for manual conflict resolution
-cc stacks sync --interactive
+csc stacks sync --interactive
 
 # 🔄 Sync without cleaning up merged branches
-cc stacks sync --skip-cleanup
+csc stacks sync --skip-cleanup
 ```
 
 #### Complete Development Workflow
 ```bash
 # Morning routine: sync with latest changes
-cc stacks sync
+csc stacks sync
 
 # Make changes and push to stack
-cc stacks push --message "Add feature X"
+csc stacks push --message "Add feature X"
 
 # Submit for review
-cc stacks submit
+csc stacks submit
 
 # Later: sync again to get latest changes
-cc stacks sync
+csc stacks sync
 
 # Land completed PRs
-cc stacks land
+csc stacks land
 ```
 
 #### Simplified Landing Commands ✅
 ```bash
 # 🎯 Default: Land all ready PRs with safety checks (RECOMMENDED)
-cc stacks land
+csc stacks land
 
 # 🎯 Land specific entry by number (1-based) 
-cc stacks land 2
+csc stacks land 2
 
 # 🔍 Preview what would be landed
-cc stacks land --dry-run
+csc stacks land --dry-run
 
 # ⚠️ Force land ignoring safety checks (dangerous)
-cc stacks land --force
+csc stacks land --force
 
 # 🔒 Use server-side validation (extra safety)
-cc stacks land --auto
+csc stacks land --auto
 
 # 🕐 Wait for builds before landing
-cc stacks land --wait-for-builds
+csc stacks land --wait-for-builds
 
 # 🚀 Shorthand for land --auto
-cc stacks autoland
+csc stacks autoland
 ```
 
 #### AutoLand Shorthand
 ```bash
-# Equivalent to: cc stacks land --auto
-cc stacks autoland
+# Equivalent to: csc stacks land --auto
+csc stacks autoland
 ```
 
 #### Advanced Options
 ```bash
 # Use merge strategy instead of squash
-cc stacks autoland --strategy merge
+csc stacks autoland --strategy merge
 
 # Custom build timeout (20 minutes)
-cc stacks autoland --build-timeout 1200
+csc stacks autoland --build-timeout 1200
 
 # Wait for builds but skip other validation
-cc stacks autoland --wait-for-builds
+csc stacks autoland --wait-for-builds
 ```
 
 #### Status and Monitoring
 ```bash
 # Check stack status with merge readiness
-cc stack --mergeable
+csc stack --mergeable
 
 # List all PRs with their status
-cc stacks prs
+csc stacks prs
 
 # Get detailed status for debugging
-cc stacks status
+csc stacks status
 ```
 
 ### Error Handling
@@ -218,7 +218,7 @@ Auto-land provides clear feedback when PRs can't be merged:
 
 #### Auto-land not working?
 
-1. **Check PR status**: `cc stack --mergeable`
+1. **Check PR status**: `csc stack --mergeable`
 2. **Verify Bitbucket rules**: Does the PR meet server requirements?
 3. **Review build status**: Are builds passing?
 4. **Check conflicts**: Are there merge conflicts?
@@ -235,11 +235,11 @@ Auto-land provides clear feedback when PRs can't be merged:
 Configure Bitbucket authentication:
 
 ```bash
-cc config set bitbucket.url "https://bitbucket.company.com"
-cc config set bitbucket.username "your-username"
+csc config set bitbucket.url "https://bitbucket.company.com"
+csc config set bitbucket.username "your-username"
 
 # Store token securely (recommended)
-cc config set bitbucket.token "your-app-password"
+csc config set bitbucket.token "your-app-password"
 ```
 
 ### Supported Endpoints
@@ -332,30 +332,30 @@ All these commands now include automatic retargeting:
 
 ```bash
 # 🎯 Default: Land all ready PRs with safety checks (RECOMMENDED)
-cc stacks land
+csc stacks land
 
 # 🎯 Land specific entry by number (1-based) 
-cc stacks land 2
+csc stacks land 2
 
 # 🔍 Preview what would be landed
-cc stacks land --dry-run
+csc stacks land --dry-run
 
 # ⚠️ Force land ignoring safety checks (dangerous)
-cc stacks land --force
+csc stacks land --force
 
 # 🔒 Use server-side validation (extra safety)
-cc stacks land --auto
+csc stacks land --auto
 
 # 🕐 Wait for builds before landing
-cc stacks land --wait-for-builds
+csc stacks land --wait-for-builds
 
 # 🚀 Shorthand for land --auto
-cc stacks autoland
+csc stacks autoland
 ```
 
 ### Benefits
 
-✅ **No manual intervention**: Never need `cc stacks rebase --onto main` manually  
+✅ **No manual intervention**: Never need `csc stacks rebase --onto main` manually  
 ✅ **Preserves PR history**: All reviews, comments, and discussions remain intact  
 ✅ **Handles conflicts**: Uses intelligent conflict resolution system  
 ✅ **Progress transparency**: Shows retargeting progress and results  
@@ -366,7 +366,7 @@ cc stacks autoland
 If conflicts occur during auto-retargeting, the land operation will pause and provide clear guidance:
 
 ```bash
-cc stacks land                     # Start landing all ready PRs
+csc stacks land                     # Start landing all ready PRs
 
 # ✅ PR #1 lands successfully
 # 🔄 Auto-retargeting begins  
@@ -377,16 +377,16 @@ cc stacks land                     # Start landing all ready PRs
 #   📝 To resolve conflicts and continue landing:
 #      1. Resolve conflicts in the affected files
 #      2. Stage resolved files: git add <files>
-#      3. Continue the process: cc stacks continue-land
-#      4. Or abort the operation: cc stacks abort-land
-#   💡 Check current status: cc stacks land-status
+#      3. Continue the process: csc stacks continue-land
+#      4. Or abort the operation: csc stacks abort-land
+#   💡 Check current status: csc stacks land-status
 ```
 
 #### Manual Resolution Steps
 
 ```bash
 # 1. Check what conflicts need resolution
-cc stacks land-status
+csc stacks land-status
 
 # 2. Edit conflicted files manually
 vim src/conflicted-file.rs       # Resolve <<<<<<< ======= >>>>>>> markers
@@ -395,10 +395,10 @@ vim src/conflicted-file.rs       # Resolve <<<<<<< ======= >>>>>>> markers
 git add src/conflicted-file.rs
 
 # 4. Continue the land operation
-cc stacks continue-land            # Resumes landing remaining PRs
+csc stacks continue-land            # Resumes landing remaining PRs
 
 # 5. Alternative: Abort if conflicts too complex
-cc stacks abort-land              # Restores pre-land state
+csc stacks abort-land              # Restores pre-land state
 ```
 
 ### Base Branch Update Mechanism 📥
@@ -416,8 +416,8 @@ We now match the industry standard (Graphite) for sync functionality:
 
 **NEW Behavior** (matches `gt sync`):
 ```bash
-cc stacks sync    # ✅ Pulls main + restacks + cleans up merged branches  
-cc stacks check   # ✅ Read-only status validation (old sync behavior)
+csc stacks sync    # ✅ Pulls main + restacks + cleans up merged branches  
+csc stacks check   # ✅ Read-only status validation (old sync behavior)
 ```
 
 This provides the intuitive workflow developers expect from modern stacked diff tools.
@@ -426,7 +426,7 @@ This provides the intuitive workflow developers expect from modern stacked diff 
 
 #### **NEW**: Proper Sync (Industry Standard)
 ```bash
-cc stacks sync    # 🔄 Pull + rebase + cleanup (like Graphite's gt sync)
+csc stacks sync    # 🔄 Pull + rebase + cleanup (like Graphite's gt sync)
 ```
 
 **What it does**:
@@ -443,7 +443,7 @@ cc stacks sync    # 🔄 Pull + rebase + cleanup (like Graphite's gt sync)
 
 #### **Status Check Only**
 ```bash
-cc stacks check   # 📊 Read-only status check (old sync behavior)
+csc stacks check   # 📊 Read-only status check (old sync behavior)
 ```
 
 **What it does**:

@@ -24,7 +24,7 @@ async fn test_platform_specific_binary_detection() {
     );
 
     // Binary name should have correct extension
-    let expected_name = cascade_cli::utils::platform::executable_name("cc");
+    let expected_name = cascade_cli::utils::platform::executable_name("csc");
     assert!(
         binary_path.file_name().unwrap().to_string_lossy() == expected_name,
         "Binary should have correct name: expected '{}', got '{}'",

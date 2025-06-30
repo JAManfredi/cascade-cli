@@ -69,8 +69,8 @@ When releasing a new version:
 To calculate new checksums:
 ```bash
 # For ARM64
-shasum -a 256 cc-macos-arm64.tar.gz
+shasum -a 256 csc-macos-arm64.tar.gz
 
 # For x64
-shasum -a 256 cc-macos-x64.tar.gz
+shasum -a 256 csc-macos-x64.tar.gz
 ```

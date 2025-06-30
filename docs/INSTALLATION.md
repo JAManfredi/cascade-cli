@@ -52,8 +52,8 @@ echo 'export PATH="'$PWD'/target/release:$PATH"' >> ~/.bashrc
 
 #### **Verify Installation**
 ```bash
-cc --version
-cc doctor  # Run health check
+csc --version
+csc doctor  # Run health check
 ```
 
 ### **Option 2: Pre-built Binaries** *(Recommended)*
@@ -62,30 +62,30 @@ cc doctor  # Run health check
 ```bash
 # Intel Macs (x64)
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-x64.tar.gz | tar -xz
-sudo mv cc /usr/local/bin/
+sudo mv csc /usr/local/bin/
 
 # Apple Silicon Macs (ARM64)  
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-arm64.tar.gz | tar -xz
-sudo mv cc /usr/local/bin/
+sudo mv csc /usr/local/bin/
 
 # Auto-detect architecture
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
-sudo mv cc /usr/local/bin/
+sudo mv csc /usr/local/bin/
 ```
 
 #### **Linux**
 ```bash
 # x64 (Intel/AMD)
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-x64.tar.gz | tar -xz
-sudo mv cc /usr/local/bin/
+sudo mv csc /usr/local/bin/
 
 # ARM64
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-arm64.tar.gz | tar -xz  
-sudo mv cc /usr/local/bin/
+sudo mv csc /usr/local/bin/
 
 # Auto-detect architecture
 curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz | tar -xz
-sudo mv cc /usr/local/bin/
+sudo mv csc /usr/local/bin/
 ```
 
 #### **Windows**
@@ -128,34 +128,34 @@ cargo install cascade-cli
 ### **1. Verify Installation**
 ```bash
 # Check version
-cc --version
+csc --version
 
 # Run system diagnostics
-cc doctor
+csc doctor
 
 # Test help system
-cc --help
+csc --help
 ```
 
 ### **2. Shell Completions**
 ```bash
 # Auto-detect and install for your shell
-cc completions install
+csc completions install
 
 # Manual installation
-cc completions generate bash > ~/.local/share/bash-completion/completions/cc
-cc completions generate zsh > ~/.zsh/completions/_cc
-cc completions generate fish > ~/.config/fish/completions/cc.fish
+csc completions generate bash > ~/.local/share/bash-completion/completions/cc
+csc completions generate zsh > ~/.zsh/completions/_cc
+csc completions generate fish > ~/.config/fish/completions/cc.fish
 ```
 
 ### **3. First-Time Configuration**
 ```bash
 # Run interactive setup wizard
-cc setup
+csc setup
 
 # Manual configuration (if preferred)
 cd your-git-repository
-cc init --bitbucket-url https://bitbucket.your-company.com
+csc init --bitbucket-url https://bitbucket.your-company.com
 ```
 
 ---
@@ -207,7 +207,7 @@ RUN cargo build --release
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y git ca-certificates
-COPY --from=builder /app/target/release/cc /usr/local/bin/
+COPY --from=builder /app/target/release/csc /usr/local/bin/
 ENTRYPOINT ["cc"]
 ```
 
@@ -353,15 +353,15 @@ git config core.fscache true
 git config gc.auto 256
 
 # Configure Cascade CLI
-cc config set performance.cache_size 1000
-cc config set performance.parallel_operations true
+csc config set performance.cache_size 1000
+csc config set performance.parallel_operations true
 ```
 
 ### **Network Optimization**
 ```bash
 # Configure timeouts for slow networks
-cc config set network.timeout 60
-cc config set network.retry_attempts 3
+csc config set network.timeout 60
+csc config set network.retry_attempts 3
 
 # Use compression
 git config core.compression 9
@@ -411,7 +411,7 @@ rm ~/.config/fish/completions/cc.fish
 
 # Remove Git hooks (per repository)
 cd your-repository
-cc hooks uninstall
+csc hooks uninstall
 ```
 
 ---
@@ -421,14 +421,14 @@ cc hooks uninstall
 If you encounter installation issues:
 
 1. **Check [Troubleshooting Guide](./TROUBLESHOOTING.md)**
-2. **Run `cc doctor` for diagnostics**
+2. **Run `csc doctor` for diagnostics**
 3. **Search [GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)**
 4. **Create new issue with system details**
 
 ### **System Information for Bug Reports**
 ```bash
 # Gather system info
-cc doctor --verbose
+csc doctor --verbose
 rustc --version
 git --version
 uname -a  # Linux/macOS

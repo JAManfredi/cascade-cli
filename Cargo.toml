@@ -1,6 +1,6 @@
 [package]
 name = "cascade-cli"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "Stacked diffs CLI for Bitbucket Server"
 authors = ["Jared Manfredi <jared@jaredm.dev>"]
@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 rust-version = "1.82.0"
 
 [[bin]]
-name = "cc"
+name = "csc"
 path = "src/main.rs"
 
 [dependencies]

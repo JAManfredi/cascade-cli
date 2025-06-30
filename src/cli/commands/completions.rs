@@ -9,7 +9,7 @@ use std::path::PathBuf;
 /// Generate shell completions for the specified shell
 pub fn generate_completions(shell: Shell) -> Result<()> {
     let mut cmd = Cli::command();
-    let bin_name = "cc";
+    let bin_name = "csc";
 
     generate(shell, &mut cmd, bin_name, &mut io::stdout());
     Ok(())
@@ -47,7 +47,7 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
 
         println!("\n💡 Next steps:");
         println!("   1. Restart your shell or run: source ~/.bashrc (or equivalent)");
-        println!("   2. Try: cc <TAB><TAB>");
+        println!("   2. Try: csc <TAB><TAB>");
     }
 
     if !errors.is_empty() {
@@ -128,7 +128,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
                     CascadeError::config("Could not find suitable bash completion directory")
                 })?;
 
-            (dir, "cc")
+            (dir, "csc")
         }
         Shell::Zsh => {
             // Find the first suitable zsh completion directory
@@ -149,7 +149,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
                     CascadeError::config("Could not find suitable zsh completion directory")
                 })?;
 
-            (dir, "_cc")
+            (dir, "_csc")
         }
         Shell::Fish => {
             // Find the first suitable fish completion directory
@@ -170,7 +170,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
                     CascadeError::config("Could not find suitable fish completion directory")
                 })?;
 
-            (dir, "cc.fish")
+            (dir, "csc.fish")
         }
         _ => {
             return Err(CascadeError::config(format!(
@@ -193,7 +193,7 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
     // Generate completion content
     let mut cmd = Cli::command();
     let mut content = Vec::new();
-    generate(shell, &mut cmd, "cc", &mut content);
+    generate(shell, &mut cmd, "csc", &mut content);
 
     // Write to file atomically
     crate::utils::atomic_file::write_bytes(&completion_file, &content)?;
@@ -220,16 +220,16 @@ pub fn show_completions_status() -> Result<()> {
         .any(|s| !check_completion_installed(*s))
     {
         println!("\n💡 To install completions:");
-        println!("   cc completions install");
-        println!("   cc completions install --shell bash  # for specific shell");
+        println!("   csc completions install");
+        println!("   csc completions install --shell bash  # for specific shell");
     } else {
         println!("\n🎉 All available shells have completions installed!");
     }
 
     println!("\n🔧 Manual installation:");
-    println!("   cc completions generate bash > ~/.bash_completion.d/cc");
-    println!("   cc completions generate zsh > ~/.zsh/completions/_cc");
-    println!("   cc completions generate fish > ~/.config/fish/completions/cc.fish");
+    println!("   csc completions generate bash > ~/.bash_completion.d/csc");
+    println!("   csc completions generate zsh > ~/.zsh/completions/_csc");
+    println!("   csc completions generate fish > ~/.config/fish/completions/csc.fish");
 
     Ok(())
 }
@@ -243,16 +243,16 @@ fn check_completion_installed(shell: Shell) -> bool {
 
     let possible_paths = match shell {
         Shell::Bash => vec![
-            home_dir.join(".bash_completion.d/cc"),
-            PathBuf::from("/usr/local/etc/bash_completion.d/cc"),
-            PathBuf::from("/etc/bash_completion.d/cc"),
+            home_dir.join(".bash_completion.d/csc"),
+            PathBuf::from("/usr/local/etc/bash_completion.d/csc"),
+            PathBuf::from("/etc/bash_completion.d/csc"),
         ],
         Shell::Zsh => vec![
-            home_dir.join(".oh-my-zsh/completions/_cc"),
-            home_dir.join(".zsh/completions/_cc"),
-            PathBuf::from("/usr/local/share/zsh/site-functions/_cc"),
+            home_dir.join(".oh-my-zsh/completions/_csc"),
+            home_dir.join(".zsh/completions/_csc"),
+            PathBuf::from("/usr/local/share/zsh/site-functions/_csc"),
         ],
-        Shell::Fish => vec![home_dir.join(".config/fish/completions/cc.fish")],
+        Shell::Fish => vec![home_dir.join(".config/fish/completions/csc.fish")],
         _ => return false,
     };
 

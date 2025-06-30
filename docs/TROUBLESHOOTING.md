@@ -8,13 +8,13 @@ Before diving into specific issues, run the built-in diagnostics:
 
 ```bash
 # Run comprehensive health check
-cc doctor
+csc doctor
 
 # Get detailed system information
-cc doctor --verbose
+csc doctor --verbose
 
 # Show configuration
-cc config list
+csc config list
 
 # Check Git status
 git status
@@ -30,7 +30,7 @@ git status
 
 **Symptoms:**
 ```bash
-$ cc --version
+$ csc --version
 bash: cc: command not found
 ```
 
@@ -66,14 +66,14 @@ bash: cc: command not found
    
    # Or rebuild
    cargo build --release
-   cp target/release/cc ~/.local/bin/
+   cp target/release/csc ~/.local/bin/
    ```
 
 #### **Rust compilation errors**
 
 **Symptoms:**
 ```
-error: linking with `cc` failed: exit status: 1
+error: linking with `csc` failed: exit status: 1
 ```
 
 **Solutions:**
@@ -108,7 +108,7 @@ error: linking with `cc` failed: exit status: 1
 
 **Symptoms:**
 ```bash
-$ cc --version
+$ csc --version
 Permission denied
 ```
 
@@ -144,15 +144,15 @@ Error: Repository is not initialized for Cascade CLI
 
 2. **Initialize Cascade CLI:**
    ```bash
-   cc init --bitbucket-url https://your-bitbucket.com
+   csc init --bitbucket-url https://your-bitbucket.com
    # Or use setup wizard
-   cc setup
+   csc setup
    ```
 
 3. **Fix corrupted configuration:**
    ```bash
    rm -rf .cascade/
-   cc init --force
+   csc init --force
    ```
 
 #### **Bitbucket connection failures**
@@ -167,8 +167,8 @@ Error: Failed to connect to Bitbucket: Connection timeout
 
 1. **Verify credentials:**
    ```bash
-   cc config get bitbucket.token
-   cc config get bitbucket.url
+   csc config get bitbucket.token
+   csc config get bitbucket.url
    
    # Test manually
    curl -H "Authorization: Bearer YOUR_TOKEN" \
@@ -230,7 +230,7 @@ Error: Repository 'invalid-repo' not found in project 'PROJECT'
    ```bash
    git remote -v
    # Use the setup wizard to auto-detect
-   cc setup --force
+   csc setup --force
    ```
 
 ### **🔴 Stack Management Issues**
@@ -246,16 +246,16 @@ Error: No active stack found
 
 1. **Check existing stacks:**
    ```bash
-   cc stacks list
+   csc stacks list
    ```
 
 2. **Create or activate a stack:**
    ```bash
    # Create new stack
-   cc stacks create my-feature --base main
+   csc stacks create my-feature --base main
    
    # Or activate existing stack
-   cc stacks switch existing-stack-name
+   csc stacks switch existing-stack-name
    ```
 
 3. **Recover from corruption:**
@@ -264,10 +264,10 @@ Error: No active stack found
    ls .cascade/stacks/
    
    # Validate stack integrity
-   cc stacks validate
+   csc stacks validate
    
    # Force create new stack if needed
-   cc stacks create recovery-stack --base main --force
+   csc stacks create recovery-stack --base main --force
    ```
 
 #### **Stack synchronization failures**
@@ -287,11 +287,11 @@ Error: Base branch 'main' not found
    
    # Resolve conflicts manually
    git add .
-   cc stacks rebase --continue
+   csc stacks rebase --continue
    
    # Or abort and try different strategy
-   cc stacks rebase --abort
-   cc stacks sync --strategy merge
+   csc stacks rebase --abort
+   csc stacks sync --strategy merge
    ```
 
 2. **Update base branch:**
@@ -307,7 +307,7 @@ Error: Base branch 'main' not found
    git pull origin main
    
    # Try sync again
-   cc stacks sync
+   csc stacks sync
    ```
 
 3. **Stack corruption recovery:**
@@ -316,16 +316,16 @@ Error: Base branch 'main' not found
    git stash
    
    # Reset stack to known good state
-   cc stack  # Note commit hashes
+   csc stack  # Note commit hashes
    git checkout main
    git pull origin main
    
    # Recreate stack manually
-   cc stacks create recovery --base main
+   csc stacks create recovery --base main
    git cherry-pick COMMIT_HASH_1
-   cc stacks push
+   csc stacks push
    git cherry-pick COMMIT_HASH_2
-   cc stacks push
+   csc stacks push
    ```
 
 #### **Pull request creation failures**
@@ -341,7 +341,7 @@ Error: Failed to create pull request: source branch not found
 1. **Check commit exists:**
    ```bash
    git log --oneline -n 5
-   cc stack
+   csc stack
    ```
 
 2. **Verify branch state:**
@@ -356,11 +356,11 @@ Error: Failed to create pull request: source branch not found
 3. **Manual PR creation:**
    ```bash
    # Get commit details
-   cc stack
+   csc stack
    
    # Create PR manually in Bitbucket UI
    # Then update stack metadata
-   cc stacks submit --pr-id 123
+   csc stacks submit --pr-id 123
    ```
 
 ### **🔴 Performance Issues**
@@ -383,9 +383,9 @@ Error: Failed to create pull request: source branch not found
 
 2. **Adjust Cascade CLI settings:**
    ```bash
-   cc config set performance.cache_size 500
-   cc config set performance.parallel_operations false
-   cc config set network.timeout 120
+   csc config set performance.cache_size 500
+   csc config set performance.parallel_operations false
+   csc config set network.timeout 120
    ```
 
 3. **Repository maintenance:**
@@ -404,7 +404,7 @@ Error: Failed to create pull request: source branch not found
 
 1. **Reduce cache size:**
    ```bash
-   cc config set performance.cache_size 100
+   csc config set performance.cache_size 100
    ```
 
 2. **Monitor memory usage:**
@@ -447,8 +447,8 @@ Error: Failed to create pull request: source branch not found
 
 3. **Disable colors if needed:**
    ```bash
-   cc config set ui.colors false
-   cc tui
+   csc config set ui.colors false
+   csc tui
    ```
 
 #### **TUI crashes or freezes**
@@ -463,15 +463,15 @@ Error: Failed to create pull request: source branch not found
 
 2. **Reset TUI settings:**
    ```bash
-   cc config unset ui.tui_refresh_rate
-   cc config unset ui.tui_theme
+   csc config unset ui.tui_refresh_rate
+   csc config unset ui.tui_theme
    ```
 
 3. **Use alternative interface:**
    ```bash
    # Use CLI instead of TUI
-   cc stacks list --verbose
-   cc viz stack
+   csc stacks list --verbose
+   csc viz stack
    ```
 
 ### **🔴 Git Hooks Issues**
@@ -486,7 +486,7 @@ Error: Failed to create pull request: source branch not found
 
 1. **Check hook installation:**
    ```bash
-   cc hooks status
+   csc hooks status
    ls -la .git/hooks/
    ```
 
@@ -498,8 +498,8 @@ Error: Failed to create pull request: source branch not found
 
 3. **Reinstall hooks:**
    ```bash
-   cc hooks uninstall
-   cc hooks install --force
+   csc hooks uninstall
+   csc hooks install --force
    ```
 
 #### **Hook conflicts**
@@ -518,13 +518,13 @@ Error: Existing hook found, use --force to overwrite
 
 2. **Force install:**
    ```bash
-   cc hooks install --force
+   csc hooks install --force
    ```
 
 3. **Manual integration:**
    ```bash
    # Edit existing hook to call Cascade CLI
-   echo "cc stacks push --auto || true" >> .git/hooks/post-commit
+   echo "csc stacks push --auto || true" >> .git/hooks/post-commit
    ```
 
 ---
@@ -538,7 +538,7 @@ Error: Existing hook found, use --force to overwrite
 export CASCADE_LOG_LEVEL=debug
 
 # Run command with debug output
-cc stacks push
+csc stacks push
 
 # Check logs
 tail -f ~/.cascade/logs/cascade.log
@@ -548,7 +548,7 @@ tail -f ~/.cascade/logs/cascade.log
 
 ```bash
 # Full diagnostic report
-cc doctor --verbose > cascade-debug.txt
+csc doctor --verbose > cascade-debug.txt
 
 # Add system info
 echo "=== System Info ===" >> cascade-debug.txt
@@ -558,7 +558,7 @@ rustc --version >> cascade-debug.txt
 
 # Add configuration
 echo "=== Configuration ===" >> cascade-debug.txt
-cc config list >> cascade-debug.txt
+csc config list >> cascade-debug.txt
 
 # Add recent logs
 echo "=== Recent Logs ===" >> cascade-debug.txt
@@ -576,7 +576,7 @@ curl -v -H "Authorization: Bearer YOUR_TOKEN" \
 dig your-bitbucket.com
 
 # Test with different timeout
-cc config set network.timeout 300
+csc config set network.timeout 300
 ```
 
 ### **Repository State Analysis**
@@ -612,10 +612,10 @@ git branch backup-$(date +%Y%m%d)
 rm -rf .cascade/
 
 # 3. Reinitialize
-cc setup
+csc setup
 
 # 4. Recreate stacks manually
-cc stacks create recovery --base main
+csc stacks create recovery --base main
 # Cherry-pick commits as needed
 ```
 
@@ -625,23 +625,23 @@ For corrupted stack metadata:
 
 ```bash
 # 1. Export stack information
-cc stack > stack-backup.txt
+csc stack > stack-backup.txt
 
 # 2. Note commit hashes and PR IDs
 
 # 3. Delete corrupted stack
-cc stacks delete problematic-stack --force
+csc stacks delete problematic-stack --force
 
 # 4. Recreate with same commits
-cc stacks create recovered-stack --base main
+csc stacks create recovered-stack --base main
 git cherry-pick HASH1
-cc stacks push
+csc stacks push
 git cherry-pick HASH2  
-cc stacks push
+csc stacks push
 
 # 5. Reconnect to existing PRs
-cc config set stack.recovered-stack.pr.1 PR_ID_1
-cc config set stack.recovered-stack.pr.2 PR_ID_2
+csc config set stack.recovered-stack.pr.1 PR_ID_1
+csc config set stack.recovered-stack.pr.2 PR_ID_2
 ```
 
 ### **Configuration Recovery**
@@ -653,16 +653,16 @@ For broken configuration:
 cp .cascade/config.toml .cascade/config.toml.backup
 
 # 2. Reset to defaults
-cc config reset
+csc config reset
 
 # 3. Reconfigure step by step
-cc config set bitbucket.url "https://your-bitbucket.com"
-cc config set bitbucket.project "PROJECT"
-cc config set bitbucket.repository "repo"
-cc config set bitbucket.token "YOUR_TOKEN"
+csc config set bitbucket.url "https://your-bitbucket.com"
+csc config set bitbucket.project "PROJECT"
+csc config set bitbucket.repository "repo"
+csc config set bitbucket.token "YOUR_TOKEN"
 
 # 4. Test configuration
-cc doctor
+csc doctor
 ```
 
 ---
@@ -673,14 +673,14 @@ cc doctor
 
 1. **Built-in help:**
    ```bash
-   cc --help
-   cc stack --help
-   cc stacks create --help
+   csc --help
+   csc stack --help
+   csc stacks create --help
    ```
 
 2. **Diagnostics:**
    ```bash
-   cc doctor --verbose
+   csc doctor --verbose
    ```
 
 3. **Documentation:**
@@ -702,12 +702,12 @@ cc doctor
    Include this information:
    ```bash
    # System information
-   cc doctor --verbose
+   csc doctor --verbose
    
    # Error reproduction steps
    # Expected vs actual behavior
    # Configuration (sanitized)
-   cc config list | sed 's/token = .*/token = [REDACTED]/'
+   csc config list | sed 's/token = .*/token = [REDACTED]/'
    ```
 
 ### **Enterprise Support**
@@ -732,7 +732,7 @@ For enterprise users:
    ```bash
    # Weekly repository cleanup
    git gc
-   cc doctor
+   csc doctor
    
    # Monthly cache cleanup
    rm -rf .cascade/cache/
@@ -751,7 +751,7 @@ For enterprise users:
 3. **Monitor health:**
    ```bash
    # Regular health checks
-   cc doctor | grep -E "(ERROR|WARN)"
+   csc doctor | grep -E "(ERROR|WARN)"
    
    # Check for updates
    cargo install cascade-cli --force
@@ -793,13 +793,13 @@ If PRs don't update correctly:
 
 ```bash
 # Check if PRs still exist
-cc stacks prs --verbose
+csc stacks prs --verbose
 
 # Manually update PR if needed  
-cc config set stack.STACK_NAME.pr.INDEX PR_ID
+csc config set stack.STACK_NAME.pr.INDEX PR_ID
 
 # Re-submit if PR was closed
-cc stacks submit INDEX --title "Updated after rebase"
+csc stacks submit INDEX --title "Updated after rebase"
 ```
 
 ### **Versioned Branches Accumulating**
@@ -814,7 +814,7 @@ git branch | grep -E '.*-v[0-9]+$'
 git branch | grep -E '.*-v[1-9][0-9]*$' | xargs -n 1 git branch -D
 
 # Or use cascade cleanup
-cc stack cleanup --remove-versioned-branches
+csc stack cleanup --remove-versioned-branches
 ```
 
 ### **Force Push Safety Concerns**
@@ -841,14 +841,14 @@ git log --oneline origin/your-branch..your-branch-v2
 
 | Code | Meaning | Common Solutions |
 |------|---------|------------------|
-| E001 | Configuration missing | Run `cc init` or `cc setup` |
+| E001 | Configuration missing | Run `csc init` or `csc setup` |
 | E002 | Git repository not found | Ensure you're in a Git repository |
 | E003 | Bitbucket connection failed | Check credentials and network |
-| E004 | Stack not found | Use `cc stacks list` to see available stacks |
-| E005 | Merge conflict detected | Resolve conflicts and run `cc stacks rebase --continue` |
+| E004 | Stack not found | Use `csc stacks list` to see available stacks |
+| E005 | Merge conflict detected | Resolve conflicts and run `csc stacks rebase --continue` |
 | E006 | Invalid commit hash | Check commit exists with `git log` |
 | E007 | Permission denied | Check file permissions and access rights |
-| E008 | Network timeout | Increase timeout with `cc config set network.timeout 120` |
+| E008 | Network timeout | Increase timeout with `csc config set network.timeout 120` |
 
 ---
 

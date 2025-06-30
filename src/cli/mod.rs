@@ -8,7 +8,7 @@ use commands::stack::StackAction;
 use commands::{MergeStrategyArg, RebaseStrategyArg};
 
 #[derive(Parser)]
-#[command(name = "cc")]
+#[command(name = "csc")]
 #[command(about = "Cascade CLI - Stacked diffs for Bitbucket Server")]
 #[command(version)]
 pub struct Cli {

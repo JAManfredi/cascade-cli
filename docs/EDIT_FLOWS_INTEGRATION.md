@@ -71,7 +71,7 @@ git_repo.force_push_branch(&existing_branch, &new_branch)?;
 ## What Happens During Rebase with Smart Force Push:
 
 ```bash
-$ cc stacks rebase
+$ csc stacks rebase
 
 🔄 Rebasing stack: authentication
    📋 Branch mapping:
@@ -170,7 +170,7 @@ git checkout -b add-auth
 git push origin add-auth --force
 
 # Or just create new PR manually:
-cc stacks submit --title "Updated feature after rebase"
+csc stacks submit --title "Updated feature after rebase"
 ```
 
 ## Why This Approach Wins

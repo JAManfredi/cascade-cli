@@ -44,11 +44,11 @@ A **stack** is a logical grouping of related commits that represent incremental 
 
 ### **🎯 Core Commands**
 
-#### **`cc init`** - Initialize Repository
+#### **`csc init`** - Initialize Repository
 Initialize Cascade CLI in a Git repository.
 
 ```bash
-cc init [OPTIONS]
+csc init [OPTIONS]
 
 # Options:
 --bitbucket-url <URL>     # Bitbucket Server URL
@@ -60,20 +60,20 @@ cc init [OPTIONS]
 **Examples:**
 ```bash
 # Interactive initialization
-cc init
+csc init
 
 # Manual configuration
-cc init --bitbucket-url https://bitbucket.company.com --project DEV --repository my-app
+csc init --bitbucket-url https://bitbucket.company.com --project DEV --repository my-app
 
 # Force reconfiguration
-cc init --force
+csc init --force
 ```
 
-#### **`cc setup`** - Interactive Setup Wizard
+#### **`csc setup`** - Interactive Setup Wizard
 Guided configuration for first-time users.
 
 ```bash
-cc setup [OPTIONS]
+csc setup [OPTIONS]
 
 # Options:
 --force                   # Force reconfiguration if already initialized
@@ -88,11 +88,11 @@ cc setup [OPTIONS]
 
 ### **📚 Stack Management**
 
-#### **`cc stacks create`** - Create New Stack
+#### **`csc stacks create`** - Create New Stack
 Create a new stack for organizing related commits.
 
 ```bash
-cc stacks create <NAME> [OPTIONS]
+csc stacks create <NAME> [OPTIONS]
 
 # Options:
 --base <BRANCH>           # Base branch (default: current branch)
@@ -103,20 +103,20 @@ cc stacks create <NAME> [OPTIONS]
 **Examples:**
 ```bash
 # Basic stack creation
-cc stacks create feature-auth --base develop
+csc stacks create feature-auth --base develop
 
 # With description
-cc stacks create fix-performance --base main --description "Database query optimizations"
+csc stacks create fix-performance --base main --description "Database query optimizations"
 
 # Create without activating
-cc stacks create future-feature --base develop --no-activate
+csc stacks create future-feature --base develop --no-activate
 ```
 
-#### **`cc stacks list`** - List All Stacks
+#### **`csc stacks list`** - List All Stacks
 Display all stacks with their status and information.
 
 ```bash
-cc stacks list [OPTIONS]
+csc stacks list [OPTIONS]
 
 # Options:
 --verbose, -v            # Show detailed information
@@ -127,23 +127,23 @@ cc stacks list [OPTIONS]
 **Examples:**
 ```bash
 # Simple list
-cc stacks list
+csc stacks list
 
 # Detailed view
-cc stacks list --verbose
+csc stacks list --verbose
 
 # Only active stack
-cc stacks list --active
+csc stacks list --active
 
 # Custom format
-cc stacks list --format status
+csc stacks list --format status
 ```
 
-#### **`cc stack`** - Display Stack Details
+#### **`csc stack`** - Display Stack Details
 Show detailed information about a specific stack.
 
 ```bash
-cc stack [NAME]
+csc stack [NAME]
 
 # Arguments:
 [NAME]                   # Stack name (defaults to active stack)
@@ -155,11 +155,11 @@ cc stack [NAME]
 - Pull request status and links
 - Dependency information
 
-#### **`cc stacks switch`** - Activate Stack
+#### **`csc stacks switch`** - Activate Stack
 Switch to a different stack, making it the active stack.
 
 ```bash
-cc stacks switch <NAME>
+csc stacks switch <NAME>
 
 # Arguments:
 <NAME>                   # Stack name to activate
@@ -167,15 +167,15 @@ cc stacks switch <NAME>
 
 **Examples:**
 ```bash
-cc stacks switch feature-auth
-cc stacks switch fix-bugs
+csc stacks switch feature-auth
+csc stacks switch fix-bugs
 ```
 
-#### **`cc stacks delete`** - Remove Stack
+#### **`csc stacks delete`** - Remove Stack
 Delete a stack and optionally its associated branches.
 
 ```bash
-cc stacks delete <NAME> [OPTIONS]
+csc stacks delete <NAME> [OPTIONS]
 
 # Options:
 --force                  # Skip confirmation prompt
@@ -185,22 +185,22 @@ cc stacks delete <NAME> [OPTIONS]
 **Examples:**
 ```bash
 # With confirmation
-cc stacks delete old-feature
+csc stacks delete old-feature
 
 # Force deletion
-cc stacks delete temp-stack --force
+csc stacks delete temp-stack --force
 
 # Delete but keep branches
-cc stacks delete feature-x --keep-branches
+csc stacks delete feature-x --keep-branches
 ```
 
 ### **📤 Stack Operations**
 
-#### **`cc stacks push`** - Add Commits to Stack
+#### **`csc stacks push`** - Add Commits to Stack
 Add commits to the active stack. By default, pushes all unpushed commits.
 
 ```bash
-cc stacks push [OPTIONS]
+csc stacks push [OPTIONS]
 
 # Options:
 --branch <NAME>         # Custom branch name for this commit
@@ -212,7 +212,7 @@ cc stacks push [OPTIONS]
 --squash-since <REF>    # 🎉 Squash all commits since reference
 ```
 
-**Default Behavior:** When no specific targeting options are provided, `cc stacks push` pushes **all unpushed commits** since the last stack push.
+**Default Behavior:** When no specific targeting options are provided, `csc stacks push` pushes **all unpushed commits** since the last stack push.
 
 **Squash Workflow Examples:**
 ```bash
@@ -223,29 +223,29 @@ git commit -m "WIP: fix bugs"
 git commit -m "Final: complete feature with tests"
 
 # 🔍 See unpushed commits and get squash suggestions
-cc stack
-# 🚧 Unpushed commits (4): use 'cc stacks push --squash 4' to squash them
+csc stack
+# 🚧 Unpushed commits (4): use 'csc stacks push --squash 4' to squash them
 #    1. WIP: start feature (abc123)
 #    2. WIP: add core logic (def456)
 #    3. WIP: fix bugs (ghi789)
 #    4. Final: complete feature with tests (jkl012)
 # 💡 Squash options:
-#    cc stacks push --squash 4           # Squash all unpushed commits
-#    cc stacks push --squash 3           # Squash last 3 commits only
+#    csc stacks push --squash 4           # Squash all unpushed commits
+#    csc stacks push --squash 3           # Squash last 3 commits only
 
 # 🎉 Smart squash automatically detects "Final:" commits and creates intelligent messages
-cc stacks push --squash 4
+csc stacks push --squash 4
 # ✅ Smart message: Complete feature with tests (automatically extracted from "Final:" commit)
 
 # Alternative patterns that smart squash recognizes:
 git commit -m "WIP: authentication work"
 git commit -m "Add user authentication with OAuth"  # Uses this descriptive message
-cc stacks push --squash 2  # Result: "Add user authentication with OAuth"
+csc stacks push --squash 2  # Result: "Add user authentication with OAuth"
 
 git commit -m "fix typo"
 git commit -m "fix bug"  
 git commit -m "refactor cleanup"
-cc stacks push --squash 3  # Result: "Refactor cleanup" (uses last commit)
+csc stacks push --squash 3  # Result: "Refactor cleanup" (uses last commit)
 ```
 
 **Branch Naming:** Generated from final squashed commit message using Cascade CLI's branch naming rules.
@@ -255,32 +255,32 @@ cc stacks push --squash 3  # Result: "Refactor cleanup" (uses last commit)
 # Push all unpushed commits (default behavior)
 git commit -m "Add user authentication"
 git commit -m "Add password validation"
-cc stacks push  # Pushes both commits as separate stack entries
+csc stacks push  # Pushes both commits as separate stack entries
 
 # Push specific commit only
-cc stacks push --commit abc123
+csc stacks push --commit abc123
 
 # Push commits since specific reference
-cc stacks push --since HEAD~3
+csc stacks push --since HEAD~3
 
 # Push specific commits
-cc stacks push --commits abc123,def456,ghi789
+csc stacks push --commits abc123,def456,ghi789
 
 # Push with custom branch name
-cc stacks push --branch custom-auth-branch
+csc stacks push --branch custom-auth-branch
 
 # Squash multiple commits before pushing
-cc stacks push --squash 3  # Squashes last 3 commits into one
+csc stacks push --squash 3  # Squashes last 3 commits into one
 
 # Squash commits since reference
-cc stacks push --squash-since HEAD~5
+csc stacks push --squash-since HEAD~5
 ```
 
-#### **`cc stacks pop`** - Remove Entry from Stack
+#### **`csc stacks pop`** - Remove Entry from Stack
 Remove the top entry from the stack.
 
 ```bash
-cc stacks pop [OPTIONS]
+csc stacks pop [OPTIONS]
 
 # Options:
 --keep-branch           # Keep the associated branch
@@ -290,20 +290,20 @@ cc stacks pop [OPTIONS]
 **Examples:**
 ```bash
 # Remove top entry
-cc stacks pop
+csc stacks pop
 
 # Keep the branch
-cc stacks pop --keep-branch
+csc stacks pop --keep-branch
 
 # Force removal
-cc stacks pop --force
+csc stacks pop --force
 ```
 
-#### **`cc stacks submit`** - Create Pull Requests
+#### **`csc stacks submit`** - Create Pull Requests
 Submit stack entries as pull requests. By default, submits all unsubmitted entries.
 
 ```bash
-cc stacks submit [ENTRY] [OPTIONS]
+csc stacks submit [ENTRY] [OPTIONS]
 
 # Arguments:
 [ENTRY]                 # Entry index (defaults to all unsubmitted entries)
@@ -316,37 +316,37 @@ cc stacks submit [ENTRY] [OPTIONS]
 --reviewers <USERS>     # Comma-separated reviewer list
 ```
 
-**Default Behavior:** When no specific entry is provided, `cc stacks submit` submits **all unsubmitted entries** as separate pull requests.
+**Default Behavior:** When no specific entry is provided, `csc stacks submit` submits **all unsubmitted entries** as separate pull requests.
 
 **Examples:**
 ```bash
 # Submit all unsubmitted entries (default behavior)
-cc stacks submit
+csc stacks submit
 
 # Submit specific entry
-cc stacks submit 2
+csc stacks submit 2
 
 # Submit range of entries
-cc stacks submit --range 1-3
+csc stacks submit --range 1-3
 
 # Submit specific entries 
-cc stacks submit --range 2,4,6
+csc stacks submit --range 2,4,6
 
 # Submit with custom details
-cc stacks submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
+csc stacks submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
 
 # Create draft PRs
-cc stacks submit --draft
+csc stacks submit --draft
 
 # Add reviewers
-cc stacks submit --reviewers "alice,bob,charlie"
+csc stacks submit --reviewers "alice,bob,charlie"
 ```
 
-#### **`cc stacks sync`** - Synchronize with Remote
+#### **`csc stacks sync`** - Synchronize with Remote
 Update stack with latest changes from base branch and dependencies.
 
 ```bash
-cc stacks sync [OPTIONS]
+csc stacks sync [OPTIONS]
 
 # Options:
 --force                 # Force sync even with conflicts
@@ -356,20 +356,20 @@ cc stacks sync [OPTIONS]
 **Examples:**
 ```bash
 # Standard sync
-cc stacks sync
+csc stacks sync
 
 # Force sync with conflicts
-cc stacks sync --force
+csc stacks sync --force
 
 # Use specific strategy
-cc stacks sync --strategy rebase
+csc stacks sync --strategy rebase
 ```
 
-#### **`cc stacks rebase`** - Rebase Stack
+#### **`csc stacks rebase`** - Rebase Stack
 Rebase all stack entries on latest base branch using smart force push strategy.
 
 ```bash
-cc stacks rebase [OPTIONS]
+csc stacks rebase [OPTIONS]
 
 # Options:
 --interactive          # Interactive rebase mode
@@ -390,21 +390,21 @@ This approach follows industry standards (Graphite, Phabricator, GitHub CLI) and
 **Examples:**
 ```bash
 # Standard rebase with PR history preservation
-cc stacks rebase
+csc stacks rebase
 
 # Interactive rebase
-cc stacks rebase --interactive
+csc stacks rebase --interactive
 
 # Continue after conflict resolution
-cc stacks rebase --continue
+csc stacks rebase --continue
 
 # Abort rebase
-cc stacks rebase --abort
+csc stacks rebase --abort
 ```
 
 **What you'll see:**
 ```bash
-$ cc stacks rebase
+$ csc stacks rebase
 
 🔄 Rebasing stack: authentication
    📋 Branch mapping:
@@ -420,11 +420,11 @@ $ cc stacks rebase
 
 ### **📊 Status and Information**
 
-#### **`cc repo`** - Show Repository Overview
+#### **`csc repo`** - Show Repository Overview
 Display comprehensive status of current repository and stacks.
 
 ```bash
-cc repo [OPTIONS]
+csc repo [OPTIONS]
 
 # Options:
 --verbose, -v           # Show detailed information
@@ -438,21 +438,21 @@ cc repo [OPTIONS]
 - Pull request status
 - Sync status with remotes
 
-#### **`cc stacks status`** - Stack-Specific Status
+#### **`csc stacks status`** - Stack-Specific Status
 Show detailed status for current or specified stack.
 
 ```bash
-cc stacks status [NAME]
+csc stacks status [NAME]
 
 # Arguments:
 [NAME]                  # Stack name (defaults to active stack)
 ```
 
-#### **`cc stacks prs`** - List Pull Requests
+#### **`csc stacks prs`** - List Pull Requests
 Show all pull requests associated with stacks.
 
 ```bash
-cc stacks prs [OPTIONS]
+csc stacks prs [OPTIONS]
 
 # Options:
 --stack <NAME>          # Filter by stack name
@@ -463,22 +463,22 @@ cc stacks prs [OPTIONS]
 **Examples:**
 ```bash
 # All PRs
-cc stacks prs
+csc stacks prs
 
 # PRs for specific stack
-cc stacks prs --stack feature-auth
+csc stacks prs --stack feature-auth
 
 # Only open PRs
-cc stacks prs --status open
+csc stacks prs --status open
 ```
 
 ### **🎨 Visualization**
 
-#### **`cc viz stack`** - Stack Diagram
+#### **`csc viz stack`** - Stack Diagram
 Generate visual representation of a stack.
 
 ```bash
-cc viz stack [NAME] [OPTIONS]
+csc viz stack [NAME] [OPTIONS]
 
 # Arguments:
 [NAME]                  # Stack name (defaults to active stack)
@@ -493,23 +493,23 @@ cc viz stack [NAME] [OPTIONS]
 **Examples:**
 ```bash
 # ASCII diagram in terminal
-cc viz stack
+csc viz stack
 
 # Mermaid diagram
-cc viz stack --format mermaid
+csc viz stack --format mermaid
 
 # Save to file
-cc viz stack --format dot --output stack.dot
+csc viz stack --format dot --output stack.dot
 
 # Compact mode
-cc viz stack --compact
+csc viz stack --compact
 ```
 
-#### **`cc viz deps`** - Dependency Graph
+#### **`csc viz deps`** - Dependency Graph
 Show dependencies between all stacks.
 
 ```bash
-cc viz deps [OPTIONS]
+csc viz deps [OPTIONS]
 
 # Options:
 --format <FORMAT>       # Output format (ascii, mermaid, dot, plantuml)
@@ -521,22 +521,22 @@ cc viz deps [OPTIONS]
 **Examples:**
 ```bash
 # ASCII dependency graph
-cc viz deps
+csc viz deps
 
 # Export to Mermaid
-cc viz deps --format mermaid --output deps.md
+csc viz deps --format mermaid --output deps.md
 
 # Graphviz format for advanced visualization
-cc viz deps --format dot --output deps.dot
+csc viz deps --format dot --output deps.dot
 ```
 
 ### **🖥️ Interactive Tools**
 
-#### **`cc tui`** - Terminal User Interface
+#### **`csc tui`** - Terminal User Interface
 Launch interactive stack browser.
 
 ```bash
-cc tui
+csc tui
 ```
 
 **Features:**
@@ -554,35 +554,35 @@ cc tui
 
 ### **🪝 Git Hooks**
 
-#### **`cc hooks install`** - Install All Hooks
+#### **`csc hooks install`** - Install All Hooks
 Install all Cascade Git hooks for workflow automation.
 
 ```bash
-cc hooks install [OPTIONS]
+csc hooks install [OPTIONS]
 
 # Options:
 --force                 # Overwrite existing hooks
 ```
 
-#### **`cc hooks uninstall`** - Remove All Hooks
+#### **`csc hooks uninstall`** - Remove All Hooks
 Remove all Cascade Git hooks.
 
 ```bash
-cc hooks uninstall
+csc hooks uninstall
 ```
 
-#### **`cc hooks status`** - Show Hook Status
+#### **`csc hooks status`** - Show Hook Status
 Display installation status of all Git hooks.
 
 ```bash
-cc hooks status
+csc hooks status
 ```
 
-#### **`cc hooks add`** - Install Specific Hook
+#### **`csc hooks add`** - Install Specific Hook
 Install a specific Git hook.
 
 ```bash
-cc hooks add <HOOK>
+csc hooks add <HOOK>
 
 # Hook types:
 post-commit            # Auto-add commits to active stack
@@ -591,20 +591,20 @@ commit-msg            # Validate commit message format
 prepare-commit-msg    # Add stack context to commit messages
 ```
 
-#### **`cc hooks remove`** - Remove Specific Hook
+#### **`csc hooks remove`** - Remove Specific Hook
 Remove a specific Git hook.
 
 ```bash
-cc hooks remove <HOOK>
+csc hooks remove <HOOK>
 ```
 
 ### **⚙️ Configuration**
 
-#### **`cc config`** - Configuration Management
+#### **`csc config`** - Configuration Management
 Manage Cascade CLI configuration settings.
 
 ```bash
-cc config <SUBCOMMAND>
+csc config <SUBCOMMAND>
 
 # Subcommands:
 list                   # Show all configuration
@@ -616,36 +616,36 @@ unset <KEY>           # Remove configuration value
 **Examples:**
 ```bash
 # List all configuration
-cc config list
+csc config list
 
 # Get specific setting
-cc config get bitbucket.url
+csc config get bitbucket.url
 
 # Set configuration
-cc config set bitbucket.token "your-token-here"
+csc config set bitbucket.token "your-token-here"
 
 # Remove setting
-cc config unset bitbucket.project
+csc config unset bitbucket.project
 ```
 
 ### **🔧 Utility Commands**
 
-#### **`cc doctor`** - System Diagnostics
+#### **`csc doctor`** - System Diagnostics
 Run comprehensive system health check.
 
 ```bash
-cc doctor [OPTIONS]
+csc doctor [OPTIONS]
 
 # Options:
 --verbose, -v           # Show detailed diagnostics
 --fix                  # Attempt to fix common issues
 ```
 
-#### **`cc completions`** - Shell Completions
+#### **`csc completions`** - Shell Completions
 Manage shell completion installation.
 
 ```bash
-cc completions <SUBCOMMAND>
+csc completions <SUBCOMMAND>
 
 # Subcommands:
 install               # Auto-install for detected shells
@@ -653,11 +653,11 @@ status               # Show installation status
 generate <SHELL>     # Generate completions for specific shell
 ```
 
-#### **`cc version`** - Version Information
+#### **`csc version`** - Version Information
 Display version and build information.
 
 ```bash
-cc version [OPTIONS]
+csc version [OPTIONS]
 
 # Options:
 --verbose, -v         # Show detailed build information
@@ -672,7 +672,7 @@ cc version [OPTIONS]
 #### **1. Start New Feature**
 ```bash
 # Create feature stack
-cc stacks create feature-user-profiles --base develop --description "User profile management system"
+csc stacks create feature-user-profiles --base develop --description "User profile management system"
 
 # Start development
 git checkout develop
@@ -683,23 +683,23 @@ git pull origin develop
 ```bash
 # First increment: basic profile model
 git add . && git commit -m "Add user profile model"
-cc stacks push
+csc stacks push
 
 # Second increment: profile endpoints
 git add . && git commit -m "Add profile CRUD endpoints"
-cc stacks push
+csc stacks push
 
 # Third increment: profile validation
 git add . && git commit -m "Add profile data validation"
-cc stacks push
+csc stacks push
 ```
 
 #### **3. Submit for Review**
 ```bash
 # Submit each increment as separate PRs
-cc stacks submit 1  # Submit profile model
-cc stacks submit 2  # Submit endpoints (depends on model)
-cc stacks submit 3  # Submit validation (depends on endpoints)
+csc stacks submit 1  # Submit profile model
+csc stacks submit 2  # Submit endpoints (depends on model)
+csc stacks submit 3  # Submit validation (depends on endpoints)
 ```
 
 #### **4. Handle Review Feedback**
@@ -708,21 +708,21 @@ cc stacks submit 3  # Submit validation (depends on endpoints)
 git add . && git commit -m "Address review feedback: improve validation"
 
 # Update existing PR
-cc stacks submit 3 --title "Updated: Add profile data validation"
+csc stacks submit 3 --title "Updated: Add profile data validation"
 
 # Or sync if dependencies changed
-cc stacks sync
+csc stacks sync
 ```
 
 #### **5. Merge and Clean Up**
 ```bash
 # After PRs are approved and merged
-cc stacks pop  # Remove merged entries
-cc stacks pop
-cc stacks pop
+csc stacks pop  # Remove merged entries
+csc stacks pop
+csc stacks pop
 
 # Or delete completed stack
-cc stacks delete feature-user-profiles
+csc stacks delete feature-user-profiles
 ```
 
 ### **Bug Fix Workflow**
@@ -730,34 +730,34 @@ cc stacks delete feature-user-profiles
 #### **Quick Fix**
 ```bash
 # Create fix stack
-cc stacks create fix-login-bug --base main --description "Fix login timeout issue"
+csc stacks create fix-login-bug --base main --description "Fix login timeout issue"
 
 # Make fix
 git add . && git commit -m "Fix login timeout in OAuth flow"
-cc stacks push
+csc stacks push
 
 # Submit immediately
-cc stacks submit --reviewers "security-team"
+csc stacks submit --reviewers "security-team"
 ```
 
 #### **Complex Fix with Investigation**
 ```bash
 # Investigation stack
-cc stacks create investigate-memory-leak --base develop
+csc stacks create investigate-memory-leak --base develop
 
 # Add investigation commits
 git commit -m "Add memory profiling tools"
-cc stacks push
+csc stacks push
 
 git commit -m "Identify memory leak in cache layer"
-cc stacks push
+csc stacks push
 
 git commit -m "Fix memory leak and add tests"
-cc stacks push
+csc stacks push
 
 # Submit investigation and fix separately
-cc stacks submit 1 --title "Add memory profiling tools"
-cc stacks submit 3 --title "Fix memory leak in cache layer"
+csc stacks submit 1 --title "Add memory profiling tools"
+csc stacks submit 3 --title "Fix memory leak in cache layer"
 ```
 
 ### **Team Collaboration Patterns**
@@ -765,33 +765,33 @@ cc stacks submit 3 --title "Fix memory leak in cache layer"
 #### **Dependent Feature Development**
 ```bash
 # Team member A: Core infrastructure
-cc stacks create auth-core --base main
+csc stacks create auth-core --base main
 git commit -m "Add OAuth2 infrastructure"
-cc stacks push
-cc stacks submit
+csc stacks push
+csc stacks submit
 
 # Team member B: Dependent feature (waits for A's PR)
-cc stacks create user-management --base auth-core
+csc stacks create user-management --base auth-core
 git commit -m "Add user management using OAuth2"
-cc stacks push
+csc stacks push
 
 # After A's PR is merged, B syncs
-cc stacks sync  # Rebase on latest main including A's changes
-cc stacks submit
+csc stacks sync  # Rebase on latest main including A's changes
+csc stacks submit
 ```
 
 #### **Parallel Development with Coordination**
 ```bash
 # Feature A: Independent
-cc stacks create feature-a --base develop
+csc stacks create feature-a --base develop
 # ... development work ...
 
 # Feature B: Independent
-cc stacks create feature-b --base develop  
+csc stacks create feature-b --base develop  
 # ... development work ...
 
 # Visualize dependencies
-cc viz deps --format mermaid > team-deps.md
+csc viz deps --format mermaid > team-deps.md
 ```
 
 ---
@@ -803,15 +803,15 @@ cc viz deps --format mermaid > team-deps.md
 #### **CI/CD Integration**
 ```bash
 # In CI pipeline
-cc doctor --verbose           # Validate environment
-cc stacks status --format json # Get status for reporting
-cc viz deps --format dot      # Generate dependency graphs
+csc doctor --verbose           # Validate environment
+csc stacks status --format json # Get status for reporting
+csc viz deps --format dot      # Generate dependency graphs
 ```
 
 #### **Pre-commit Hook Integration**
 ```bash
 # Install hooks for automatic workflow
-cc hooks install
+csc hooks install
 
 # Hooks will automatically:
 # - Add commits to active stack
@@ -824,15 +824,15 @@ cc hooks install
 #### **Performance Configuration**
 ```bash
 # Optimize for large repos
-cc config set performance.cache_size 2000
-cc config set performance.parallel_operations true
-cc config set network.timeout 120
+csc config set performance.cache_size 2000
+csc config set performance.parallel_operations true
+csc config set network.timeout 120
 ```
 
 #### **Selective Stack Management**
 ```bash
 # Work with specific stacks only
-cc stacks list --format name | grep feature- | xargs -I {} cc stacks validate {}
+csc stacks list --format name | grep feature- | xargs -I {} csc stacks validate {}
 ```
 
 ### **Advanced Visualization**
@@ -840,19 +840,19 @@ cc stacks list --format name | grep feature- | xargs -I {} cc stacks validate {}
 #### **Documentation Generation**
 ```bash
 # Generate project architecture docs
-cc viz deps --format mermaid --output docs/architecture.md
+csc viz deps --format mermaid --output docs/architecture.md
 
 # Include in markdown
 echo "# Project Architecture" > docs/full-arch.md
 echo "## Stack Dependencies" >> docs/full-arch.md
-cc viz deps --format mermaid >> docs/full-arch.md
+csc viz deps --format mermaid >> docs/full-arch.md
 ```
 
 #### **Custom Formats for Tools**
 ```bash
 # Export for external tools
-cc viz stack --format dot | dot -Tpng > stack-diagram.png
-cc viz deps --format plantuml | plantuml -pipe > deps.svg
+csc viz stack --format dot | dot -Tpng > stack-diagram.png
+csc viz deps --format plantuml | plantuml -pipe > deps.svg
 ```
 
 ---
@@ -918,39 +918,39 @@ BITBUCKET_URL="https://bitbucket.company.com"
 #### **"Stack not found" errors**
 ```bash
 # List all stacks to verify names
-cc stacks list
+csc stacks list
 
 # Check if in correct repository
-cc repo
+csc repo
 
 # Re-initialize if needed
-cc init --force
+csc init --force
 ```
 
 #### **Bitbucket connection issues**
 ```bash
 # Test connection
-cc doctor
+csc doctor
 
 # Verify token permissions
-cc config get bitbucket.token
+csc config get bitbucket.token
 
 # Reconfigure if needed
-cc setup --force
+csc setup --force
 ```
 
 #### **Sync conflicts**
 ```bash
 # Check conflict status
-cc stacks status
+csc stacks status
 
 # Resolve manually and continue
 git add .
-cc stacks rebase --continue
+csc stacks rebase --continue
 
 # Or abort and try different strategy
-cc stacks rebase --abort
-cc stacks sync --strategy merge
+csc stacks rebase --abort
+csc stacks sync --strategy merge
 ```
 
 #### **Performance issues**
@@ -963,14 +963,14 @@ git gc --aggressive
 git prune
 
 # Adjust cache settings
-cc config set performance.cache_size 500
+csc config set performance.cache_size 500
 ```
 
 ### **Debug Mode**
 ```bash
 # Enable debug logging
 export CASCADE_LOG_LEVEL=debug
-cc stacks push
+csc stacks push
 
 # Check logs
 tail -f ~/.cascade/logs/cascade.log
@@ -979,15 +979,15 @@ tail -f ~/.cascade/logs/cascade.log
 ### **Getting Help**
 ```bash
 # Built-in help
-cc --help
-cc stack --help
-cc stacks create --help
+csc --help
+csc stack --help
+csc stacks create --help
 
 # System diagnostics
-cc doctor --verbose
+csc doctor --verbose
 
 # Check configuration
-cc config list
+csc config list
 ```
 
 ---

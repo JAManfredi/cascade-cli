@@ -82,9 +82,9 @@ cargo clippy --fix
 ## Architecture
 
 ### High-Level Structure
-This is a Rust CLI tool (`cc`) that implements stacked diffs for Bitbucket Server. The core architecture follows these principles:
+This is a Rust CLI tool (`csc`) that implements stacked diffs for Bitbucket Server. The core architecture follows these principles:
 
-**Command Architecture**: Built with `clap` using a hierarchical command structure where main commands have subcommands (e.g., `cc stacks create`, `cc push`). Shortcuts exist for common operations (`cc stack` vs `cc stacks show`).
+**Command Architecture**: Built with `clap` using a hierarchical command structure where main commands have subcommands (e.g., `csc stacks create`, `csc push`). Shortcuts exist for common operations (`csc stack` vs `csc stacks show`).
 
 **Module Organization**:
 - `cli/` - Command-line interface and command implementations

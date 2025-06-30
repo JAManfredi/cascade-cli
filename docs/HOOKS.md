@@ -5,7 +5,7 @@ Cascade CLI provides Git hooks to seamlessly integrate stack management with you
 ## 🎯 Key Concept: Hooks vs CLI Protections
 
 **Git Hooks** protect against **raw Git commands** (`git commit`, `git push`)  
-**CLI Commands** have built-in protections for **Cascade commands** (`cc submit`, `cc push`)
+**CLI Commands** have built-in protections for **Cascade commands** (`csc submit`, `csc push`)
 
 Hooks ensure that even when developers use native Git commands, they still get Cascade's benefits and protections.
 
@@ -24,7 +24,7 @@ git push --force origin feature-branch
 # Hook blocks it and provides guidance:
 # ❌ Force push detected!
 # 🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity
-# 💡 Instead try: cc sync, cc push, cc submit
+# 💡 Instead try: csc sync, csc push, csc submit
 ```
 
 **Manual equivalent (hooks OFF):**
@@ -33,7 +33,7 @@ git push --force origin feature-branch
 git push --force origin feature-branch  # 💥 Could corrupt stack metadata!
 
 # You'd need to manually remember:
-cc stacks validate  # Check before any git push
+csc stacks validate  # Check before any git push
 ```
 
 **Why it's critical:**
@@ -82,7 +82,7 @@ git commit
 # 
 # Stack: feature-auth
 # This commit will be added to the active stack automatically.
-# Use 'cc stacks status' to see the current stack state.
+# Use 'csc stacks status' to see the current stack state.
 ```
 
 **Manual equivalent (hooks OFF):**
@@ -112,13 +112,13 @@ git commit  # Plain editor, no context
 git commit -m "Fix authentication bug"
 
 # Hook automatically runs this behind the scenes:
-cc stacks push --commit [that-commit-hash] --message "Fix authentication bug"
+csc stacks push --commit [that-commit-hash] --message "Fix authentication bug"
 ```
 
 **Manual equivalent (hooks OFF):**
 ```bash
 git commit -m "Fix authentication bug"
-cc push --commit $(git rev-parse HEAD)  # You'd have to remember this every time!
+csc push --commit $(git rev-parse HEAD)  # You'd have to remember this every time!
 ```
 
 **Why it's optional:**
@@ -128,7 +128,7 @@ cc push --commit $(git rev-parse HEAD)  # You'd have to remember this every time
 
 **Install if needed:**
 ```bash
-cc hooks install post-commit
+csc hooks install post-commit
 ```
 
 ## 🔄 Complete Workflow Comparison
@@ -138,7 +138,7 @@ cc hooks install post-commit
 git commit -m "Add user authentication"
 # ✅ Message validated
 # ✅ Stack context included
-# ⚠️ NOT auto-added to stack (manual cc push needed)
+# ⚠️ NOT auto-added to stack (manual csc push needed)
 
 git push origin feature-branch
 # ✅ Stack integrity validated
@@ -160,8 +160,8 @@ git push origin feature-branch
 ### Without Hooks (Manual Steps):
 ```bash
 git commit -m "Add user authentication"
-cc push --commit $(git rev-parse HEAD)  # Manual step #1
-cc stacks validate                        # Manual step #2
+csc push --commit $(git rev-parse HEAD)  # Manual step #1
+csc stacks validate                        # Manual step #2
 
 git push origin feature-branch
 # 💥 Could accidentally use --force and break stacks
@@ -171,26 +171,26 @@ git push origin feature-branch
 
 ### Install Essential Hooks (Recommended)
 ```bash
-cc hooks install
+csc hooks install
 ```
 
 ### Install Specific Hook
 ```bash
-cc hooks install post-commit    # Only if no conflicting repo hooks
-cc hooks install pre-push       # Stack protection
-cc hooks install commit-msg     # Message validation
-cc hooks install prepare-commit-msg  # Stack context
+csc hooks install post-commit    # Only if no conflicting repo hooks
+csc hooks install pre-push       # Stack protection
+csc hooks install commit-msg     # Message validation
+csc hooks install prepare-commit-msg  # Stack context
 ```
 
 ### Check Hook Status
 ```bash
-cc hooks status
+csc hooks status
 ```
 
 ### Remove Hooks
 ```bash
-cc hooks uninstall              # Remove all
-cc hooks uninstall post-commit  # Remove specific hook
+csc hooks uninstall              # Remove all
+csc hooks uninstall post-commit  # Remove specific hook
 ```
 
 ## 🚨 Troubleshooting
@@ -200,7 +200,7 @@ cc hooks uninstall post-commit  # Remove specific hook
 
 **Solution:** 
 1. Don't install the post-commit hook
-2. Use manual workflow: `git commit` then `cc push`
+2. Use manual workflow: `git commit` then `csc push`
 3. Or chain hooks properly (advanced - see your repo's hook documentation)
 
 ### Hook Not Running
@@ -212,10 +212,10 @@ cc hooks uninstall post-commit  # Remove specific hook
 ls -la .git/hooks/
 
 # Verify Cascade hooks are installed
-cc hooks status
+csc hooks status
 
 # Reinstall if needed
-cc hooks install --force
+csc hooks install --force
 ```
 
 ### Force Push Still Blocked
@@ -227,9 +227,9 @@ cc hooks install --force
 git push --force-with-lease origin branch-name
 
 # Or temporarily uninstall pre-push hook
-cc hooks uninstall pre-push
+csc hooks uninstall pre-push
 git push --force origin branch-name
-cc hooks install pre-push
+csc hooks install pre-push
 ```
 
 ## 📈 Recommendation
