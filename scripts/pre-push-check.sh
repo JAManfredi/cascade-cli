@@ -65,6 +65,19 @@ if ! run_check "Clippy Linting" "cargo clippy --all-targets --all-features -- -D
     print_warning "Fix clippy warnings or run 'cargo clippy --fix' for auto-fixes"
 fi
 
+# 2b. Run Clippy with beta if available (matches CI matrix)
+if rustup toolchain list | grep -q "beta"; then
+    print_step "Clippy Beta (CI compatibility check)"
+    if rustup run beta cargo clippy --all-targets --all-features -- -D warnings 2>/dev/null; then
+        print_success "Clippy beta passed"
+    else
+        print_warning "Clippy beta failed - this may cause CI failures"
+        print_warning "Consider running: rustup install beta && rustup run beta cargo clippy --fix"
+    fi
+else
+    print_warning "Beta toolchain not installed (run: rustup install beta)"
+fi
+
 # 3. Build check
 if ! run_check "Build Check" "cargo build --verbose"; then
     FAILED_CHECKS+=("build")
