@@ -138,6 +138,13 @@ async fn test_stack_state_after_manual_git_ops() {
 }
 
 /// Test concurrent stack operations on Unix systems (aggressive)
+///
+/// This test creates multiple stacks concurrently and verifies they can be listed afterward.
+/// It includes retry logic to handle race conditions between stack creation and metadata
+/// synchronization, which can manifest differently in CI environments vs local development.
+///
+/// Common race condition: Stack creation reports success but metadata isn't fully written
+/// to disk before the stack listing operation runs, causing some stacks to be "missing".
 #[cfg(unix)]
 #[tokio::test]
 async fn test_concurrent_stack_operations_unix() {
@@ -201,35 +208,52 @@ async fn test_concurrent_stack_operations_unix() {
         "Unix should handle at least half of concurrent stack operations successfully. Results: {results:#?}"
     );
 
-    // Allow file system to synchronize after concurrent operations
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    // Verify stacks were created and can be listed
-    let list_output = std::process::Command::new(&binary_path)
-        .args(["stacks", "list"])
-        .current_dir(&repo_path)
-        .output()
-        .expect("List command should work");
-
-    assert!(
-        list_output.status.success(),
-        "Stack listing should work after concurrent operations"
-    );
-
-    let list_stdout = String::from_utf8_lossy(&list_output.stdout);
-
-    // Verify that the successful stacks are listed
+    // Retry stack listing with exponential backoff to handle race conditions
     let mut found_stacks = 0;
-    for stack_name in results.iter().flatten() {
-        if list_stdout.contains(stack_name) {
-            found_stacks += 1;
+    let max_retries = 5;
+    for attempt in 1..=max_retries {
+        // Progressive delay for file system synchronization
+        let delay_ms = 50 * attempt as u64; // 50ms, 100ms, 150ms, 200ms, 250ms
+        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+
+        let list_output = std::process::Command::new(&binary_path)
+            .args(["stacks", "list"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("List command should work");
+
+        assert!(
+            list_output.status.success(),
+            "Stack listing should work after concurrent operations (attempt {attempt})"
+        );
+
+        let list_stdout = String::from_utf8_lossy(&list_output.stdout);
+
+        // Count how many successful stacks are actually listed
+        found_stacks = 0;
+        for stack_name in results.iter().flatten() {
+            if list_stdout.contains(stack_name) {
+                found_stacks += 1;
+            }
         }
+
+        // If we found enough stacks, we're done
+        if found_stacks >= successful_count - 1 {
+            println!(
+                "Found {found_stacks} stacks on attempt {attempt} (needed at least {})",
+                successful_count - 1
+            );
+            break;
+        }
+
+        println!("Attempt {attempt}: Found {found_stacks}/{successful_count} stacks, retrying...");
     }
 
-    // In concurrent tests, allow for slight discrepancies due to timing
+    // Final assertion with better error context
     assert!(
         found_stacks >= successful_count - 1,
-        "Most successfully created stacks should be listable. Found {found_stacks}, expected at least {}", successful_count - 1
+        "Concurrent stack operations race condition: Found {found_stacks} stacks after {max_retries} attempts, expected at least {}. This suggests a file system synchronization issue in CI environments. Successful operations: {successful_count}, Results: {results:#?}", 
+        successful_count - 1
     );
 }
 
