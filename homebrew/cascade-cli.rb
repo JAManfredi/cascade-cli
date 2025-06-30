@@ -36,9 +36,6 @@ class CascadeCli < Formula
     bash_completion.install "completions/cc.bash" => "cc"
     zsh_completion.install "completions/_cc"
     fish_completion.install "completions/cc.fish"
-    
-    # Install man page if available
-    # man1.install "docs/cc.1" if File.exist?("docs/cc.1")
   end
 
   def post_install

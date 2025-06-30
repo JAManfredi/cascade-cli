@@ -92,6 +92,15 @@ jobs:
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
 
+    - name: Generate shell completions (native target only)
+      if: matrix.can-test
+      run: |
+        mkdir -p completions
+        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate bash > completions/cc.bash
+        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate zsh > completions/_cc
+        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate fish > completions/cc.fish
+        ./target/${{ matrix.target }}/release/cc${{ matrix.os == 'windows-latest' && '.exe' || '' }} completions generate powershell > completions/cc.ps1
+
     - name: Run tests (if supported)
       if: matrix.can-test
       continue-on-error: true
@@ -100,16 +109,36 @@ jobs:
     - name: Create binary package (Unix)
       if: matrix.os != 'windows-latest'
       run: |
-        cd target/${{ matrix.target }}/release
-        tar czf ../../../${{ matrix.name }}.tar.gz cc
-        cd ../../..
+        # Create package directory
+        mkdir -p package
+        cp target/${{ matrix.target }}/release/cc package/
+        
+        # Include completions if they were generated (native targets only)
+        if [ -d "completions" ]; then
+          cp -r completions package/
+        fi
+        
+        # Create archive
+        cd package
+        tar czf ../${{ matrix.name }}.tar.gz *
+        cd ..
 
     - name: Create binary package (Windows)  
       if: matrix.os == 'windows-latest'
       run: |
-        cd target/${{ matrix.target }}/release
-        7z a ../../../${{ matrix.name }}.zip cc.exe
-        cd ../../..
+        # Create package directory
+        mkdir package
+        cp target/${{ matrix.target }}/release/cc.exe package/
+        
+        # Include completions if they were generated (native targets only)
+        if (Test-Path "completions") {
+          Copy-Item -Recurse completions package/
+        }
+        
+        # Create archive
+        cd package
+        7z a ../${{ matrix.name }}.zip *
+        cd ..
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
