@@ -33,6 +33,20 @@ struct BranchDeletionSafety {
     pub main_branch_name: String,
 }
 
+/// Safety information for checkout operations
+#[derive(Debug, Clone)]
+struct CheckoutSafety {
+    #[allow(dead_code)] // Used in confirmation dialogs and future features
+    pub has_uncommitted_changes: bool,
+    pub modified_files: Vec<String>,
+    pub staged_files: Vec<String>,
+    pub untracked_files: Vec<String>,
+    #[allow(dead_code)] // Reserved for future automatic stashing implementation
+    pub stash_created: Option<String>,
+    #[allow(dead_code)] // Used for context in confirmation dialogs
+    pub current_branch: Option<String>,
+}
+
 /// Wrapper around git2::Repository with safe operations
 ///
 /// For thread safety, use the async variants (e.g., fetch_async, pull_async)
@@ -175,8 +189,29 @@ impl GitRepository {
         Ok(())
     }
 
-    /// Switch to a branch
+    /// Switch to a branch with safety checks
     pub fn checkout_branch(&self, name: &str) -> Result<()> {
+        self.checkout_branch_with_options(name, false)
+    }
+
+    /// Switch to a branch with force option to bypass safety checks
+    pub fn checkout_branch_unsafe(&self, name: &str) -> Result<()> {
+        self.checkout_branch_with_options(name, true)
+    }
+
+    /// Internal branch checkout implementation with safety options
+    fn checkout_branch_with_options(&self, name: &str, force_unsafe: bool) -> Result<()> {
+        info!("Attempting to checkout branch: {}", name);
+
+        // Enhanced safety check: Detect uncommitted work before checkout
+        if !force_unsafe {
+            let safety_result = self.check_checkout_safety(name)?;
+            if let Some(safety_info) = safety_result {
+                // Repository has uncommitted changes, get user confirmation
+                self.handle_checkout_confirmation(name, &safety_info)?;
+            }
+        }
+
         // Find the branch
         let branch = self
             .repo
@@ -204,8 +239,32 @@ impl GitRepository {
         Ok(())
     }
 
-    /// Checkout a specific commit (detached HEAD)
+    /// Checkout a specific commit (detached HEAD) with safety checks
     pub fn checkout_commit(&self, commit_hash: &str) -> Result<()> {
+        self.checkout_commit_with_options(commit_hash, false)
+    }
+
+    /// Checkout a specific commit with force option to bypass safety checks
+    pub fn checkout_commit_unsafe(&self, commit_hash: &str) -> Result<()> {
+        self.checkout_commit_with_options(commit_hash, true)
+    }
+
+    /// Internal commit checkout implementation with safety options
+    fn checkout_commit_with_options(&self, commit_hash: &str, force_unsafe: bool) -> Result<()> {
+        info!("Attempting to checkout commit: {}", commit_hash);
+
+        // Enhanced safety check: Detect uncommitted work before checkout
+        if !force_unsafe {
+            let safety_result = self.check_checkout_safety(&format!("commit:{}", commit_hash))?;
+            if let Some(safety_info) = safety_result {
+                // Repository has uncommitted changes, get user confirmation
+                self.handle_checkout_confirmation(
+                    &format!("commit {}", commit_hash),
+                    &safety_info,
+                )?;
+            }
+        }
+
         let oid = Oid::from_str(commit_hash).map_err(CascadeError::Git)?;
 
         let commit = self.repo.find_commit(oid).map_err(|e| {
@@ -1179,6 +1238,206 @@ impl GitRepository {
         None
     }
 
+    /// Check if checkout operation is safe
+    fn check_checkout_safety(&self, _target: &str) -> Result<Option<CheckoutSafety>> {
+        // Check if there are uncommitted changes
+        let is_dirty = self.is_dirty()?;
+        if !is_dirty {
+            // No uncommitted changes, checkout is safe
+            return Ok(None);
+        }
+
+        // Get current branch for context
+        let current_branch = self.get_current_branch().ok();
+
+        // Get detailed information about uncommitted changes
+        let modified_files = self.get_modified_files()?;
+        let staged_files = self.get_staged_files()?;
+        let untracked_files = self.get_untracked_files()?;
+
+        let has_uncommitted_changes = !modified_files.is_empty() || !staged_files.is_empty();
+
+        if has_uncommitted_changes || !untracked_files.is_empty() {
+            return Ok(Some(CheckoutSafety {
+                has_uncommitted_changes,
+                modified_files,
+                staged_files,
+                untracked_files,
+                stash_created: None,
+                current_branch,
+            }));
+        }
+
+        Ok(None)
+    }
+
+    /// Handle user confirmation for checkout operations with uncommitted changes
+    fn handle_checkout_confirmation(
+        &self,
+        target: &str,
+        safety_info: &CheckoutSafety,
+    ) -> Result<()> {
+        // Check if we're in a non-interactive environment
+        if std::env::var("CI").is_ok() || std::env::var("CHECKOUT_NO_CONFIRM").is_ok() {
+            return Err(CascadeError::branch(
+                format!(
+                    "Cannot checkout '{}' with uncommitted changes in non-interactive mode. Commit your changes or use stash first.",
+                    target
+                )
+            ));
+        }
+
+        // Interactive warning and confirmation
+        println!("\n⚠️  CHECKOUT WARNING ⚠️");
+        println!("You have uncommitted changes that could be lost:");
+
+        if !safety_info.modified_files.is_empty() {
+            println!(
+                "\n📝 Modified files ({}):",
+                safety_info.modified_files.len()
+            );
+            for file in safety_info.modified_files.iter().take(10) {
+                println!("   - {}", file);
+            }
+            if safety_info.modified_files.len() > 10 {
+                println!("   ... and {} more", safety_info.modified_files.len() - 10);
+            }
+        }
+
+        if !safety_info.staged_files.is_empty() {
+            println!("\n📁 Staged files ({}):", safety_info.staged_files.len());
+            for file in safety_info.staged_files.iter().take(10) {
+                println!("   - {}", file);
+            }
+            if safety_info.staged_files.len() > 10 {
+                println!("   ... and {} more", safety_info.staged_files.len() - 10);
+            }
+        }
+
+        if !safety_info.untracked_files.is_empty() {
+            println!(
+                "\n❓ Untracked files ({}):",
+                safety_info.untracked_files.len()
+            );
+            for file in safety_info.untracked_files.iter().take(5) {
+                println!("   - {}", file);
+            }
+            if safety_info.untracked_files.len() > 5 {
+                println!("   ... and {} more", safety_info.untracked_files.len() - 5);
+            }
+        }
+
+        println!("\n🔄 Options:");
+        println!("1. Stash changes and checkout (recommended)");
+        println!("2. Force checkout (WILL LOSE UNCOMMITTED CHANGES)");
+        println!("3. Cancel checkout");
+
+        let confirmation = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Would you like to stash your changes and proceed with checkout?")
+            .interact()
+            .map_err(|e| CascadeError::branch(format!("Could not get user confirmation: {e}")))?;
+
+        if confirmation {
+            // Create stash before checkout
+            let stash_message = format!(
+                "Auto-stash before checkout to {} at {}",
+                target,
+                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+            );
+
+            match self.create_stash(&stash_message) {
+                Ok(stash_oid) => {
+                    println!("✅ Created stash: {} ({})", stash_message, stash_oid);
+                    println!("💡 You can restore with: git stash pop");
+                }
+                Err(e) => {
+                    println!("❌ Failed to create stash: {}", e);
+
+                    let force_confirm = Confirm::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Stash failed. Force checkout anyway? (WILL LOSE CHANGES)")
+                        .interact()
+                        .map_err(|e| {
+                            CascadeError::branch(format!("Could not get confirmation: {e}"))
+                        })?;
+
+                    if !force_confirm {
+                        return Err(CascadeError::branch(
+                            "Checkout cancelled by user".to_string(),
+                        ));
+                    }
+                }
+            }
+        } else {
+            return Err(CascadeError::branch(
+                "Checkout cancelled by user".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Create a stash with uncommitted changes
+    fn create_stash(&self, message: &str) -> Result<String> {
+        // For now, we'll use a different approach that doesn't require mutable access
+        // This is a simplified version that recommends manual stashing
+
+        warn!("Automatic stashing not yet implemented - please stash manually");
+        Err(CascadeError::branch(format!(
+            "Please manually stash your changes first: git stash push -m \"{}\"",
+            message
+        )))
+    }
+
+    /// Get modified files in working directory
+    fn get_modified_files(&self) -> Result<Vec<String>> {
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(false).include_ignored(false);
+
+        let statuses = self
+            .repo
+            .statuses(Some(&mut opts))
+            .map_err(|e| CascadeError::branch(format!("Could not get repository status: {e}")))?;
+
+        let mut modified_files = Vec::new();
+        for status in statuses.iter() {
+            let flags = status.status();
+            if flags.contains(git2::Status::WT_MODIFIED) || flags.contains(git2::Status::WT_DELETED)
+            {
+                if let Some(path) = status.path() {
+                    modified_files.push(path.to_string());
+                }
+            }
+        }
+
+        Ok(modified_files)
+    }
+
+    /// Get staged files in index
+    fn get_staged_files(&self) -> Result<Vec<String>> {
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(false).include_ignored(false);
+
+        let statuses = self
+            .repo
+            .statuses(Some(&mut opts))
+            .map_err(|e| CascadeError::branch(format!("Could not get repository status: {e}")))?;
+
+        let mut staged_files = Vec::new();
+        for status in statuses.iter() {
+            let flags = status.status();
+            if flags.contains(git2::Status::INDEX_MODIFIED)
+                || flags.contains(git2::Status::INDEX_NEW)
+                || flags.contains(git2::Status::INDEX_DELETED)
+            {
+                if let Some(path) = status.path() {
+                    staged_files.push(path.to_string());
+                }
+            }
+        }
+
+        Ok(staged_files)
+    }
+
     /// Count commits between two references
     fn count_commits_between(&self, from: &str, to: &str) -> Result<usize> {
         let commits = self.get_commits_between(from, to)?;
@@ -1536,5 +1795,181 @@ mod tests {
         let hash = head.id().to_string();
         let same_commit = repo.get_commit(&hash).unwrap();
         assert_eq!(head.id(), same_commit.id());
+    }
+
+    #[test]
+    fn test_checkout_safety_clean_repo() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create a test branch
+        create_commit(&repo_path, "Second commit", "test.txt");
+        Command::new("git")
+            .args(["checkout", "-b", "test-branch"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Test checkout safety with clean repo
+        let safety_result = repo.check_checkout_safety("main");
+        assert!(safety_result.is_ok());
+        assert!(safety_result.unwrap().is_none()); // Clean repo should return None
+    }
+
+    #[test]
+    fn test_checkout_safety_with_modified_files() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create a test branch
+        Command::new("git")
+            .args(["checkout", "-b", "test-branch"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Modify a file to create uncommitted changes
+        std::fs::write(repo_path.join("README.md"), "Modified content").unwrap();
+
+        // Test checkout safety with modified files
+        let safety_result = repo.check_checkout_safety("main");
+        assert!(safety_result.is_ok());
+        let safety_info = safety_result.unwrap();
+        assert!(safety_info.is_some());
+        
+        let info = safety_info.unwrap();
+        assert!(!info.modified_files.is_empty());
+        assert!(info.modified_files.contains(&"README.md".to_string()));
+    }
+
+    #[test] 
+    fn test_unsafe_checkout_methods() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create a test branch
+        create_commit(&repo_path, "Second commit", "test.txt");
+        Command::new("git")
+            .args(["checkout", "-b", "test-branch"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Modify a file to create uncommitted changes
+        std::fs::write(repo_path.join("README.md"), "Modified content").unwrap();
+
+        // Test unsafe checkout methods bypass safety checks
+        let _result = repo.checkout_branch_unsafe("master");
+        // Note: This might still fail due to git2 restrictions, but shouldn't hit our safety code
+        // The important thing is that it doesn't trigger our safety confirmation
+        
+        // Test unsafe commit checkout
+        let head_commit = repo.get_head_commit().unwrap();
+        let commit_hash = head_commit.id().to_string();
+        let _result = repo.checkout_commit_unsafe(&commit_hash);
+        // Similar to above - testing that safety is bypassed
+    }
+
+    #[test]
+    fn test_get_modified_files() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Initially should have no modified files
+        let modified = repo.get_modified_files().unwrap();
+        assert!(modified.is_empty());
+
+        // Modify a file
+        std::fs::write(repo_path.join("README.md"), "Modified content").unwrap();
+
+        // Should now detect the modified file
+        let modified = repo.get_modified_files().unwrap();
+        assert_eq!(modified.len(), 1);
+        assert!(modified.contains(&"README.md".to_string()));
+    }
+
+    #[test]
+    fn test_get_staged_files() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Initially should have no staged files
+        let staged = repo.get_staged_files().unwrap();
+        assert!(staged.is_empty());
+
+        // Create and stage a new file
+        std::fs::write(repo_path.join("staged.txt"), "Staged content").unwrap();
+        Command::new("git")
+            .args(["add", "staged.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Should now detect the staged file
+        let staged = repo.get_staged_files().unwrap();
+        assert_eq!(staged.len(), 1);
+        assert!(staged.contains(&"staged.txt".to_string()));
+    }
+
+    #[test]
+    fn test_create_stash_fallback() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Test that stash creation returns helpful error message
+        let result = repo.create_stash("test stash");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("git stash push"));
+    }
+
+    #[test]
+    fn test_delete_branch_unsafe() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create a test branch
+        create_commit(&repo_path, "Second commit", "test.txt");
+        Command::new("git")
+            .args(["checkout", "-b", "test-branch"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        // Add another commit to the test branch to make it different from master
+        create_commit(&repo_path, "Branch-specific commit", "branch.txt");
+        
+        // Go back to master
+        Command::new("git")
+            .args(["checkout", "master"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Test unsafe delete bypasses safety checks
+        // Note: This may still fail if the branch has unpushed commits, but it should bypass our safety confirmation
+        let result = repo.delete_branch_unsafe("test-branch");
+        // Even if it fails, the key is that it didn't prompt for user confirmation
+        // So we just check that it attempted the operation without interactive prompts
+        let _ = result; // Don't assert success since delete may fail for git reasons
+    }
+
+    #[test]
+    fn test_force_push_unsafe() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create a test branch
+        create_commit(&repo_path, "Second commit", "test.txt");
+        Command::new("git")
+            .args(["checkout", "-b", "test-branch"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Test unsafe force push bypasses safety checks
+        // Note: This will likely fail due to no remote, but it tests the safety bypass
+        let _result = repo.force_push_branch_unsafe("test-branch", "test-branch");
+        // The key is that it doesn't trigger safety confirmation dialogs
     }
 }

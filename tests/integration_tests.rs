@@ -4,6 +4,7 @@
 mod integration {
     mod bitbucket_api_tests;
     mod branch_deletion_safety_tests;
+    mod checkout_safety_tests;
     mod config_management_tests;
     mod end_to_end_tests;
     mod force_push_safety_tests;

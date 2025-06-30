@@ -20,14 +20,21 @@ pub async fn run_cli_with_timeout(
     let repo_path = repo_path.to_path_buf();
 
     let command_future = tokio::task::spawn_blocking(move || {
-        Command::new(&binary_path)
-            .args(&args)
+        let mut cmd = Command::new(&binary_path);
+        cmd.args(&args)
             .current_dir(&repo_path)
             .env("RUST_LOG", "info")
             .env("CI", "true") // Always set CI mode for consistent behavior
             .env("_CC_COMPLETE", "") // Prevent shell completion activation
-            .env("COMPLETE", "") // Prevent alternative completion activation
-            .output()
+            .env("COMPLETE", ""); // Prevent alternative completion activation
+        
+        // Windows-specific environment setup
+        if cfg!(windows) {
+            cmd.env("HOME", std::env::var("USERPROFILE").unwrap_or_default())
+               .env("TERM", "xterm"); // Some CLI tools expect TERM to be set
+        }
+        
+        cmd.output()
     });
 
     match tokio::time::timeout(timeout_duration, command_future).await {
@@ -48,7 +55,7 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
     let repo_path = temp_dir.path().to_path_buf();
 
     // Initialize git with CI-compatible config
-    let git_commands = [
+    let mut git_commands = vec![
         vec!["init"],
         vec!["config", "user.name", "Test User"],
         vec!["config", "user.email", "test@example.com"],
@@ -56,6 +63,15 @@ pub async fn create_test_git_repo() -> (TempDir, PathBuf) {
         vec!["config", "core.autocrlf", "false"], // Prevent line ending issues
         vec!["config", "core.filemode", "false"], // Prevent file mode issues
     ];
+    
+    // Windows-specific git configuration
+    if cfg!(windows) {
+        git_commands.extend(vec![
+            vec!["config", "core.longpaths", "true"], // Support long paths on Windows
+            vec!["config", "core.preloadindex", "true"], // Performance optimization
+            vec!["config", "core.fscache", "true"], // File system cache for Windows
+        ]);
+    }
 
     for cmd_args in &git_commands {
         let output = Command::new("git")
@@ -260,13 +276,19 @@ where
     F: FnOnce() -> Result<T, String> + Send + 'static,
     T: Send + 'static,
 {
-    // Limit concurrency based on environment
+    // Limit concurrency based on environment and platform
     let max_concurrency = std::env::var("INTEGRATION_TEST_CONCURRENCY")
         .unwrap_or_else(|_| {
             if std::env::var("CI").is_ok() {
-                "1".to_string() // Very conservative for CI stability
+                if cfg!(windows) {
+                    "1".to_string() // Very conservative for Windows CI
+                } else {
+                    "1".to_string() // Conservative for all CI
+                }
+            } else if cfg!(windows) {
+                "1".to_string() // Windows is more sensitive to concurrency
             } else {
-                "2".to_string() // Reduced even for local development
+                "2".to_string() // Unix can handle more concurrency
             }
         })
         .parse::<usize>()
@@ -285,11 +307,17 @@ where
                 .await
                 .expect("Semaphore should not be closed");
 
-            // Add jitter to prevent thundering herd - increased for CI stability
+            // Add jitter to prevent thundering herd - platform and environment aware
             let jitter_max = if std::env::var("CI").is_ok() {
-                200 // Longer delays in CI to reduce race conditions
+                if cfg!(windows) {
+                    300 // Extra long delays for Windows CI
+                } else {
+                    200 // Longer delays in CI to reduce race conditions
+                }
+            } else if cfg!(windows) {
+                150 // Windows needs longer delays locally too
             } else {
-                100 // Moderate delays locally
+                100 // Moderate delays for Unix locally
             };
             let jitter = Duration::from_millis(fastrand::u64(0..jitter_max));
             tokio::time::sleep(jitter).await;
