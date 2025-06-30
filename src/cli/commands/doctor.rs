@@ -302,15 +302,16 @@ mod tests {
         };
         let tree = repo.find_tree(tree_id).unwrap();
 
-        let commit_oid = repo.commit(
-            None, // Create initial commit without updating HEAD
-            &signature,
-            &signature,
-            "Initial commit",
-            &tree,
-            &[],
-        )
-        .unwrap();
+        let commit_oid = repo
+            .commit(
+                None, // Create initial commit without updating HEAD
+                &signature,
+                &signature,
+                "Initial commit",
+                &tree,
+                &[],
+            )
+            .unwrap();
 
         // Create main branch and set HEAD
         let commit = repo.find_commit(commit_oid).unwrap();
