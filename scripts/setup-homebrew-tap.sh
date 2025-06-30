@@ -31,14 +31,13 @@ git clone https://github.com/JAManfredi/homebrew-cascade-cli.git || {
 
 cd homebrew-cascade-cli
 
+# Create Formula directory (Homebrew convention)
+mkdir -p Formula
+
 # Copy the formula
 echo "Copying formula..."
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cp "$SCRIPT_DIR/../homebrew/cascade-cli.rb" ./Formula/cascade-cli.rb
-mkdir -p Formula
-
-# Move formula to Formula directory (Homebrew convention)
-mv cascade-cli.rb Formula/
 
 # Create README
 cat > README.md << 'EOF'
