@@ -18,12 +18,12 @@ class CascadeCli < Formula
   # Apple Silicon (ARM64) - Default
   if Hardware::CPU.arm?
     url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.4/cc-macos-arm64.tar.gz"
-    sha256 "7ed0da8c7e73beae3080c0e2cd78592a79953984eb50593a1694364ac2978c62"
+    sha256 "493938d29f18a1f47a48800cf7c5662f0c8f7b19ae3c8ac0f84037f7402b5652"
     version "0.1.4"
   else
     # Intel (x64)
     url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.4/cc-macos-x64.tar.gz"
-    sha256 "a0362f8c9023633d9fe1f2584ae5305864ea6af0b5c04f4c1620a5d00187ade0"
+    sha256 "5287e10b6103094e2349b24237c7015f57d4054d5726f651fef9c9985a445281"
     version "0.1.4"
   end
 
@@ -32,10 +32,8 @@ class CascadeCli < Formula
   def install
     bin.install "cc"
     
-    # Install shell completions
-    bash_completion.install "completions/cc.bash" => "cc"
-    zsh_completion.install "completions/_cc"
-    fish_completion.install "completions/cc.fish"
+    # Note: Shell completions will be added in future release
+    # when completion generation in CI is fixed
   end
 
   def post_install
