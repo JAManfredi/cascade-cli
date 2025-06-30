@@ -49,8 +49,7 @@ async fn test_checkout_safety_with_modified_files() {
     let error_msg = result.unwrap_err().to_string();
     assert!(
         error_msg.contains("uncommitted changes"),
-        "Error should mention uncommitted changes, but got: {}",
-        error_msg
+        "Error should mention uncommitted changes, but got: {error_msg}"
     );
 
     // Test that unsafe checkout works
