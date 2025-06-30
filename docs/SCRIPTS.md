@@ -1,6 +1,53 @@
 # Development Scripts
 
-This directory contains scripts to help with development and CI debugging.
+This directory contains scripts to help with development, release management, and CI debugging.
+
+## 🚀 Release Management Scripts
+
+### `bump-version.sh`
+**Automated version bump script** that handles all version references across the project.
+
+```bash
+./scripts/bump-version.sh <new-version>
+```
+
+**Features:**
+- Updates `Cargo.toml` package version
+- Updates Homebrew formula URLs and version fields 
+- Refreshes `Cargo.lock` dependencies
+- Searches for other version references in docs/code
+- Creates git commit with standardized message
+- Creates annotated git tag with release notes
+- Cross-platform compatible (macOS/Linux)
+- Includes validation and safety checks
+- Requires user confirmation before proceeding
+
+**Usage Examples:**
+```bash
+# Bump to next patch version
+./scripts/bump-version.sh 0.1.7
+
+# Bump to next minor version  
+./scripts/bump-version.sh 0.2.0
+
+# Bump to next major version
+./scripts/bump-version.sh 1.0.0
+```
+
+**What it does:**
+1. Validates version format (X.Y.Z)
+2. Checks for clean git working directory
+3. Shows current vs new version and asks for confirmation
+4. Updates all version references automatically
+5. Creates standardized commit message and git tag
+6. Provides clear next steps for release process
+
+**Next steps after running:**
+1. Review changes: `git show HEAD`
+2. Push commits: `git push origin master`
+3. Push tag: `git push origin vX.Y.Z`
+4. Create GitHub release from the tag
+5. Build and upload release binaries
 
 ## 🔧 CI Simulation Scripts
 
@@ -93,6 +140,21 @@ Use this when integration tests are failing to understand **why** they're failin
 ```bash
 # Before every push
 ./scripts/pre-push-check.sh
+```
+
+### Creating a Release
+```bash
+# 1. Bump version (creates commit and tag)
+./scripts/bump-version.sh 0.1.7
+
+# 2. Run final validation
+./scripts/pre-push-check.sh
+
+# 3. Push everything
+git push origin master
+git push origin v0.1.7
+
+# 4. Create GitHub release and upload binaries
 ```
 
 ### When CI Fails But Local Tests Pass

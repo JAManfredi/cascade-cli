@@ -169,11 +169,30 @@ cargo test --doc
 
 ### Version Management
 
+**Use the automated version bump script** (recommended):
+
+```bash
+# Automated version bump - handles everything!
+./scripts/bump-version.sh 1.x.x
+
+# Review changes
+git show HEAD
+
+# Push commits and tag
+git push origin master
+git push origin v1.x.x
+```
+
+**Manual process** (if needed):
+
 1. Update version in `Cargo.toml`
-2. Update `CHANGELOG.md` with new version
-3. Commit changes: `git commit -m "Release v1.x.x"`
-4. Create tag: `git tag v1.x.x`
-5. Push tag: `git push origin v1.x.x`
+2. Update Homebrew formula URLs and versions
+3. Update `Cargo.lock`: `cargo check`
+4. Commit changes: `git commit -m "Release v1.x.x"`
+5. Create tag: `git tag v1.x.x`
+6. Push tag: `git push origin v1.x.x`
+
+The automated script eliminates version reference errors and ensures consistency across all files.
 
 ### Automated Release
 
