@@ -102,12 +102,12 @@ Expand-Archive -Path "cc.zip" -DestinationPath "$env:USERPROFILE\bin\"
 $env:PATH += ";$env:USERPROFILE\bin"
 ```
 
-### **Option 3: Package Managers** *(Planned)*
+### **Option 3: Package Managers**
 
-#### **macOS - Homebrew**
+#### **macOS - Homebrew** *(Coming Soon)*
 ```bash
-brew tap JAManfredi/cascade-cli
-brew install cascade-cli
+# Homebrew tap repository setup in progress
+# For now, use the universal installer script or manual installation
 ```
 
 #### **Rust - Cargo**
@@ -375,8 +375,8 @@ cargo install --path . --force
 
 ### **Package Manager Updates**
 ```bash
-# Homebrew
-brew upgrade cascade-cli
+# Homebrew (when available)
+# brew upgrade cascade-cli
 
 # Cargo
 cargo install cascade-cli --force
