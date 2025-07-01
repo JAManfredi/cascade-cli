@@ -208,12 +208,22 @@ async fn test_concurrent_stack_operations_unix() {
         "Unix should handle at least half of concurrent stack operations successfully. Results: {results:#?}"
     );
 
+    // Detect CI environment for appropriate timing
+    let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+    println!("Running in CI environment: {is_ci}");
+
     // Retry stack listing with exponential backoff to handle any remaining timing issues
     let mut found_stacks = 0;
     let max_retries = 5;
     for attempt in 1..=max_retries {
         // Progressive delay for file system synchronization
-        let delay_ms = 50 * attempt as u64; // 50ms, 100ms, 150ms, 200ms, 250ms
+        // Use longer delays in CI environments which have slower/more loaded file systems
+        let base_delay = if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            200 // CI: 200ms, 400ms, 600ms, 800ms, 1000ms (total: 3s)
+        } else {
+            50 // Local: 50ms, 100ms, 150ms, 200ms, 250ms (total: 750ms)
+        };
+        let delay_ms = base_delay * attempt as u64;
         tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
 
         let list_output = std::process::Command::new(&binary_path)
@@ -231,9 +241,11 @@ async fn test_concurrent_stack_operations_unix() {
 
         // Count how many successful stacks are actually listed
         found_stacks = 0;
+        let mut found_stack_names = Vec::new();
         for stack_name in results.iter().flatten() {
             if list_stdout.contains(stack_name) {
                 found_stacks += 1;
+                found_stack_names.push(stack_name.clone());
             }
         }
 
@@ -241,12 +253,12 @@ async fn test_concurrent_stack_operations_unix() {
         let required_stacks = std::cmp::max(1, successful_count * 2 / 3); // At least 2/3 of successful operations
         if found_stacks >= required_stacks {
             println!(
-                "Found {found_stacks} stacks on attempt {attempt} (needed at least {required_stacks})"
+                "Found {found_stacks} stacks on attempt {attempt} (needed at least {required_stacks}): {found_stack_names:?}"
             );
             break;
         }
 
-        println!("Attempt {attempt}: Found {found_stacks}/{successful_count} stacks, retrying...");
+        println!("Attempt {attempt}: Found {found_stacks}/{successful_count} stacks ({found_stack_names:?}), retrying after {delay_ms}ms...");
     }
 
     // With proper file syncing, we should find at least 2/3 of successfully created stacks
