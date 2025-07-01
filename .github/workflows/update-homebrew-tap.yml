@@ -33,8 +33,12 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           fi
           
-          # Remove 'v' prefix if present for downloads
-          VERSION_NO_V="${VERSION#v}"
+          # Ensure version has 'v' prefix for downloads (GitHub releases use v-prefixed tags)
+          if [[ ! "$VERSION" =~ ^v ]]; then
+            VERSION="v${VERSION}"
+          fi
+          
+          echo "Using version: $VERSION"
           
           # Download macOS binaries
           curl -L -o ca-macos-arm64.tar.gz \
@@ -46,37 +50,37 @@ jobs:
           ARM64_SHA=$(shasum -a 256 ca-macos-arm64.tar.gz | cut -d' ' -f1)
           X64_SHA=$(shasum -a 256 ca-macos-x64.tar.gz | cut -d' ' -f1)
           
+          # Strip 'v' prefix for version number in formula
+          VERSION_NO_V="${VERSION#v}"
+          
           echo "ARM64_SHA=$ARM64_SHA" >> $GITHUB_ENV
           echo "X64_SHA=$X64_SHA" >> $GITHUB_ENV
-          echo "VERSION=$VERSION_NO_V" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION_NO_V=$VERSION_NO_V" >> $GITHUB_ENV
       
-      - name: Update formula version
+      - name: Update formula version  
         run: |
-          # Get version from release or input
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
+          echo "Updating formula to version $VERSION (numeric: $VERSION_NO_V)"
           
-          # Remove 'v' prefix if present
-          VERSION="${VERSION#v}"
-          
-          echo "Updating formula to version $VERSION"
-          
-          # Update the formula
+          # Update the formula in the tap repository
           cd homebrew-tap
           
-          # Update URLs
-          sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/ca-macos-arm64.tar.gz|g" Formula/cascade-cli.rb
-          sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-x64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/ca-macos-x64.tar.gz|g" Formula/cascade-cli.rb
+          # Update URLs (use $VERSION which includes 'v' prefix)
+          sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/${VERSION}/ca-macos-arm64.tar.gz|g" Formula/cascade-cli.rb
+          sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-x64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/${VERSION}/ca-macos-x64.tar.gz|g" Formula/cascade-cli.rb
           
-          # Update version
-          sed -i "s/version \"v[^\"]*\"/version \"v${VERSION}\"/g" Formula/cascade-cli.rb
+          # Update version (use VERSION_NO_V without 'v' prefix)
+          sed -i "s/version \"[^\"]*\"/version \"${VERSION_NO_V}\"/g" Formula/cascade-cli.rb
           
-          # Update checksums
-          sed -i "s/sha256 \"[a-f0-9]*\" # ARM64/sha256 \"${ARM64_SHA}\" # ARM64/g" Formula/cascade-cli.rb  
-          sed -i "s/sha256 \"[a-f0-9]*\" # x64/sha256 \"${X64_SHA}\" # x64/g" Formula/cascade-cli.rb
+          # Update checksums - handle both placeholder and real SHA patterns
+          sed -i "s/sha256 \"PLACEHOLDER_ARM64_SHA\"/sha256 \"${ARM64_SHA}\"/g" Formula/cascade-cli.rb
+          sed -i "s/sha256 \"PLACEHOLDER_X64_SHA\"/sha256 \"${X64_SHA}\"/g" Formula/cascade-cli.rb
+          sed -i "s/sha256 \"[a-f0-9]*\" # ARM64/sha256 \"${ARM64_SHA}\"/g" Formula/cascade-cli.rb  
+          sed -i "s/sha256 \"[a-f0-9]*\" # x64/sha256 \"${X64_SHA}\"/g" Formula/cascade-cli.rb
+          
+          # Show what was updated
+          echo "Updated formula content:"
+          cat Formula/cascade-cli.rb
           
       - name: Commit and push changes
         run: |
@@ -89,7 +93,6 @@ jobs:
             exit 0
           fi
           
-          VERSION="${{ github.event.release.tag_name || github.event.inputs.version }}"
           git add Formula/cascade-cli.rb
           git commit -m "Update Cascade CLI to ${VERSION}"
           git push
