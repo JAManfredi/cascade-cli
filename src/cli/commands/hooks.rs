@@ -1,5 +1,6 @@
 use crate::config::Settings;
 use crate::errors::{CascadeError, Result};
+use crate::git::find_repository_root;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -106,6 +107,28 @@ impl HooksManager {
     /// Install all recommended Cascade hooks
     pub fn install_all(&self) -> Result<()> {
         self.install_with_options(&InstallOptions::default())
+    }
+
+    /// Install only essential hooks (for setup) - excludes post-commit
+    pub fn install_essential(&self) -> Result<()> {
+        println!("🪝 Installing essential Cascade Git hooks...");
+
+        let essential_hooks = vec![
+            HookType::PrePush,
+            HookType::CommitMsg,
+            HookType::PrepareCommitMsg,
+        ];
+
+        for hook in essential_hooks {
+            self.install_hook(&hook)?;
+        }
+
+        println!("✅ Essential Cascade hooks installed successfully!");
+        println!("💡 Note: Post-commit hook available separately with 'ca hooks install post-commit'");
+        println!("\n💡 Hooks installed:");
+        self.list_installed_hooks()?;
+
+        Ok(())
     }
 
     /// Install hooks with smart validation options
@@ -306,8 +329,10 @@ impl HooksManager {
                  rem Get the commit hash and message\n\
                  for /f \"tokens=*\" %%i in ('git rev-parse HEAD') do set COMMIT_HASH=%%i\n\
                  for /f \"tokens=*\" %%i in ('git log --format=%%s -n 1 HEAD') do set COMMIT_MSG=%%i\n\n\
-                 rem Check if Cascade is initialized\n\
-                 if not exist \".cascade\" (\n\
+                 rem Find repository root and check if Cascade is initialized\n\
+                 for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
+                 if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
+                 if not exist \"%REPO_ROOT%\\.cascade\" (\n\
                      echo ℹ️ Cascade not initialized, skipping stack management\n\
                      echo 💡 Run 'ca init' to start using stacked diffs\n\
                      exit /b 0\n\
@@ -343,8 +368,9 @@ impl HooksManager {
                  # Get the commit hash and message\n\
                  COMMIT_HASH=$(git rev-parse HEAD)\n\
                  COMMIT_MSG=$(git log --format=%s -n 1 HEAD)\n\n\
-                 # Check if Cascade is initialized\n\
-                 if [ ! -d \".cascade\" ]; then\n\
+                 # Find repository root and check if Cascade is initialized\n\
+                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
+                 if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      echo \"ℹ️ Cascade not initialized, skipping stack management\"\n\
                      echo \"💡 Run 'ca init' to start using stacked diffs\"\n\
                      exit 0\n\
@@ -393,8 +419,10 @@ impl HooksManager {
                      echo    ^(But consider if this will affect other stack entries^)\n\
                      exit /b 1\n\
                  )\n\n\
-                 rem Check if Cascade is initialized\n\
-                 if not exist \".cascade\" (\n\
+                 rem Find repository root and check if Cascade is initialized\n\
+                 for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
+                 if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
+                 if not exist \"%REPO_ROOT%\\.cascade\" (\n\
                      echo ℹ️ Cascade not initialized, allowing push\n\
                      exit /b 0\n\
                  )\n\n\
@@ -438,8 +466,9 @@ impl HooksManager {
                      echo \"   (But consider if this will affect other stack entries)\"\n\
                      exit 1\n\
                  fi\n\n\
-                 # Check if Cascade is initialized\n\
-                 if [ ! -d \".cascade\" ]; then\n\
+                 # Find repository root and check if Cascade is initialized\n\
+                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
+                 if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      echo \"ℹ️ Cascade not initialized, allowing push\"\n\
                      exit 0\n\
                  fi\n\n\
@@ -480,8 +509,10 @@ rem Skip validation for merge commits, fixup commits, etc.
 echo %COMMIT_MSG% | findstr /B /C:"Merge" /C:"Revert" /C:"fixup!" /C:"squash!" >nul
 if %ERRORLEVEL% equ 0 exit /b 0
 
-rem Check if Cascade is initialized
-if not exist ".cascade" exit /b 0
+rem Find repository root and check if Cascade is initialized
+for /f "tokens=*" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i
+if "%REPO_ROOT%"=="" set REPO_ROOT=.
+if not exist "%REPO_ROOT%\.cascade" exit /b 0
 
 rem Basic commit message validation
 echo %COMMIT_MSG% | findstr /R "^..........*" >nul
@@ -528,8 +559,9 @@ if echo "$COMMIT_MSG" | grep -E "^(Merge|Revert|fixup!|squash!)" > /dev/null; th
     exit 0
 fi
 
-# Check if Cascade is initialized
-if [ ! -d ".cascade" ]; then
+# Find repository root and check if Cascade is initialized
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
+if [ ! -d "$REPO_ROOT/.cascade" ]; then
     exit 0
 fi
 
@@ -571,8 +603,10 @@ echo "✅ Commit message validation passed"
                  set COMMIT_SHA=%3\n\n\
                  rem Only modify message if it's a regular commit (not merge, template, etc.)\n\
                  if not \"%COMMIT_SOURCE%\"==\"\" if not \"%COMMIT_SOURCE%\"==\"message\" exit /b 0\n\n\
-                 rem Check if Cascade is initialized\n\
-                 if not exist \".cascade\" exit /b 0\n\n\
+                 rem Find repository root and check if Cascade is initialized\n\
+                 for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
+                 if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
+                 if not exist \"%REPO_ROOT%\\.cascade\" exit /b 0\n\n\
                  rem Get active stack info\n\
                  for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" stack list --active --format=name 2^>nul') do set ACTIVE_STACK=%%i\n\n\
                  if not \"%ACTIVE_STACK%\"==\"\" (\n\
@@ -606,8 +640,9 @@ echo "✅ Commit message validation passed"
                  if [ \"$COMMIT_SOURCE\" != \"\" ] && [ \"$COMMIT_SOURCE\" != \"message\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
-                 # Check if Cascade is initialized\n\
-                 if [ ! -d \".cascade\" ]; then\n\
+                 # Find repository root and check if Cascade is initialized\n\
+                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
+                 if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
                  # Get active stack info\n\
@@ -846,6 +881,17 @@ pub async fn install() -> Result<()> {
     install_with_options(false, false, false, false).await
 }
 
+pub async fn install_essential() -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let hooks_manager = HooksManager::new(&repo_root)?;
+    hooks_manager.install_essential()
+}
+
 pub async fn install_with_options(
     skip_checks: bool,
     allow_main_branch: bool,
@@ -854,8 +900,11 @@ pub async fn install_with_options(
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let hooks_manager = HooksManager::new(&current_dir)?;
+    let hooks_manager = HooksManager::new(&repo_root)?;
 
     let options = InstallOptions {
         check_prerequisites: !skip_checks,
@@ -870,16 +919,22 @@ pub async fn install_with_options(
 pub async fn uninstall() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let hooks_manager = HooksManager::new(&current_dir)?;
+    let hooks_manager = HooksManager::new(&repo_root)?;
     hooks_manager.uninstall_all()
 }
 
 pub async fn status() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let hooks_manager = HooksManager::new(&current_dir)?;
+    let hooks_manager = HooksManager::new(&repo_root)?;
     hooks_manager.list_installed_hooks()
 }
 
@@ -894,8 +949,11 @@ pub async fn install_hook_with_options(
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let hooks_manager = HooksManager::new(&current_dir)?;
+    let hooks_manager = HooksManager::new(&repo_root)?;
 
     let hook_type = match hook_name {
         "post-commit" => HookType::PostCommit,
@@ -920,8 +978,11 @@ pub async fn install_hook_with_options(
 pub async fn uninstall_hook(hook_name: &str) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let hooks_manager = HooksManager::new(&current_dir)?;
+    let hooks_manager = HooksManager::new(&repo_root)?;
 
     let hook_type = match hook_name {
         "post-commit" => HookType::PostCommit,
