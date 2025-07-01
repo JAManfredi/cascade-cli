@@ -26,14 +26,21 @@ jobs:
       
       - name: Download and compute checksums
         run: |
-          VERSION=${{ github.event.inputs.version }}
-          cd cascade-cli
+          # Get version from release or input
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          
+          # Remove 'v' prefix if present for downloads
+          VERSION_NO_V="${VERSION#v}"
           
           # Download macOS binaries
           curl -L -o ca-macos-arm64.tar.gz \
-            "https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/ca-macos-arm64.tar.gz"
+            "https://github.com/JAManfredi/cascade-cli/releases/download/${VERSION}/ca-macos-arm64.tar.gz"
           curl -L -o ca-macos-x64.tar.gz \
-            "https://github.com/JAManfredi/cascade-cli/releases/download/v${VERSION}/ca-macos-x64.tar.gz"
+            "https://github.com/JAManfredi/cascade-cli/releases/download/${VERSION}/ca-macos-x64.tar.gz"
           
           # Compute checksums
           ARM64_SHA=$(shasum -a 256 ca-macos-arm64.tar.gz | cut -d' ' -f1)
@@ -41,7 +48,7 @@ jobs:
           
           echo "ARM64_SHA=$ARM64_SHA" >> $GITHUB_ENV
           echo "X64_SHA=$X64_SHA" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=$VERSION_NO_V" >> $GITHUB_ENV
       
       - name: Update formula version
         run: |
@@ -96,8 +103,8 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          path: cascade-cli
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
           commit-message: "Update Homebrew formula to v${{ github.event.inputs.version }}"
           title: "Update Homebrew formula to v${{ github.event.inputs.version }}"
           body: |

@@ -48,9 +48,24 @@ pub mod atomic_file {
         // Create temporary file in the same directory as the target
         let temp_path = path.with_extension("tmp");
 
-        // Write to temporary file first
-        fs::write(&temp_path, content)
-            .map_err(|e| CascadeError::config(format!("Failed to write temporary file: {e}")))?;
+        // Write to temporary file first and ensure it's synced to disk
+        {
+            use std::fs::File;
+            use std::io::Write;
+
+            let mut file = File::create(&temp_path).map_err(|e| {
+                CascadeError::config(format!("Failed to create temporary file: {e}"))
+            })?;
+
+            file.write_all(content.as_bytes()).map_err(|e| {
+                CascadeError::config(format!("Failed to write to temporary file: {e}"))
+            })?;
+
+            // Force data to be written to disk before rename
+            file.sync_all().map_err(|e| {
+                CascadeError::config(format!("Failed to sync temporary file to disk: {e}"))
+            })?;
+        }
 
         // Platform-specific atomic rename
         atomic_rename(&temp_path, path)
@@ -97,9 +112,24 @@ pub mod atomic_file {
         with_concurrent_file_lock(path, || {
             let temp_path = path.with_extension("tmp");
 
-            fs::write(&temp_path, data).map_err(|e| {
-                CascadeError::config(format!("Failed to write temporary file: {e}"))
-            })?;
+            // Write and sync binary data to disk
+            {
+                use std::fs::File;
+                use std::io::Write;
+
+                let mut file = File::create(&temp_path).map_err(|e| {
+                    CascadeError::config(format!("Failed to create temporary file: {e}"))
+                })?;
+
+                file.write_all(data).map_err(|e| {
+                    CascadeError::config(format!("Failed to write to temporary file: {e}"))
+                })?;
+
+                // Force data to be written to disk before rename
+                file.sync_all().map_err(|e| {
+                    CascadeError::config(format!("Failed to sync temporary file to disk: {e}"))
+                })?;
+            }
 
             atomic_rename(&temp_path, path)
         })
