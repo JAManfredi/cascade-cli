@@ -137,8 +137,6 @@ async fn test_stack_state_after_manual_git_ops() {
     }
 }
 
-
-
 /// Test internal stack manager thread safety (proper concurrency testing)
 #[tokio::test]
 async fn test_stack_manager_thread_safety() {
@@ -160,8 +158,8 @@ async fn test_stack_manager_thread_safety() {
         let handle = tokio::spawn(async move {
             // Each task creates its own StackManager instance
             let mut manager = cascade_cli::stack::manager::StackManager::new(&repo_path).unwrap();
-            let stack_name = format!("thread-safe-stack-{}", i);
-            
+            let stack_name = format!("thread-safe-stack-{i}");
+
             // Test creating a stack - this should be thread-safe
             manager.create_stack(stack_name, None, None)
         });
@@ -170,7 +168,7 @@ async fn test_stack_manager_thread_safety() {
 
     // Wait for all operations to complete
     let results: Vec<_> = futures::future::join_all(handles).await;
-    
+
     // Count successful operations
     let successful_count = results
         .into_iter()
@@ -189,10 +187,11 @@ async fn test_stack_manager_thread_safety() {
     // Verify stacks can be listed successfully
     let final_manager = cascade_cli::stack::manager::StackManager::new(&repo_path).unwrap();
     let stacks = final_manager.list_stacks();
-    
+
     assert!(
         stacks.len() >= successful_count,
-        "Should be able to list at least {successful_count} stacks, but found {}", stacks.len()
+        "Should be able to list at least {successful_count} stacks, but found {}",
+        stacks.len()
     );
 }
 
@@ -209,19 +208,20 @@ async fn test_sequential_stack_operations() {
     .unwrap();
 
     let mut manager = cascade_cli::stack::manager::StackManager::new(&repo_path).unwrap();
-    
+
     // Create stacks sequentially - this should always work
     let stack_count = 5;
     for i in 0..stack_count {
-        let stack_name = format!("sequential-stack-{}", i);
-        manager.create_stack(stack_name, None, None)
-            .expect(&format!("Sequential stack creation {} should always succeed", i));
+        let stack_name = format!("sequential-stack-{i}");
+        manager
+            .create_stack(stack_name, None, None)
+            .unwrap_or_else(|_| panic!("Sequential stack creation {i} should always succeed"));
     }
 
     // Verify all stacks exist
     let stacks = manager.list_stacks();
     assert_eq!(
-        stacks.len(), 
+        stacks.len(),
         stack_count,
         "Sequential operations should create exactly {stack_count} stacks"
     );

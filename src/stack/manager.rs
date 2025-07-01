@@ -84,10 +84,10 @@ impl StackManager {
         // Use provided base branch or default
         let base_branch = base_branch.unwrap_or_else(|| self.metadata.default_base_branch.clone());
 
-        // Verify base branch exists
-        if !self.repo.branch_exists(&base_branch) {
+        // Verify base branch exists (try to fetch from remote if not local)
+        if !self.repo.branch_exists_or_fetch(&base_branch)? {
             return Err(CascadeError::branch(format!(
-                "Base branch '{base_branch}' does not exist"
+                "Base branch '{base_branch}' does not exist locally or remotely"
             )));
         }
 
@@ -473,10 +473,10 @@ impl StackManager {
             )));
         }
 
-        // Check if base branch exists and has new commits
-        if !self.repo.branch_exists(&stack.base_branch) {
+        // Check if base branch exists and has new commits (try to fetch from remote if not local)
+        if !self.repo.branch_exists_or_fetch(&stack.base_branch)? {
             return Err(CascadeError::branch(format!(
-                "Base branch '{}' does not exist. Create it or switch to a different base.",
+                "Base branch '{}' does not exist locally or remotely. Check the branch name or switch to a different base.",
                 stack.base_branch
             )));
         }

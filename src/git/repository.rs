@@ -297,6 +297,74 @@ impl GitRepository {
         self.repo.find_branch(name, git2::BranchType::Local).is_ok()
     }
 
+    /// Check if a branch exists locally, and if not, attempt to fetch it from remote
+    pub fn branch_exists_or_fetch(&self, name: &str) -> Result<bool> {
+        // 1. Check if branch exists locally first
+        if self.repo.find_branch(name, git2::BranchType::Local).is_ok() {
+            return Ok(true);
+        }
+
+        // 2. Try to fetch it from remote
+        println!("🔍 Branch '{name}' not found locally, trying to fetch from remote...");
+
+        use std::process::Command;
+
+        // Try: git fetch origin release/12.34:release/12.34
+        let fetch_result = Command::new("git")
+            .args(["fetch", "origin", &format!("{name}:{name}")])
+            .current_dir(&self.path)
+            .output();
+
+        match fetch_result {
+            Ok(output) => {
+                if output.status.success() {
+                    println!("✅ Successfully fetched '{name}' from origin");
+                    // 3. Check again locally after fetch
+                    return Ok(self.repo.find_branch(name, git2::BranchType::Local).is_ok());
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    tracing::debug!("Failed to fetch branch '{name}': {stderr}");
+                }
+            }
+            Err(e) => {
+                tracing::debug!("Git fetch command failed: {e}");
+            }
+        }
+
+        // 4. Try alternative fetch patterns for common branch naming
+        if name.contains('/') {
+            println!("🔍 Trying alternative fetch patterns...");
+
+            // Try: git fetch origin (to get all refs, then checkout locally)
+            let fetch_all_result = Command::new("git")
+                .args(["fetch", "origin"])
+                .current_dir(&self.path)
+                .output();
+
+            if let Ok(output) = fetch_all_result {
+                if output.status.success() {
+                    // Try to create local branch from remote
+                    let checkout_result = Command::new("git")
+                        .args(["checkout", "-b", name, &format!("origin/{name}")])
+                        .current_dir(&self.path)
+                        .output();
+
+                    if let Ok(checkout_output) = checkout_result {
+                        if checkout_output.status.success() {
+                            println!(
+                                "✅ Successfully created local branch '{name}' from origin/{name}"
+                            );
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Only fail if it doesn't exist anywhere
+        Ok(false)
+    }
+
     /// Get the commit hash for a specific branch without switching branches
     pub fn get_branch_commit_hash(&self, branch_name: &str) -> Result<String> {
         let branch = self

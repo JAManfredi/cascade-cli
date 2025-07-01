@@ -704,7 +704,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         println!("\n🔍 Mergability Status:");
 
         // Load configuration and create Bitbucket integration
-        let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+        let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
         let config_path = config_dir.join("config.json");
         let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -807,7 +807,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         }
     } else {
         // Original PR status display for compatibility
-        let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+        let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
         let config_path = config_dir.join("config.json");
         let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -1317,7 +1317,7 @@ async fn submit_entry(
     }
 
     // Load configuration first
-    let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+    let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -1521,7 +1521,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     let stack_manager = StackManager::new(&repo_root)?;
 
     // Load configuration
-    let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+    let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -1603,7 +1603,7 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
     let stack_manager = StackManager::new(&repo_root)?;
 
     // Load configuration
-    let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+    let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -3051,9 +3051,7 @@ mod tests {
         // IMPORTANT: temp_dir must stay in scope to prevent early cleanup of test directory
         let _ = &temp_dir;
 
-        // Initialize cascade in the test repo
-        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
-            .expect("Failed to initialize Cascade in test repo");
+        // Note: create_test_repo() already initializes Cascade configuration
 
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
@@ -3089,9 +3087,7 @@ mod tests {
         // IMPORTANT: temp_dir must stay in scope to prevent early cleanup of test directory
         let _ = &temp_dir;
 
-        // Initialize cascade in the test repo
-        crate::config::initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string()))
-            .expect("Failed to initialize Cascade in test repo");
+        // Note: create_test_repo() already initializes Cascade configuration
 
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
