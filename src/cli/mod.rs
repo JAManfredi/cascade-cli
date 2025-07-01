@@ -240,6 +240,15 @@ pub enum Commands {
         #[arg(long)]
         draft: bool,
     },
+
+    /// Validate stack integrity and handle branch modifications (shortcut for 'stacks validate')
+    Validate {
+        /// Name of the stack (defaults to active stack)
+        name: Option<String>,
+        /// Auto-fix mode: incorporate, split, or reset
+        #[arg(long)]
+        fix: Option<String>,
+    },
 }
 
 /// Git hooks actions
@@ -560,6 +569,12 @@ impl Cli {
                     draft,
                 };
                 commands::stack::run(submit_action).await
+            }
+
+            Commands::Validate { name, fix } => {
+                // Delegate to the stacks validate functionality
+                let validate_action = StackAction::Validate { name, fix };
+                commands::stack::run(validate_action).await
             }
         }
     }
