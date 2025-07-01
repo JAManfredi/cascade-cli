@@ -23,7 +23,7 @@ jobs:
           repository: JAManfredi/homebrew-cascade-cli
           path: homebrew-tap
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          ref: main  # Explicitly checkout main branch
+          ref: master  # Explicitly checkout master branch
           fetch-depth: 0  # Fetch full history to avoid detached HEAD issues
       
       - name: Configure git in tap repository
@@ -32,9 +32,9 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          # Ensure we're on main branch and not detached
-          git checkout main
-          git pull origin main
+          # Ensure we're on master branch and not detached
+          git checkout master
+          git pull origin master
           
           # Verify we're on a branch
           echo "Current branch: $(git branch --show-current)"
@@ -149,4 +149,4 @@ jobs:
           delete-branch: true
           author: "GitHub Actions <actions@github.com>"
           committer: "GitHub Actions <actions@github.com>"
-          base: main  # Explicitly set base branch
+          base: master  # Explicitly set base branch
