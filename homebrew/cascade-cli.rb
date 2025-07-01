@@ -18,10 +18,10 @@ class CascadeCli < Formula
   # macOS binaries with architecture detection
   if Hardware::CPU.arm?
     url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.17/ca-macos-arm64.tar.gz"
-    sha256 "794f600912364f086e08b2fc3346a9b0ea3102e430e61ac908a780245a2b499f"
+    sha256 "541d9ca145b33c664e2a46a0c9f46b6809afe4ad940a1cad07f4b470002e0367"
   else
     url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.17/ca-macos-x64.tar.gz"
-    sha256 "7f6e73c946496d916030af3d36546576edab0f52d092a2b3160ead8962709aa2"
+    sha256 "87abcc3360a1e845960b710a355d15c1be2678fce6f8b42e7acf4148c2cf118d"
   end
 
   depends_on "git"
