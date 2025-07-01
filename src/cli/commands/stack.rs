@@ -1,4 +1,4 @@
-use crate::bitbucket::BitbucketIntegration;
+use crate::providers::{ProviderIntegration, MergeStrategy as ProviderMergeStrategy, BuildStatus, PullRequestStatus};
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, GitRepository};
 use crate::stack::{StackManager, StackStatus};
@@ -30,7 +30,7 @@ pub enum MergeStrategyArg {
     FastForward,
 }
 
-impl From<MergeStrategyArg> for crate::bitbucket::pull_request::MergeStrategy {
+impl From<MergeStrategyArg> for ProviderMergeStrategy {
     fn from(arg: MergeStrategyArg) -> Self {
         match arg {
             MergeStrategyArg::Merge => Self::Merge,
@@ -728,7 +728,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         };
 
         let integration =
-            crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+            ProviderIntegration::new(stack_manager, cascade_config)?;
 
         match integration.check_enhanced_stack_status(&stack_id).await {
             Ok(status) => {
@@ -760,7 +760,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                         if verbose {
                             println!(
                                 "      {} -> {}",
-                                enhanced.pr.from_ref.display_id, enhanced.pr.to_ref.display_id
+                                enhanced.pr.source_branch, enhanced.pr.target_branch
                             );
 
                             // Show blocking reasons if not ready
@@ -788,9 +788,9 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                             // Show build status
                             if let Some(build) = &enhanced.build_status {
                                 let build_icon = match build.state {
-                                    crate::bitbucket::pull_request::BuildState::Successful => "✅",
-                                    crate::bitbucket::pull_request::BuildState::Failed => "❌",
-                                    crate::bitbucket::pull_request::BuildState::InProgress => "🔄",
+                                    BuildStatus::Success => "✅",
+                                    BuildStatus::Failed => "❌",
+                                    BuildStatus::InProgress => "🔄",
                                     _ => "⚪",
                                 };
                                 println!("      Build: {} {:?}", build_icon, build.state);
@@ -831,7 +831,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         };
 
         let integration =
-            crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+            ProviderIntegration::new(stack_manager, cascade_config)?;
 
         match integration.check_stack_status(&stack_id).await {
             Ok(status) => {
@@ -847,9 +847,9 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     println!("\n📋 Pull Requests:");
                     for pr in &status.pull_requests {
                         let state_icon = match pr.state {
-                            crate::bitbucket::PullRequestState::Open => "🔄",
-                            crate::bitbucket::PullRequestState::Merged => "✅",
-                            crate::bitbucket::PullRequestState::Declined => "❌",
+                            PullRequestStatus::Open => "🔄",
+                            PullRequestStatus::Merged => "✅",
+                            PullRequestStatus::Declined => "❌",
                         };
                         println!(
                             "   {} PR #{}: {} ({} -> {})",
@@ -1443,7 +1443,7 @@ async fn submit_entry(
     // Create a new StackManager for the integration (since the original was moved)
     let integration_stack_manager = StackManager::new(&repo_root)?;
     let mut integration =
-        BitbucketIntegration::new(integration_stack_manager, cascade_config.clone())?;
+        ProviderIntegration::new(integration_stack_manager, cascade_config.clone())?;
 
     pb.set_message("Starting batch submission");
     pb.inc(1);
@@ -1566,7 +1566,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     }
 
     // Create Bitbucket integration (this takes ownership of stack_manager)
-    let integration = crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+    let integration = ProviderIntegration::new(stack_manager, cascade_config)?;
 
     // Check stack status
     match integration.check_stack_status(&stack_id).await {
@@ -1583,9 +1583,9 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
                 println!("\n📋 Pull Requests:");
                 for pr in &status.pull_requests {
                     let state_icon = match pr.state {
-                        crate::bitbucket::PullRequestState::Open => "🔄",
-                        crate::bitbucket::PullRequestState::Merged => "✅",
-                        crate::bitbucket::PullRequestState::Declined => "❌",
+                        PullRequestStatus::Open => "🔄",
+                        PullRequestStatus::Merged => "✅",
+                        PullRequestStatus::Declined => "❌",
                     };
                     println!(
                         "   {} PR #{}: {} ({} -> {})",
@@ -1628,14 +1628,14 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
     };
 
     // Create Bitbucket integration
-    let integration = crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+    let integration = ProviderIntegration::new(stack_manager, cascade_config)?;
 
     // Parse state filter
     let pr_state = if let Some(state_str) = state {
         match state_str.to_lowercase().as_str() {
-            "open" => Some(crate::bitbucket::PullRequestState::Open),
-            "merged" => Some(crate::bitbucket::PullRequestState::Merged),
-            "declined" => Some(crate::bitbucket::PullRequestState::Declined),
+            "open" => Some(PullRequestStatus::Open),
+            "merged" => Some(PullRequestStatus::Merged),
+            "declined" => Some(PullRequestStatus::Declined),
             _ => {
                 return Err(CascadeError::config(format!(
                     "Invalid state '{state_str}'. Use: open, merged, declined"
@@ -1657,9 +1657,9 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
             println!("📋 Pull Requests ({} total):", pr_page.values.len());
             for pr in &pr_page.values {
                 let state_icon = match pr.state {
-                    crate::bitbucket::PullRequestState::Open => "🔄",
-                    crate::bitbucket::PullRequestState::Merged => "✅",
-                    crate::bitbucket::PullRequestState::Declined => "❌",
+                    PullRequestStatus::Open => "🔄",
+                    PullRequestStatus::Merged => "✅",
+                    PullRequestStatus::Declined => "❌",
                 };
                 println!("   {} PR #{}: {}", state_icon, pr.id, pr.title);
                 if verbose {
@@ -1832,7 +1832,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
                                         let mut integration =
-                                            crate::bitbucket::BitbucketIntegration::new(
+                                            ProviderIntegration::new(
                                                 integration_stack_manager,
                                                 cascade_config,
                                             )?;
@@ -2024,7 +2024,7 @@ async fn rebase_stack(
                 if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
                     // Create a new StackManager for the integration (since the original was moved)
                     let integration_stack_manager = StackManager::new(&repo_root)?;
-                    let mut integration = BitbucketIntegration::new(
+                    let mut integration = ProviderIntegration::new(
                         integration_stack_manager,
                         cascade_config.clone(),
                     )?;
@@ -2624,7 +2624,7 @@ async fn land_stack(
         auth: crate::config::AuthConfig::default(),
     };
 
-    let integration = crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+    let integration = ProviderIntegration::new(stack_manager, cascade_config)?;
 
     // Get enhanced status
     let status = integration.check_enhanced_stack_status(&stack_id).await?;
@@ -2654,7 +2654,7 @@ async fn land_stack(
 
             if force {
                 // If force is enabled, include any open PR
-                pr_status.pr.state == crate::bitbucket::pull_request::PullRequestState::Open
+                pr_status.pr.state == PullRequestStatus::Open
             } else {
                 pr_status.is_ready_to_land()
             }
@@ -2671,7 +2671,7 @@ async fn land_stack(
         // Show what's blocking them
         println!("\n🚫 Blocking Issues:");
         for pr_status in &status.enhanced_statuses {
-            if pr_status.pr.state == crate::bitbucket::pull_request::PullRequestState::Open {
+            if pr_status.pr.state == PullRequestStatus::Open {
                 let blocking = pr_status.get_blocking_reasons();
                 if !blocking.is_empty() {
                     println!("   PR #{}: {}", pr_status.pr.id, blocking.join(", "));
@@ -2807,7 +2807,7 @@ async fn land_stack(
                                     git: settings.git.clone(),
                                     auth: crate::config::AuthConfig::default(),
                                 };
-                                let mut retarget_integration = BitbucketIntegration::new(
+                                let mut retarget_integration = ProviderIntegration::new(
                                     StackManager::new(&repo_root)?,
                                     retarget_config,
                                 )?;

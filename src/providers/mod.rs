@@ -1,10 +1,13 @@
 pub mod types;
 pub mod factory;
 pub mod bitbucket;
+pub mod integration;
 
 use async_trait::async_trait;
 use crate::errors::Result;
 pub use types::*;
+pub use factory::ProviderFactory;
+pub use integration::{ProviderIntegration, StackSubmissionStatus, EntrySubmissionStatus, EnhancedStackStatus, EnhancedEntryStatus, EnhancedPullRequestStatus};
 
 /// Main trait defining repository provider operations
 #[async_trait]
