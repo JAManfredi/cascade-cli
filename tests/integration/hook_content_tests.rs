@@ -313,8 +313,8 @@ async fn test_hooks_handle_edge_cases_gracefully() {
 
     // Verify graceful handling of edge cases
     assert!(
-        hook_content.contains("if [ ! -d \".cascade\" ]")
-            || hook_content.contains("if not exist \".cascade\""),
+        hook_content.contains("if [ ! -d \"$REPO_ROOT/.cascade\" ]")
+            || hook_content.contains("if not exist \"%REPO_ROOT%\\.cascade\""),
         "Hooks should check for Cascade initialization"
     );
     assert!(

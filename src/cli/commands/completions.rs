@@ -67,7 +67,7 @@ fn detect_current_and_available_shells() -> Vec<Shell> {
     // First, try to detect the current shell from SHELL environment variable
     if let Some(current_shell) = detect_current_shell() {
         shells.push(current_shell);
-        println!("🔍 Detected current shell: {:?}", current_shell);
+        println!("🔍 Detected current shell: {current_shell:?}");
         return shells; // Only install for current shell
     }
 
