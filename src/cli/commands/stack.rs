@@ -1162,11 +1162,10 @@ async fn push_to_stack(
                     unpushed
                 }
                 Err(e) => {
-                    return Err(CascadeError::branch(format!(
-                        "Failed to calculate commits between '{}' and '{}': {}. \
-                         This usually means the branches have diverged or don't share common history.",
-                        base_branch, current_branch, e
-                    )));
+                                            return Err(CascadeError::branch(format!(
+                            "Failed to calculate commits between '{base_branch}' and '{current_branch}': {e}. \
+                             This usually means the branches have diverged or don't share common history."
+                        )));
                 }
             }
         }
