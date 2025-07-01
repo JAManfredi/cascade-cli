@@ -32,9 +32,9 @@ pub async fn run() -> Result<()> {
     println!("  Documentation: https://github.com/your-org/cascade-cli/wiki");
 
     println!("\n💡 Quick Start:");
-    println!("  Initialize repository: cc init");
-    println!("  Show help: cc --help");
-    println!("  Check status: cc status");
+    println!("  Initialize repository: ca init");
+    println!("  Show help: ca --help");
+    println!("  Check status: ca status");
 
     Ok(())
 }

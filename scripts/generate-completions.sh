@@ -18,19 +18,19 @@ echo "🐚 Generating shell completions..."
 
 # Generate bash completion
 echo "  → bash"
-./target/release/cc completions generate bash > "$COMPLETIONS_DIR/cc.bash"
+./target/release/ca completions generate bash > "$COMPLETIONS_DIR/ca.bash"
 
 # Generate zsh completion
 echo "  → zsh"
-./target/release/cc completions generate zsh > "$COMPLETIONS_DIR/_cc"
+./target/release/ca completions generate zsh > "$COMPLETIONS_DIR/_ca"
 
 # Generate fish completion
 echo "  → fish"
-./target/release/cc completions generate fish > "$COMPLETIONS_DIR/cc.fish"
+./target/release/ca completions generate fish > "$COMPLETIONS_DIR/ca.fish"
 
 # Generate PowerShell completion (for Windows users)
 echo "  → powershell"
-./target/release/cc completions generate powershell > "$COMPLETIONS_DIR/cc.ps1"
+./target/release/ca completions generate powershell > "$COMPLETIONS_DIR/ca.ps1"
 
 echo "✅ Completions generated in $COMPLETIONS_DIR"
 echo ""

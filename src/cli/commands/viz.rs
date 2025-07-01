@@ -637,7 +637,7 @@ pub async fn show_stack(
             .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?
     } else {
         manager.get_active_stack().ok_or_else(|| {
-            CascadeError::config("No active stack. Use 'cc stack list' to see available stacks")
+            CascadeError::config("No active stack. Use 'ca stack list' to see available stacks")
         })?
     };
 
@@ -682,7 +682,7 @@ pub async fn show_dependencies(
     let stacks = manager.get_all_stacks_objects()?;
 
     if stacks.is_empty() {
-        println!("No stacks found. Create one with: cc stack create <name>");
+        println!("No stacks found. Create one with: ca stack create <name>");
         return Ok(());
     }
 

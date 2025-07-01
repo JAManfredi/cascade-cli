@@ -85,7 +85,7 @@ pub async fn run(force: bool) -> Result<()> {
                 }
                 Err(e) => {
                     warn!("   ⚠️  Connection test failed: {}", e);
-                    println!("   💡 You can test the connection later with: cc doctor");
+                    println!("   💡 You can test the connection later with: ca doctor");
                 }
             }
         } else {
@@ -110,7 +110,7 @@ pub async fn run(force: bool) -> Result<()> {
             }
             Err(e) => {
                 warn!("   ⚠️  Failed to install completions: {}", e);
-                println!("   💡 You can install them later with: cc completions install");
+                println!("   💡 You can install them later with: ca completions install");
             }
         }
     }
@@ -132,7 +132,7 @@ pub async fn run(force: bool) -> Result<()> {
             }
             Err(e) => {
                 warn!("   ⚠️  Failed to install hooks: {}", e);
-                println!("   💡 You can install them later with: cc hooks install");
+                println!("   💡 You can install them later with: ca hooks install");
             }
         }
     }
@@ -143,15 +143,15 @@ pub async fn run(force: bool) -> Result<()> {
     println!("Cascade CLI is now configured for your repository.");
     println!();
     println!("💡 Next steps:");
-    println!("   1. Create your first stack: cc stack create \"My Feature\"");
-    println!("   2. Push commits to the stack: cc push");
-    println!("   3. Submit for review: cc submit");
-    println!("   4. Check status: cc status");
+    println!("   1. Create your first stack: ca stack create \"My Feature\"");
+    println!("   2. Push commits to the stack: ca push");
+    println!("   3. Submit for review: ca submit");
+    println!("   4. Check status: ca status");
     println!();
     println!("📚 Learn more:");
-    println!("   • Run 'cc --help' for all commands");
-    println!("   • Run 'cc doctor' to verify your setup");
-    println!("   • Run 'cc hooks status' to check hook installation");
+    println!("   • Run 'ca --help' for all commands");
+    println!("   • Run 'ca doctor' to verify your setup");
+    println!("   • Run 'ca hooks status' to check hook installation");
     println!("   • Visit docs/HOOKS.md for hook details");
     println!("   • Visit the documentation for advanced usage");
 
@@ -314,7 +314,7 @@ async fn configure_bitbucket_interactive(
         }
     } else {
         println!("   💡 You can configure the token later with:");
-        println!("      cc config set bitbucket.token YOUR_TOKEN");
+        println!("      ca config set bitbucket.token YOUR_TOKEN");
         None
     };
 

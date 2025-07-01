@@ -83,7 +83,7 @@ impl AuthManager {
     pub fn validate_auth(&self, server_url: &str) -> Result<()> {
         if self.get_token(server_url).is_none() {
             return Err(CascadeError::auth(format!(
-                "No authentication token configured for server: {server_url}. Use 'cc config set bitbucket.token <token>' to configure."
+                "No authentication token configured for server: {server_url}. Use 'ca config set bitbucket.token <token>' to configure."
             )));
         }
         Ok(())

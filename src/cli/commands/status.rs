@@ -90,7 +90,7 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
 
     if !is_repo_initialized(repo_path) {
         println!("  Status: ❌ Not initialized");
-        println!("  Run 'cc init' to initialize this repository for Cascade");
+        println!("  Run 'ca init' to initialize this repository for Cascade");
         return Ok(());
     }
 
@@ -145,8 +145,8 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
         println!("  Status: ✅ Ready for use");
     } else {
         println!("  Status: ⚠️  Incomplete configuration");
-        println!("  Run 'cc config list' to see all settings");
-        println!("  Run 'cc doctor' for configuration recommendations");
+        println!("  Run 'ca config list' to see all settings");
+        println!("  Run 'ca doctor' for configuration recommendations");
     }
 
     // Show stack information
@@ -159,7 +159,7 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
 
             if stacks.is_empty() {
                 println!("  No stacks created yet");
-                println!("  Run 'cc stacks create \"Stack Name\"' to create your first stack");
+                println!("  Run 'ca stacks create \"Stack Name\"' to create your first stack");
             } else {
                 println!("  Total stacks: {}", stacks.len());
 
@@ -196,7 +196,7 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
 
                 if active_stack.is_none() && !stacks.is_empty() {
                     println!(
-                        "\n  💡 No active stack. Use 'cc stacks switch <name>' to activate one"
+                        "\n  💡 No active stack. Use 'ca stacks switch <name>' to activate one"
                     );
                 }
             }

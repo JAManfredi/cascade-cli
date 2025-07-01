@@ -76,8 +76,8 @@ jobs:
     - name: Run integration tests
       run: cargo test --test '*' --verbose -- --test-threads=1
 
-    - name: Test CLI binary
-      run: ./target/release/csc --help
+    - name: Test CLI basic functionality
+      run: ./target/release/ca --help
 
     - name: Test force push functionality (Linux/macOS only)
       if: matrix.os != 'windows-latest'

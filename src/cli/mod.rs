@@ -8,8 +8,8 @@ use commands::stack::StackAction;
 use commands::{MergeStrategyArg, RebaseStrategyArg};
 
 #[derive(Parser)]
-#[command(name = "csc")]
-#[command(about = "Cascade CLI - Stacked diffs for Bitbucket Server")]
+#[command(name = "ca")]
+#[command(about = "Cascade CLI - Stacked Diffs for Bitbucket")]
 #[command(version)]
 pub struct Cli {
     #[command(subcommand)]

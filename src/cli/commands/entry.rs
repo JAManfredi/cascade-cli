@@ -70,12 +70,12 @@ async fn checkout_entry(
 
     // Get active stack
     let active_stack = manager.get_active_stack().ok_or_else(|| {
-        CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+        CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
     })?;
 
     if active_stack.entries.is_empty() {
         return Err(CascadeError::config(
-            "Stack is empty. Push some commits first with 'cc stack push'",
+            "Stack is empty. Push some commits first with 'ca stack push'",
         ));
     }
 
@@ -124,7 +124,7 @@ async fn checkout_entry(
 
             // TODO: Implement interactive confirmation
             // For now, just warn and exit
-            return Err(CascadeError::config("Exit current edit mode first with 'cc entry status' and handle any pending changes"));
+            return Err(CascadeError::config("Exit current edit mode first with 'ca entry status' and handle any pending changes"));
         }
     }
 
@@ -160,9 +160,9 @@ async fn checkout_entry(
     println!("   You are now on commit: {entry_short_hash} ({entry_short_message})");
     println!("   Branch: {entry_branch}");
     println!("\n📝 Make your changes and commit normally.");
-    println!("   • Use 'cc entry status' to see edit mode info");
+    println!("   • Use 'ca entry status' to see edit mode info");
     println!("   • Changes will be smartly handled when you commit");
-    println!("   • Use 'cc stack commit-edit' when ready (coming in next step)");
+    println!("   • Use 'ca stack commit-edit' when ready (coming in next step)");
 
     Ok(())
 }
@@ -322,7 +322,7 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
             println!("inactive");
         } else {
             println!("📝 Not in edit mode");
-            println!("   Use 'cc entry checkout' to start editing a stack entry");
+            println!("   Use 'ca entry checkout' to start editing a stack entry");
         }
         return Ok(());
     }
@@ -354,7 +354,7 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
     // - Staged changes
 
     println!("   Use 'git status' for detailed working directory status");
-    println!("   Use 'cc entry list' to see all entries");
+    println!("   Use 'ca entry list' to see all entries");
 
     Ok(())
 }
@@ -367,13 +367,13 @@ async fn list_entries(verbose: bool) -> Result<()> {
 
     let active_stack = manager.get_active_stack().ok_or_else(|| {
         CascadeError::config(
-            "No active stack. Create a stack first with 'cc stack create'".to_string(),
+            "No active stack. Create a stack first with 'ca stack create'".to_string(),
         )
     })?;
 
     if active_stack.entries.is_empty() {
         println!("📭 Active stack '{}' has no entries yet", active_stack.name);
-        println!("   Add some commits to the stack with 'cc stack push'");
+        println!("   Add some commits to the stack with 'ca stack push'");
         return Ok(());
     }
 
@@ -442,9 +442,9 @@ async fn list_entries(verbose: bool) -> Result<()> {
     }
 
     if let Some(_edit_info) = edit_mode_info {
-        println!("\n🎯 Edit mode active - use 'cc entry status' for details");
+        println!("\n🎯 Edit mode active - use 'ca entry status' for details");
     } else {
-        println!("\n💡 Use 'cc entry checkout' to start editing an entry");
+        println!("\n💡 Use 'ca entry checkout' to start editing an entry");
     }
 
     Ok(())

@@ -126,7 +126,7 @@ if ! run_check "Integration Tests" "cargo test --test '*' --verbose -- --test-th
 fi
 
 # CLI binary test
-if ! run_check "CLI Binary Test" "cargo build --release && ./target/release/csc --help > /dev/null"; then
+if ! run_check "CLI Binary Test" "cargo build --release && ./target/release/ca --help > /dev/null"; then
     FAILED_CHECKS+=("cli-binary")
 fi
 

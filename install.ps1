@@ -2,8 +2,8 @@
 # PowerShell script for installing Cascade CLI on Windows systems
 
 param(
-    [Parameter(HelpMessage="Installation directory (default: $env:LOCALAPPDATA\cascade-cli)")]
-    [string]$InstallDir = "$env:LOCALAPPDATA\cascade-cli",
+    [Parameter(HelpMessage="Installation directory (default: $env:USERPROFILE\bin)")]
+    [string]$InstallDir = "$env:USERPROFILE\bin",
     
     [Parameter(HelpMessage="Force reinstallation even if already installed")]
     [switch]$Force,
@@ -22,7 +22,7 @@ $ErrorActionPreference = "Stop"
 function Write-Success { param($Message) Write-Host "✅ $Message" -ForegroundColor Green }
 function Write-Error { param($Message) Write-Host "❌ $Message" -ForegroundColor Red }
 function Write-Warning { param($Message) Write-Host "⚠️ $Message" -ForegroundColor Yellow }
-function Write-Info { param($Message) Write-Host "ℹ️ $Message" -ForegroundColor Cyan }
+function Write-Info { param($Message) Write-Host "ℹ️ $Message" -ForegroundColor Blue }
 function Write-Step { param($Message) Write-Host "📦 $Message" -ForegroundColor Blue }
 
 Write-Host @"
@@ -37,11 +37,20 @@ if (-not $isAdmin) {
 }
 
 # Detect architecture
-$arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+$arch = if ([Environment]::Is64BitOperatingSystem) {
+    if ([Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432") -eq "ARM64" -or 
+        [Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") -eq "ARM64") {
+        "arm64"
+    } else {
+        "x64"
+    }
+} else {
+    "x86"
+}
 Write-Info "Detected architecture: $arch"
 
 # Check if already installed
-$existingPath = Get-Command "cc" -ErrorAction SilentlyContinue
+$existingPath = Get-Command "ca" -ErrorAction SilentlyContinue
 if ($existingPath -and -not $Force) {
     Write-Warning "Cascade CLI is already installed at: $($existingPath.Source)"
     Write-Info "Use -Force parameter to reinstall"
@@ -72,11 +81,11 @@ try {
     catch {
         Write-Error "Failed to fetch release information: $($_.Exception.Message)"
         Write-Info "Falling back to manual download..."
-        $downloadUrl = "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows-$arch.exe.zip"
+        $downloadUrl = "https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-windows-$arch.exe.zip"
     }
     
-    $zipPath = Join-Path $InstallDir "cascade-cli.zip"
-    $exePath = Join-Path $InstallDir "cc.exe"
+    $zipPath = Join-Path $InstallDir "ca-windows-$arch.exe.zip"
+    $exePath = Join-Path $InstallDir "ca.exe"
     
     # Download with progress
     $webClient = New-Object System.Net.WebClient
@@ -104,13 +113,13 @@ try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
         
-        $entry = $zip.Entries | Where-Object { $_.Name -eq "cc.exe" } | Select-Object -First 1
+        $entry = $zip.Entries | Where-Object { $_.Name -eq "ca.exe" } | Select-Object -First 1
         if ($entry) {
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $exePath, $true)
             Write-Success "Binary extracted to: $exePath"
         }
         else {
-            throw "cc.exe not found in archive"
+            throw "ca.exe not found in archive"
         }
     }
     catch {
@@ -173,13 +182,13 @@ Cascade CLI has been installed to: $InstallDir
 📋 Next steps:
 1. Restart your shell (PowerShell/Command Prompt)
 2. Navigate to your Git repository
-3. Run: cc setup
+3. Run: ca setup
 
 💡 Quick start:
-   cc init --bitbucket-url https://your-bitbucket-server.com
-   cc stacks create my-feature --base main
+   ca init --bitbucket-url https://your-bitbucket-server.com
+   ca stacks create my-feature --base main
    git commit -m "Add new feature"
-   cc push && cc submit
+   ca push && ca submit
 
 📚 Documentation: https://github.com/JAManfredi/cascade-cli
 "@ -ForegroundColor Green

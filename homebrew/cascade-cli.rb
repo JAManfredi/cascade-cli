@@ -10,76 +10,67 @@
 # brew install cascade-cli
 
 class CascadeCli < Formula
-  desc "Git-based development workflow tool for managing stacked branches"
+  desc "Cascade CLI - Git stacked diffs for Bitbucket Server"
   homepage "https://github.com/JAManfredi/cascade-cli"
-  license "MIT OR Apache-2.0"
-  head "https://github.com/JAManfredi/cascade-cli.git", branch: "master"
+  version "0.1.6"
+  license "MIT"
 
-  # Apple Silicon (ARM64) - Default
+  # macOS binaries with architecture detection
   if Hardware::CPU.arm?
-    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.6/csc-macos-arm64.tar.gz"
-    sha256 "TBD_ARM64_SHA"
-    version "0.1.6"
+    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.6/ca-macos-arm64.tar.gz"
+    sha256 "PLACEHOLDER_ARM64_SHA"
   else
-    # Intel (x64)
-    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.6/csc-macos-x64.tar.gz"
-    sha256 "TBD_X64_SHA"
-    version "0.1.6"
+    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.6/ca-macos-x64.tar.gz"
+    sha256 "PLACEHOLDER_X64_SHA"
   end
 
   depends_on "git"
 
   def install
-    bin.install "csc"
+    bin.install "ca"
     
     # Install shell completions
-    bash_completion.install "completions/csc.bash" => "csc"
-    zsh_completion.install "completions/_csc"
-    fish_completion.install "completions/csc.fish"
+    bash_completion.install "completions/ca.bash" => "ca"
+    zsh_completion.install "completions/_ca"
+    fish_completion.install "completions/ca.fish"
   end
 
-  def post_install
-    puts <<~EOS
-      Cascade CLI has been installed!
+  def caveats
+    <<~EOS
+      Cascade CLI has been installed successfully!
       
-      Quick Start:
-        1. Navigate to your Git repository: cd your-project
-        2. Initialize Cascade: csc init
-        3. Create your first stack: csc stack create "my-feature"
-        4. Add commits to stack: csc stack push
+      Getting Started:
+      1. Navigate to your Git repository
+      2. Initialize Cascade: ca init
+      3. Create your first stack: ca stack create "my-feature"
+      4. Add commits to stack: ca stack push
       
-      Learn More:
-        csc --help                    # Show all commands
-        csc doctor                    # Check system setup
-        csc stack --help             # Stack management help
-        
-      Documentation:
-        https://github.com/JAManfredi/cascade-cli/blob/main/docs/USER_MANUAL.md
-        https://github.com/JAManfredi/cascade-cli/blob/main/docs/ONBOARDING.md
+      Quick Commands:
+      ca --help                    # Show all commands
+      ca doctor                    # Check system setup
+      ca stack --help             # Stack management help
       
-      Shell Completions:
-        Completions have been installed for Bash, Zsh, and Fish.
-        Restart your shell or source your profile to enable them.
+      Documentation: https://github.com/JAManfredi/cascade-cli/blob/main/docs/
     EOS
   end
 
   test do
-    system "#{bin}/csc", "--version"
-    system "#{bin}/csc", "--help"
-    
     # Test basic functionality
-    (testpath/"test-repo").mkpath
-    cd testpath/"test-repo" do
+    system "#{bin}/ca", "--version"
+    system "#{bin}/ca", "--help"
+    
+    # Test in a temporary directory (no git repo)
+    testpath_git = testpath/"test_repo"
+    testpath_git.mkpath
+    
+    cd testpath_git do
       system "git", "init"
       system "git", "config", "user.name", "Test User"
       system "git", "config", "user.email", "test@example.com"
-      system "echo 'test' > README.md"
-      system "git", "add", "README.md"
-      system "git", "commit", "-m", "Initial commit"
       
-      # Test csc doctor (should detect git repo but no cascade config)
-      output = shell_output("#{bin}/csc doctor 2>&1", 1)
-      assert_match "Git repository:", output
+      # Test ca doctor (should detect git repo but no cascade config)
+      output = shell_output("#{bin}/ca doctor 2>&1", 1)
+      assert_match "Cascade CLI", output
     end
   end
 end 

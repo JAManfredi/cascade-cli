@@ -46,15 +46,15 @@ pub async fn run(bitbucket_url: Option<String>, force: bool) -> Result<()> {
     println!("\n📋 Next steps:");
     println!("  1. Configure Bitbucket Server settings:");
     if bitbucket_url.is_none() {
-        println!("     cc config set bitbucket.url https://your-bitbucket-server.com");
+        println!("     ca config set bitbucket.url https://your-bitbucket-server.com");
     }
-    println!("     cc config set bitbucket.project YOUR_PROJECT_KEY");
-    println!("     cc config set bitbucket.repo your-repo-name");
-    println!("     cc config set bitbucket.token your-personal-access-token");
+    println!("     ca config set bitbucket.project YOUR_PROJECT_KEY");
+    println!("     ca config set bitbucket.repo your-repo-name");
+    println!("     ca config set bitbucket.token your-personal-access-token");
     println!("  2. Verify configuration:");
-    println!("     cc doctor");
+    println!("     ca doctor");
     println!("  3. Create your first stack:");
-    println!("     cc create \"Add new feature\"");
+    println!("     ca create \"Add new feature\"");
 
     Ok(())
 }

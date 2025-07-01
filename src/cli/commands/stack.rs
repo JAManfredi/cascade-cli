@@ -499,7 +499,7 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
     let stacks = manager.list_stacks();
 
     if stacks.is_empty() {
-        info!("No stacks found. Create one with: cc stack create <name>");
+        info!("No stacks found. Create one with: ca stack create <name>");
         return Ok(());
     }
 
@@ -584,7 +584,7 @@ async fn deactivate_stack(force: bool) -> Result<()> {
 
     if !force {
         println!("⚠️  This will deactivate stack '{stack_name}' and return to normal Git workflow");
-        println!("   You can reactivate it later with 'cc stacks switch {stack_name}'");
+        println!("   You can reactivate it later with 'ca stacks switch {stack_name}'");
         print!("   Continue? (y/N): ");
 
         use std::io::{self, Write};
@@ -604,7 +604,7 @@ async fn deactivate_stack(force: bool) -> Result<()> {
 
     println!("✅ Deactivated stack '{stack_name}'");
     println!("   Stack management is now OFF - you can use normal Git workflow");
-    println!("   To reactivate: cc stacks switch {stack_name}");
+    println!("   To reactivate: ca stacks switch {stack_name}");
 
     Ok(())
 }
@@ -619,7 +619,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
     let (stack_id, stack_name, stack_base, stack_entries) = {
         let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
             CascadeError::config(
-                "No active stack. Use 'cc stacks create' or 'cc stacks switch' to select a stack"
+                "No active stack. Use 'ca stacks create' or 'ca stacks switch' to select a stack"
                     .to_string(),
             )
         })?;
@@ -638,7 +638,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
     if stack_entries.is_empty() {
         println!("   No entries in this stack yet");
-        println!("   Use 'cc push' to add commits to this stack");
+        println!("   Use 'ca push' to add commits to this stack");
         return Ok(());
     }
 
@@ -777,7 +777,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
                     if ready_to_land > 0 {
                         println!(
-                            "\n🎯 {} PR{} ready to land! Use 'cc land' to land them all.",
+                            "\n🎯 {} PR{} ready to land! Use 'ca land' to land them all.",
                             ready_to_land,
                             if ready_to_land == 1 { " is" } else { "s are" }
                         );
@@ -787,7 +787,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             Err(e) => {
                 warn!("Failed to get enhanced stack status: {}", e);
                 println!("   ⚠️  Could not fetch mergability status");
-                println!("   Use 'cc stack show --verbose' for basic PR information");
+                println!("   Use 'ca stack show --verbose' for basic PR information");
             }
         }
     } else {
@@ -837,7 +837,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     }
                 }
 
-                println!("\n💡 Use 'cc stack show --mergeable' to see detailed status including build and review information");
+                println!("\n💡 Use 'ca stack show --mergeable' to see detailed status including build and review information");
             }
             Err(e) => {
                 warn!("Failed to check stack status: {}", e);
@@ -873,7 +873,7 @@ async fn push_to_stack(
 
     // Get the active stack to check base branch
     let active_stack = manager.get_active_stack().ok_or_else(|| {
-        CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+        CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
     })?;
 
     // 🛡️ BASE BRANCH PROTECTION
@@ -910,11 +910,11 @@ async fn push_to_stack(
                     println!("   1. Create a feature branch first:");
                     println!("      git checkout -b feature/my-work");
                     println!("      git commit -am \"your work\"");
-                    println!("      cc push");
+                    println!("      ca push");
                     println!("\n   2. Auto-create a branch (recommended):");
-                    println!("      cc push --auto-branch");
+                    println!("      ca push --auto-branch");
                     println!("\n   3. Force push to base branch (dangerous):");
-                    println!("      cc push --allow-base-branch");
+                    println!("      ca push --allow-base-branch");
 
                     return Err(CascadeError::config(
                         "Refusing to push uncommitted changes from base branch. Use one of the options above."
@@ -1002,7 +1002,7 @@ async fn push_to_stack(
                             commits_to_check.len()
                         );
                         println!(
-                            "   You're now on the feature branch and can continue with 'cc push'"
+                            "   You're now on the feature branch and can continue with 'ca push'"
                         );
 
                         // Continue with normal flow
@@ -1014,12 +1014,12 @@ async fn push_to_stack(
                         println!("   These commits are currently ON the base branch, which may not be intended.");
                         println!("\n   Options:");
                         println!("   1. Auto-create feature branch and cherry-pick commits:");
-                        println!("      cc push --auto-branch");
+                        println!("      ca push --auto-branch");
                         println!("\n   2. Manually create branch and move commits:");
                         println!("      git checkout -b feature/my-work");
-                        println!("      cc push");
+                        println!("      ca push");
                         println!("\n   3. Force push from base branch (not recommended):");
-                        println!("      cc push --allow-base-branch");
+                        println!("      ca push --allow-base-branch");
 
                         return Err(CascadeError::config(
                             "Refusing to push commits from base branch. Use --auto-branch or create a feature branch manually."
@@ -1036,7 +1036,7 @@ async fn push_to_stack(
             // User used --squash without specifying count, auto-detect unpushed commits
             let active_stack = manager.get_active_stack().ok_or_else(|| {
                 CascadeError::config(
-                    "No active stack. Create a stack first with 'cc stacks create'",
+                    "No active stack. Create a stack first with 'ca stacks create'",
                 )
             })?;
 
@@ -1088,7 +1088,7 @@ async fn push_to_stack(
     } else {
         // Default: Get all unpushed commits (commits not in any stack entry)
         let active_stack = manager.get_active_stack().ok_or_else(|| {
-            CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+            CascadeError::config("No active stack. Create a stack first with 'ca stacks create'")
         })?;
 
         let mut unpushed = Vec::new();
@@ -1274,7 +1274,7 @@ async fn submit_entry(
 
     // Get the active stack
     let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
-        CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+        CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
     })?;
     let stack_id = active_stack.id;
 
@@ -1449,7 +1449,7 @@ async fn submit_entry(
         }
         println!();
         println!("💡 You can retry failed entries individually:");
-        println!("   cc stack submit <ENTRY_NUMBER>");
+        println!("   ca stack submit <ENTRY_NUMBER>");
     }
 
     Ok(())
@@ -1480,7 +1480,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
             .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?
     } else {
         stack_manager.get_active_stack().ok_or_else(|| {
-            CascadeError::config("No active stack. Use 'cc stack list' to see available stacks")
+            CascadeError::config("No active stack. Use 'ca stack list' to see available stacks")
         })?
     };
     let stack_id = stack.id;
@@ -1645,7 +1645,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
     // Get active stack
     let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
-        CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+        CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
     })?;
 
     let base_branch = active_stack.base_branch.clone();
@@ -1785,7 +1785,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                                 println!("   💡 To resolve conflicts:");
                                 println!("      1. Fix conflicts in the affected files");
                                 println!("      2. Stage resolved files: git add <files>");
-                                println!("      3. Continue: cc stack continue-rebase");
+                                println!("      3. Continue: ca stack continue-rebase");
                                 return Err(e);
                             }
                         }
@@ -1824,8 +1824,8 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     println!("🎉 Sync completed successfully!");
     println!("   Base branch: {base_branch}");
     println!("   💡 Next steps:");
-    println!("      • Review your updated stack: cc stack show");
-    println!("      • Check PR status: cc stack status");
+    println!("      • Review your updated stack: ca stack show");
+    println!("      • Check PR status: ca stack status");
 
     Ok(())
 }
@@ -1855,7 +1855,7 @@ async fn rebase_stack(
 
     // Get active stack
     let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
-        CascadeError::config("No active stack. Create a stack first with 'cc stack create'")
+        CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
     })?;
     let stack_id = active_stack.id;
 
@@ -1912,8 +1912,8 @@ async fn rebase_stack(
     if rebase_manager.is_rebase_in_progress() {
         println!("⚠️  Rebase already in progress!");
         println!("   Use 'git status' to check the current state");
-        println!("   Use 'cc stack continue-rebase' to continue");
-        println!("   Use 'cc stack abort-rebase' to abort");
+        println!("   Use 'ca stack continue-rebase' to continue");
+        println!("   Use 'ca stack abort-rebase' to abort");
         return Ok(());
     }
 
@@ -1987,7 +1987,7 @@ async fn rebase_stack(
                 } else {
                     println!("   1. Review the rebased stack");
                     println!("   2. Test your changes");
-                    println!("   3. Submit new pull requests with 'cc stack submit'");
+                    println!("   3. Submit new pull requests with 'ca stack submit'");
                 }
             }
         }
@@ -1996,7 +1996,7 @@ async fn rebase_stack(
             println!("💡 Tips for resolving rebase issues:");
             println!("   - Check for uncommitted changes with 'git status'");
             println!("   - Ensure base branch is up to date");
-            println!("   - Try interactive mode: 'cc stack rebase --interactive'");
+            println!("   - Try interactive mode: 'ca stack rebase --interactive'");
             return Err(e);
         }
     }
@@ -2022,14 +2022,14 @@ async fn continue_rebase() -> Result<()> {
     match rebase_manager.continue_rebase() {
         Ok(_) => {
             println!("✅ Rebase continued successfully");
-            println!("   Check 'cc stack rebase-status' for current state");
+            println!("   Check 'ca stack rebase-status' for current state");
         }
         Err(e) => {
             warn!("❌ Failed to continue rebase: {}", e);
             println!("💡 You may need to resolve conflicts first:");
             println!("   1. Edit conflicted files");
             println!("   2. Stage resolved files with 'git add'");
-            println!("   3. Run 'cc stack continue-rebase' again");
+            println!("   3. Run 'ca stack continue-rebase' again");
         }
     }
 
@@ -2086,8 +2086,8 @@ async fn rebase_status() -> Result<()> {
             "   
 📝 Actions available:"
         );
-        println!("     - 'cc stack continue-rebase' to continue");
-        println!("     - 'cc stack abort-rebase' to abort");
+        println!("     - 'ca stack continue-rebase' to continue");
+        println!("     - 'ca stack abort-rebase' to abort");
         println!("     - 'git status' to see conflicted files");
 
         // Check for conflicts
@@ -2113,7 +2113,7 @@ async fn rebase_status() -> Result<()> {
                     );
                     println!("     1. Edit the conflicted files");
                     println!("     2. Stage resolved files: git add <file>");
-                    println!("     3. Continue: cc stack continue-rebase");
+                    println!("     3. Continue: ca stack continue-rebase");
                 }
             }
             Err(e) => {

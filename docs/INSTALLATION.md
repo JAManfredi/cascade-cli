@@ -52,8 +52,8 @@ echo 'export PATH="'$PWD'/target/release:$PATH"' >> ~/.bashrc
 
 #### **Verify Installation**
 ```bash
-csc --version
-csc doctor  # Run health check
+ca --version
+ca doctor  # Run health check
 ```
 
 ### **Option 2: Pre-built Binaries** *(Recommended)*
@@ -61,42 +61,42 @@ csc doctor  # Run health check
 #### **macOS**
 ```bash
 # Intel Macs (x64)
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-x64.tar.gz | tar -xz
-sudo mv csc /usr/local/bin/
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-macos-x64.tar.gz | tar -xz
+sudo mv ca /usr/local/bin/
 
 # Apple Silicon Macs (ARM64)  
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-arm64.tar.gz | tar -xz
-sudo mv csc /usr/local/bin/
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-macos-arm64.tar.gz | tar -xz
+sudo mv ca /usr/local/bin/
 
 # Auto-detect architecture
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
-sudo mv csc /usr/local/bin/
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-macos-$(uname -m | sed 's/x86_64/x64/;s/arm64/arm64/').tar.gz | tar -xz
+sudo mv ca /usr/local/bin/
 ```
 
 #### **Linux**
 ```bash
 # x64 (Intel/AMD)
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-x64.tar.gz | tar -xz
-sudo mv csc /usr/local/bin/
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-linux-x64.tar.gz | tar -xz
+sudo mv ca /usr/local/bin/
 
 # ARM64
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-arm64.tar.gz | tar -xz  
-sudo mv csc /usr/local/bin/
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-linux-arm64.tar.gz | tar -xz  
+sudo mv ca /usr/local/bin/
 
 # Auto-detect architecture
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz | tar -xz
-sudo mv csc /usr/local/bin/
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz | tar -xz
+sudo mv ca /usr/local/bin/
 ```
 
 #### **Windows**
 ```powershell
 # x64 (Intel/AMD)
-Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows-x64.exe.zip" -OutFile "cc.zip"
-Expand-Archive -Path "cc.zip" -DestinationPath "$env:USERPROFILE\bin\"
+Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-windows-x64.exe.zip" -OutFile "ca.zip"
+Expand-Archive -Path "ca.zip" -DestinationPath "$env:USERPROFILE\bin\"
 
 # ARM64  
-Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-windows-arm64.exe.zip" -OutFile "cc.zip"
-Expand-Archive -Path "cc.zip" -DestinationPath "$env:USERPROFILE\bin\"
+Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-windows-arm64.exe.zip" -OutFile "ca.zip"
+Expand-Archive -Path "ca.zip" -DestinationPath "$env:USERPROFILE\bin\"
 
 # Add to PATH if needed
 $env:PATH += ";$env:USERPROFILE\bin"
@@ -128,34 +128,34 @@ cargo install cascade-cli
 ### **1. Verify Installation**
 ```bash
 # Check version
-csc --version
+ca --version
 
 # Run system diagnostics
-csc doctor
+ca doctor
 
 # Test help system
-csc --help
+ca --help
 ```
 
 ### **2. Shell Completions**
 ```bash
 # Auto-detect and install for your shell
-csc completions install
+ca completions install
 
 # Manual installation
-csc completions generate bash > ~/.local/share/bash-completion/completions/cc
-csc completions generate zsh > ~/.zsh/completions/_cc
-csc completions generate fish > ~/.config/fish/completions/cc.fish
+ca completions generate bash > ~/.local/share/bash-completion/completions/ca
+ca completions generate zsh > ~/.zsh/completions/_ca
+ca completions generate fish > ~/.config/fish/completions/ca.fish
 ```
 
 ### **3. First-Time Configuration**
 ```bash
 # Run interactive setup wizard
-csc setup
+ca setup
 
 # Manual configuration (if preferred)
 cd your-git-repository
-csc init --bitbucket-url https://bitbucket.your-company.com
+ca init --bitbucket-url https://bitbucket.your-company.com
 ```
 
 ---
@@ -207,8 +207,8 @@ RUN cargo build --release
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y git ca-certificates
-COPY --from=builder /app/target/release/csc /usr/local/bin/
-ENTRYPOINT ["cc"]
+COPY --from=builder /app/target/release/ca /usr/local/bin/
+ENTRYPOINT ["ca"]
 ```
 
 ### **Docker Usage**
@@ -220,7 +220,7 @@ docker build -t cascade-cli .
 docker run -v $(pwd):/workspace -w /workspace cascade-cli status
 
 # Create alias for convenience
-alias cc='docker run -v $(pwd):/workspace -w /workspace cascade-cli'
+alias ca='docker run -v $(pwd):/workspace -w /workspace cascade-cli'
 ```
 
 ---
@@ -265,11 +265,11 @@ cargo watch -x run
 
 ### **Common Issues**
 
-#### **"command not found: cc"**
+#### **"command not found: ca"**
 ```bash
 # Verify PATH includes binary location
 echo $PATH
-which cc
+which ca
 
 # Add to PATH if missing
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -303,7 +303,7 @@ git config --list
 #### **Permission denied**
 ```bash
 # Fix binary permissions
-chmod +x /path/to/cc
+chmod +x /path/to/ca
 
 # Install to user directory instead of system
 cargo install --path . --root ~/.local
@@ -318,7 +318,7 @@ export PATH="$HOME/.local/bin:$PATH"
 xcode-select --install
 
 # macOS Gatekeeper issues
-sudo spctl --add /usr/local/bin/cc
+sudo spctl --add /usr/local/bin/ca
 ```
 
 #### **Linux**
@@ -353,15 +353,15 @@ git config core.fscache true
 git config gc.auto 256
 
 # Configure Cascade CLI
-csc config set performance.cache_size 1000
-csc config set performance.parallel_operations true
+ca config set performance.cache_size 1000
+ca config set performance.parallel_operations true
 ```
 
 ### **Network Optimization**
 ```bash
 # Configure timeouts for slow networks
-csc config set network.timeout 60
-csc config set network.retry_attempts 3
+ca config set network.timeout 60
+ca config set network.retry_attempts 3
 
 # Use compression
 git config core.compression 9
@@ -397,7 +397,7 @@ cargo install cascade-cli --force
 ### **Complete Removal**
 ```bash
 # Remove binary
-rm /usr/local/bin/cc
+rm /usr/local/bin/ca
 # or
 cargo uninstall cascade-cli
 
@@ -405,13 +405,13 @@ cargo uninstall cascade-cli
 rm -rf ~/.cascade/
 
 # Remove completions
-rm ~/.local/share/bash-completion/completions/cc
-rm ~/.zsh/completions/_cc
-rm ~/.config/fish/completions/cc.fish
+rm ~/.local/share/bash-completion/completions/ca
+rm ~/.zsh/completions/_ca
+rm ~/.config/fish/completions/ca.fish
 
 # Remove Git hooks (per repository)
 cd your-repository
-csc hooks uninstall
+ca hooks uninstall
 ```
 
 ---
@@ -421,14 +421,14 @@ csc hooks uninstall
 If you encounter installation issues:
 
 1. **Check [Troubleshooting Guide](./TROUBLESHOOTING.md)**
-2. **Run `csc doctor` for diagnostics**
+2. **Run `ca doctor` for diagnostics**
 3. **Search [GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)**
 4. **Create new issue with system details**
 
 ### **System Information for Bug Reports**
 ```bash
 # Gather system info
-csc doctor --verbose
+ca doctor --verbose
 rustc --version
 git --version
 uname -a  # Linux/macOS

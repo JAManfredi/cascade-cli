@@ -41,7 +41,7 @@ export RUST_LOG=debug
 export CI=true
 
 # Build binary if not exists
-if [[ ! -f "target/release/cc" ]]; then
+if [[ ! -f "target/release/ca" ]]; then
     print_step "Building release binary for integration tests"
     cargo build --release
 fi
@@ -108,7 +108,7 @@ for module in "${FAILED_MODULES[@]}"; do
             echo "  • Working directory changes between tests"
             echo
             echo "Debug suggestions:"
-            echo "  1. Verify binary path: ls -la target/release/cc"
+            echo "  1. Verify binary path: ls -la target/release/ca"
             echo "  2. Check git config: git config --list"
             echo "  3. Increase timeouts: export TEST_TIMEOUT=600"
             ;;
@@ -196,13 +196,13 @@ echo "Shell: $SHELL"
 echo "PWD: $(pwd)"
 
 print_step "Binary Information"
-if [[ -f "target/release/cc" ]]; then
-    echo "Binary exists: target/release/cc"
-    echo "Binary size: $(stat -f%z target/release/cc 2>/dev/null || stat -c%s target/release/cc 2>/dev/null || echo 'unknown')"
-    echo "Binary permissions: $(ls -la target/release/cc)"
-    echo "Binary test: $(./target/release/cc --version 2>&1 || echo 'FAILED')"
+if [[ -f "target/release/ca" ]]; then
+    echo "Binary exists: target/release/ca"
+    echo "Binary size: $(stat -f%z target/release/ca 2>/dev/null || stat -c%s target/release/ca 2>/dev/null || echo 'unknown')"
+    echo "Binary permissions: $(ls -la target/release/ca)"
+    echo "Binary test: $(./target/release/ca --version 2>&1 || echo 'FAILED')"
 else
-    print_error "Binary not found: target/release/cc"
+    print_error "Binary not found: target/release/ca"
 fi
 
 print_step "Git Configuration"
@@ -235,7 +235,7 @@ if [ ${#FAILED_MODULES[@]} -gt 0 ]; then
     echo "1. 🧹 Clean up your environment:"
     echo "   cargo clean"
     echo "   rm -rf /tmp/*cascade*"
-    echo "   killall cc 2>/dev/null || true"
+    echo "   killall ca 2>/dev/null || true"
     echo
     echo "2. 🔧 Try running with restricted resources (like CI):"
     echo "   export RUST_TEST_THREADS=1"
@@ -251,5 +251,5 @@ if [ ${#FAILED_MODULES[@]} -gt 0 ]; then
     echo "   ./scripts/docker-ci-simulation.sh"
     echo
     echo "5. 📊 Monitor system resources during test run:"
-    echo "   watch -n1 'ps aux | grep cc; find /tmp -name \"*cascade*\" -type d'"
+    echo "   watch -n1 'ps aux | grep ca; find /tmp -name \"*cascade*\" -type d'"
 fi 

@@ -7,21 +7,23 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release'
+        description: 'Release tag (e.g., v1.0.0)'
         required: true
-        default: 'v0.1.1'
-
-permissions:
-  contents: write
-  pull-requests: write
+        type: string
+      test_release:
+        description: 'Test release (skip some steps)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
-  
+
 jobs:
   generate-completions:
     name: Generate Shell Completions
     runs-on: ubuntu-latest
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -35,10 +37,10 @@ jobs:
     - name: Generate shell completions
       run: |
         mkdir -p completions
-        ./target/release/csc completions generate bash > completions/csc.bash
-        ./target/release/csc completions generate zsh > completions/_csc
-        ./target/release/csc completions generate fish > completions/csc.fish
-        ./target/release/csc completions generate powershell > completions/csc.ps1
+        ./target/release/ca completions generate bash > completions/ca.bash
+        ./target/release/ca completions generate zsh > completions/_ca
+        ./target/release/ca completions generate fish > completions/ca.fish
+        ./target/release/ca completions generate powershell > completions/ca.ps1
         
         echo "Generated completions:"
         ls -la completions/
@@ -60,31 +62,31 @@ jobs:
           # Linux targets
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            name: csc-linux-x64
+            name: ca-linux-x64
             can-test: true
           - target: aarch64-unknown-linux-gnu  
             os: ubuntu-latest
-            name: csc-linux-arm64
+            name: ca-linux-arm64
             can-test: false
           
           # macOS targets
           - target: x86_64-apple-darwin
             os: macos-latest
-            name: csc-macos-x64
+            name: ca-macos-x64
             can-test: true
           - target: aarch64-apple-darwin
             os: macos-latest  
-            name: csc-macos-arm64
+            name: ca-macos-arm64
             can-test: false
           
           # Windows targets
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: csc-windows-x64.exe
+            name: ca-windows-x64.exe
             can-test: true
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-            name: csc-windows-arm64.exe
+            name: ca-windows-arm64.exe
             can-test: false
 
     steps:
@@ -140,7 +142,7 @@ jobs:
       run: |
         # Create package directory
         mkdir -p package
-        cp target/${{ matrix.target }}/release/csc package/
+        cp target/${{ matrix.target }}/release/ca package/
         
         # Include completions
         cp -r completions package/
@@ -155,7 +157,7 @@ jobs:
       run: |
         # Create package directory
         mkdir package
-        cp target/${{ matrix.target }}/release/csc.exe package/
+        cp target/${{ matrix.target }}/release/ca.exe package/
         
         # Include completions
         Copy-Item -Recurse completions package/
@@ -229,21 +231,21 @@ jobs:
         echo "### Quick Install (Unix)" >> release_notes.md
         echo '```bash' >> release_notes.md
         echo "# Linux (x64)" >> release_notes.md
-        echo "curl -L https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/csc-linux-x64.tar.gz | tar -xz" >> release_notes.md
-        echo "sudo mv csc /usr/local/bin/" >> release_notes.md
+        echo "curl -L https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-linux-x64.tar.gz | tar -xz" >> release_notes.md
+        echo "sudo mv ca /usr/local/bin/" >> release_notes.md
         echo "" >> release_notes.md
         echo "# macOS (x64)" >> release_notes.md
-        echo "curl -L https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/csc-macos-x64.tar.gz | tar -xz" >> release_notes.md
-        echo "sudo mv csc /usr/local/bin/" >> release_notes.md
+        echo "curl -L https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-x64.tar.gz | tar -xz" >> release_notes.md
+        echo "sudo mv ca /usr/local/bin/" >> release_notes.md
         echo '```' >> release_notes.md
         echo "" >> release_notes.md
         echo "### Platform-Specific Downloads" >> release_notes.md
-        echo "- **Linux x64**: csc-linux-x64.tar.gz" >> release_notes.md
-        echo "- **Linux ARM64**: csc-linux-arm64.tar.gz" >> release_notes.md
-        echo "- **macOS x64**: csc-macos-x64.tar.gz" >> release_notes.md
-        echo "- **macOS ARM64**: csc-macos-arm64.tar.gz" >> release_notes.md
-        echo "- **Windows x64**: csc-windows-x64.exe.zip" >> release_notes.md
-        echo "- **Windows ARM64**: csc-windows-arm64.exe.zip" >> release_notes.md
+        echo "- **Linux x64**: ca-linux-x64.tar.gz" >> release_notes.md
+        echo "- **Linux ARM64**: ca-linux-arm64.tar.gz" >> release_notes.md
+        echo "- **macOS x64**: ca-macos-x64.tar.gz" >> release_notes.md
+        echo "- **macOS ARM64**: ca-macos-arm64.tar.gz" >> release_notes.md
+        echo "- **Windows x64**: ca-windows-x64.exe.zip" >> release_notes.md
+        echo "- **Windows ARM64**: ca-windows-arm64.exe.zip" >> release_notes.md
         echo "" >> release_notes.md
         echo "## 📖 Documentation" >> release_notes.md
         echo "- [User Manual](https://github.com/JAManfredi/cascade-cli/blob/main/docs/USER_MANUAL.md)" >> release_notes.md
@@ -257,187 +259,102 @@ jobs:
         find artifacts -name "*.zip" -exec cp {} release-assets/ \;
         ls -la release-assets/
 
+    # Test downloaded releases
+    - name: Test Unix releases
+      run: |
+        cd release-assets
+        for target in ca-linux-x64.tar.gz ca-macos-x64.tar.gz; do
+          if [ -f "$target" ]; then
+            tar -xzf "$target"
+            ./ca --version
+            ./ca --help
+            rm -f ca  # Clean up for next iteration
+          fi
+        done
+
+    # Test Windows releases separately  
+    - name: Test Windows releases
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        cd release-assets
+        if ("${{ github.event_name }}" -eq "workflow_dispatch") { 
+          $TAG = "${{ github.event.inputs.tag }}"
+        } else {
+          $TAG = "${env:GITHUB_REF}".Substring(10)  # Remove 'refs/tags/'
+        }
+        
+        $target = "ca-windows-x64.exe.zip"
+        if (Test-Path $target) {
+          Expand-Archive -Path $target -DestinationPath "."
+          .\ca.exe --version
+          .\ca.exe --help
+        }
+
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.release_notes.outputs.tag }}
-        name: "Cascade CLI ${{ steps.release_notes.outputs.tag }}"
+        name: 'Cascade CLI ${{ steps.release_notes.outputs.tag }}'
         body_path: release_notes.md
         files: release-assets/*
         draft: false
         prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        make_latest: true
 
-  # Test installation of released binaries
-  test-installation:
-    name: Test Installation
-    needs: create-release
-    runs-on: ${{ matrix.os }}
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: csc-linux-x64.tar.gz
-          - os: macos-latest
-            target: csc-macos-x64.tar.gz
-          - os: windows-latest
-            target: csc-windows-x64.exe.zip
-
-    steps:
-    - name: Download and test binary (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        # Handle both tag push and workflow_dispatch events
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          TAG="${{ github.event.inputs.tag }}"
-        else
-          TAG=${GITHUB_REF#refs/tags/}
-        fi
-        
-        echo "Testing release with tag: $TAG"
-        echo "Download URL: https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}"
-        
-        # Wait a bit for release to be fully published
-        sleep 10
-        
-        # Download with better error handling
-        curl -L -f --retry 3 --retry-delay 10 \
-          "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" \
-          -o "${{ matrix.target }}"
-        
-        # Verify it's actually a gzip file
-        file "${{ matrix.target }}"
-        
-        # Extract and test
-        tar -xzf "${{ matrix.target }}"
-        ./csc --version
-        ./csc --help
-
-    - name: Download and test binary (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        # Handle both tag push and workflow_dispatch events
-        if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-          $TAG = "${{ github.event.inputs.tag }}"
-        } else {
-          $TAG = $env:GITHUB_REF -replace 'refs/tags/', ''
-        }
-        
-        Write-Host "Testing release with tag: $TAG"
-        Write-Host "Download URL: https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}"
-        
-        # Wait a bit for release to be fully published
-        Start-Sleep -Seconds 10
-        
-        # Download with error handling
-        try {
-          Invoke-WebRequest -Uri "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/${{ matrix.target }}" -OutFile "csc.zip" -UseBasicParsing
-          Expand-Archive -Path "csc.zip" -DestinationPath "."
-          .\csc.exe --version
-          .\csc.exe --help
-        } catch {
-          Write-Error "Failed to download or extract: $_"
-          exit 1
-        } 
-
-  # Publish to crates.io
-  publish-crates:
-    name: Publish to crates.io
-    needs: create-release
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
-      
-    - name: Check working directory status
-      run: |
-        echo "Working directory status before publish:"
-        git status --porcelain
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "Warning: Working directory has uncommitted changes"
-          git diff
-        fi
-      
-    - name: Publish to crates.io
-      run: cargo publish --allow-dirty --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-  # Update Homebrew Formula
   update-homebrew:
-    name: Update Homebrew Formula
+    name: Update Homebrew Formula  
     needs: create-release
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/') && !github.event.inputs.test_release
     
     steps:
-    - name: Checkout code
+    - name: Checkout main repository
       uses: actions/checkout@v4
-      
-    - name: Download release assets
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get release info
+      id: release_info
       run: |
-        # Get tag name
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           TAG="${{ github.event.inputs.tag }}"
         else
           TAG=${GITHUB_REF#refs/tags/}
         fi
-        
-        echo "Updating Homebrew formula for: $TAG"
-        
-        # Download macOS binaries to get SHA256
-        curl -L -o csc-macos-arm64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/csc-macos-arm64.tar.gz"
-        curl -L -o csc-macos-x64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/csc-macos-x64.tar.gz"
-        
-        # Calculate SHA256
-        ARM64_SHA=$(sha256sum csc-macos-arm64.tar.gz | cut -d' ' -f1)
-        X64_SHA=$(sha256sum csc-macos-x64.tar.gz | cut -d' ' -f1)
-        
-        echo "ARM64_SHA: $ARM64_SHA"
-        echo "X64_SHA: $X64_SHA"
-        echo "TAG: $TAG"
-        
-        # Update Homebrew formula
-        sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/csc-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/csc-macos-arm64.tar.gz|g" homebrew/cascade-cli.rb
-        sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/csc-macos-x64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/csc-macos-x64.tar.gz|g" homebrew/cascade-cli.rb
-        sed -i "s|ARM64_SHA256_PLACEHOLDER|$ARM64_SHA|g" homebrew/cascade-cli.rb
-        sed -i "s|X64_SHA256_PLACEHOLDER|$X64_SHA|g" homebrew/cascade-cli.rb
-        sed -i "s|version \"[^\"]*\"|version \"${TAG#v}\"|g" homebrew/cascade-cli.rb
-        
-        # Show the changes
-        echo "Updated Homebrew formula:"
-        cat homebrew/cascade-cli.rb
-        
-    - name: Commit and Push Homebrew Updates
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+    - name: Download release assets for checksums
       run: |
-        # Get tag name for commit message
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          TAG="${{ github.event.inputs.tag }}"
-        else
-          TAG=${GITHUB_REF#refs/tags/}
-        fi
+        TAG=${{ steps.release_info.outputs.tag }}
+        curl -L -o ca-macos-arm64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-arm64.tar.gz"
+        curl -L -o ca-macos-x64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-x64.tar.gz"
         
-        # Configure git
+        # Calculate checksums
+        ARM64_SHA=$(sha256sum ca-macos-arm64.tar.gz | cut -d' ' -f1)
+        X64_SHA=$(sha256sum ca-macos-x64.tar.gz | cut -d' ' -f1)
+        
+        echo "ARM64_SHA=$ARM64_SHA" >> $GITHUB_ENV
+        echo "X64_SHA=$X64_SHA" >> $GITHUB_ENV
+
+    - name: Update Homebrew formula
+      run: |
+        TAG=${{ steps.release_info.outputs.tag }}
+        # Update URLs and checksums
+        sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-arm64.tar.gz|g" homebrew/cascade-cli.rb
+        sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-x64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-x64.tar.gz|g" homebrew/cascade-cli.rb
+        
+        # Update version
+        sed -i "s/version \"v[^\"]*\"/version \"$TAG\"/g" homebrew/cascade-cli.rb
+        
+        # Update checksums
+        sed -i "s/sha256 \"[a-f0-9]*\" # ARM64/sha256 \"$ARM64_SHA\" # ARM64/g" homebrew/cascade-cli.rb
+        sed -i "s/sha256 \"[a-f0-9]*\" # x64/sha256 \"$X64_SHA\" # x64/g" homebrew/cascade-cli.rb
+
+    - name: Commit and push updated formula
+      run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        
-        # Check if there are any changes
-        if git diff --quiet homebrew/cascade-cli.rb; then
-          echo "No changes to Homebrew formula"
-          exit 0
-        fi
-        
-        # Commit and push changes with conflict handling
         git add homebrew/cascade-cli.rb
-        git commit -m "🍺 Update Homebrew formula to $TAG - Updated download URLs to point to $TAG release - Updated SHA256 checksums for macOS binaries - Updated version number to ${TAG#v} - Auto-generated by release workflow"
-        
-        # Pull and push with retry logic
-        git pull origin master --no-edit || git pull origin master --rebase
-        git push origin HEAD:master
+        git commit -m "Update Homebrew formula to ${{ steps.release_info.outputs.tag }}" || exit 0
+        git push

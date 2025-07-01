@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 rust-version = "1.82.0"
 
 [[bin]]
-name = "csc"
+name = "ca"
 path = "src/main.rs"
 
 [dependencies]

@@ -309,14 +309,14 @@ impl HooksManager {
                  rem Check if Cascade is initialized\n\
                  if not exist \".cascade\" (\n\
                      echo ℹ️ Cascade not initialized, skipping stack management\n\
-                     echo 💡 Run 'cc init' to start using stacked diffs\n\
+                     echo 💡 Run 'ca init' to start using stacked diffs\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Check if there's an active stack\n\
                  \"{cascade_cli}\" stack list --active >nul 2>&1\n\
                  if %ERRORLEVEL% neq 0 (\n\
                      echo ℹ️ No active stack found, commit will not be added to any stack\n\
-                     echo 💡 Use 'cc stack create ^<name^>' to create a stack for this commit\n\
+                     echo 💡 Use 'ca stack create ^<name^>' to create a stack for this commit\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Add commit to active stack\n\
@@ -325,10 +325,10 @@ impl HooksManager {
                  \"{cascade_cli}\" stack push --commit \"%COMMIT_HASH%\" --message \"%COMMIT_MSG%\"\n\
                  if %ERRORLEVEL% equ 0 (\n\
                      echo ✅ Commit added to stack successfully\n\
-                     echo 💡 Next: 'cc submit' to create PRs when ready\n\
+                     echo 💡 Next: 'ca submit' to create PRs when ready\n\
                  ) else (\n\
                      echo ⚠️ Failed to add commit to stack\n\
-                     echo 💡 You can manually add it with: cc push --commit %COMMIT_HASH%\n\
+                     echo 💡 You can manually add it with: ca push --commit %COMMIT_HASH%\n\
                  )\n"
             )
         }
@@ -346,13 +346,13 @@ impl HooksManager {
                  # Check if Cascade is initialized\n\
                  if [ ! -d \".cascade\" ]; then\n\
                      echo \"ℹ️ Cascade not initialized, skipping stack management\"\n\
-                     echo \"💡 Run 'cc init' to start using stacked diffs\"\n\
+                     echo \"💡 Run 'ca init' to start using stacked diffs\"\n\
                      exit 0\n\
                  fi\n\n\
                  # Check if there's an active stack\n\
                  if ! \"{cascade_cli}\" stack list --active > /dev/null 2>&1; then\n\
                      echo \"ℹ️ No active stack found, commit will not be added to any stack\"\n\
-                     echo \"💡 Use 'cc stack create <name>' to create a stack for this commit\"\n\
+                     echo \"💡 Use 'ca stack create <name>' to create a stack for this commit\"\n\
                      exit 0\n\
                  fi\n\n\
                  # Add commit to active stack (using specific commit targeting)\n\
@@ -360,10 +360,10 @@ impl HooksManager {
                  echo \"📝 Commit: $COMMIT_MSG\"\n\
                  if \"{cascade_cli}\" stack push --commit \"$COMMIT_HASH\" --message \"$COMMIT_MSG\"; then\n\
                      echo \"✅ Commit added to stack successfully\"\n\
-                     echo \"💡 Next: 'cc submit' to create PRs when ready\"\n\
+                     echo \"💡 Next: 'ca submit' to create PRs when ready\"\n\
                  else\n\
                      echo \"⚠️ Failed to add commit to stack\"\n\
-                     echo \"💡 You can manually add it with: cc push --commit $COMMIT_HASH\"\n\
+                     echo \"💡 You can manually add it with: ca push --commit $COMMIT_HASH\"\n\
                  fi\n"
             )
         }
@@ -383,10 +383,10 @@ impl HooksManager {
                      echo 🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity\n\
                      echo.\n\
                      echo 💡 Instead of force pushing, try these streamlined commands:\n\
-                     echo    • cc sync      - Sync with remote changes ^(handles rebasing^)\n\
-                     echo    • cc push      - Push all unpushed commits ^(new default^)\n\
-                     echo    • cc submit    - Submit all entries for review ^(new default^)\n\
-                     echo    • cc autoland  - Auto-merge when approved + builds pass\n\
+                     echo    • ca sync      - Sync with remote changes ^(handles rebasing^)\n\
+                     echo    • ca push      - Push all unpushed commits ^(new default^)\n\
+                     echo    • ca submit    - Submit all entries for review ^(new default^)\n\
+                     echo    • ca autoland  - Auto-merge when approved + builds pass\n\
                      echo.\n\
                      echo 🚨 If you really need to force push, run:\n\
                      echo    git push --force-with-lease [remote] [branch]\n\
@@ -406,9 +406,9 @@ impl HooksManager {
                  ) else (\n\
                      echo ❌ Stack validation failed\n\
                      echo 💡 Fix validation errors before pushing:\n\
-                     echo    • cc doctor       - Check overall health\n\
-                     echo    • cc status       - Check current stack status\n\
-                     echo    • cc sync         - Sync with remote and rebase if needed\n\
+                     echo    • ca doctor       - Check overall health\n\
+                     echo    • ca status       - Check current stack status\n\
+                     echo    • ca sync         - Sync with remote and rebase if needed\n\
                      exit /b 1\n\
                  )\n\n\
                  echo ✅ Pre-push validation complete\n"
@@ -428,10 +428,10 @@ impl HooksManager {
                      echo \"🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity\"\n\
                      echo \"\"\n\
                      echo \"💡 Instead of force pushing, try these streamlined commands:\"\n\
-                     echo \"   • cc sync      - Sync with remote changes (handles rebasing)\"\n\
-                     echo \"   • cc push      - Push all unpushed commits (new default)\"\n\
-                     echo \"   • cc submit    - Submit all entries for review (new default)\"\n\
-                     echo \"   • cc autoland  - Auto-merge when approved + builds pass\"\n\
+                     echo \"   • ca sync      - Sync with remote changes (handles rebasing)\"\n\
+                     echo \"   • ca push      - Push all unpushed commits (new default)\"\n\
+                     echo \"   • ca submit    - Submit all entries for review (new default)\"\n\
+                     echo \"   • ca autoland  - Auto-merge when approved + builds pass\"\n\
                      echo \"\"\n\
                      echo \"🚨 If you really need to force push, run:\"\n\
                      echo \"   git push --force-with-lease [remote] [branch]\"\n\
@@ -450,9 +450,9 @@ impl HooksManager {
                  else\n\
                      echo \"❌ Stack validation failed\"\n\
                      echo \"💡 Fix validation errors before pushing:\"\n\
-                     echo \"   • cc doctor       - Check overall health\"\n\
-                     echo \"   • cc status       - Check current stack status\"\n\
-                     echo \"   • cc sync         - Sync with remote and rebase if needed\"\n\
+                     echo \"   • ca doctor       - Check overall health\"\n\
+                     echo \"   • ca status       - Check current stack status\"\n\
+                     echo \"   • ca sync         - Sync with remote and rebase if needed\"\n\
                      exit 1\n\
                  fi\n\n\
                  echo \"✅ Pre-push validation complete\"\n"
@@ -585,7 +585,7 @@ echo "✅ Commit message validation passed"
                      echo.\n\
                      echo # Stack: %ACTIVE_STACK%\n\
                      echo # This commit will be added to the active stack automatically.\n\
-                     echo # Use 'cc stack status' to see the current stack state.\n\
+                     echo # Use 'ca stack status' to see the current stack state.\n\
                      type \"%COMMIT_MSG_FILE%\"\n\
                  ) > \"%COMMIT_MSG_FILE%.tmp\"\n\
                  move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n"
@@ -625,7 +625,7 @@ echo "✅ Commit message validation passed"
                      echo \"\n\
                  # Stack: $ACTIVE_STACK\n\
                  # This commit will be added to the active stack automatically.\n\
-                 # Use 'cc stack status' to see the current stack state.\n\
+                 # Use 'ca stack status' to see the current stack state.\n\
                  $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
                  fi\n"
             )
@@ -695,7 +695,7 @@ echo "✅ Commit message validation passed"
         match repo_type {
             RepositoryType::Bitbucket => {
                 println!("✅ Bitbucket repository detected");
-                println!("💡 Hooks will work great with 'cc submit' and 'cc autoland' for Bitbucket integration");
+                println!("💡 Hooks will work great with 'ca submit' and 'ca autoland' for Bitbucket integration");
             }
             RepositoryType::GitHub => {
                 println!("✅ GitHub repository detected");
@@ -721,7 +721,7 @@ echo "✅ Commit message validation passed"
         if !config_path.exists() {
             return Err(CascadeError::config(
                 "🚫 Cascade not initialized!\n\n\
-                Please run 'cc init' or 'cc setup' first to configure Cascade CLI.\n\
+                Please run 'ca init' or 'ca setup' first to configure Cascade CLI.\n\
                 Hooks require proper Bitbucket Server configuration.\n\n\
                 Use --force to install anyway (not recommended)."
                     .to_string(),
@@ -737,7 +737,7 @@ echo "✅ Commit message validation passed"
             return Err(CascadeError::config(
                 "🚫 Invalid Bitbucket configuration!\n\n\
                 Your Bitbucket URL appears to be a placeholder.\n\
-                Please run 'cc setup' to configure a real Bitbucket Server.\n\n\
+                Please run 'ca setup' to configure a real Bitbucket Server.\n\n\
                 Use --force to install anyway (not recommended)."
                     .to_string(),
             ));
@@ -747,7 +747,7 @@ echo "✅ Commit message validation passed"
             return Err(CascadeError::config(
                 "🚫 Incomplete Bitbucket configuration!\n\n\
                 Your project/repository settings appear to be placeholders.\n\
-                Please run 'cc setup' to complete configuration.\n\n\
+                Please run 'ca setup' to complete configuration.\n\n\
                 Use --force to install anyway (not recommended)."
                     .to_string(),
             ));
@@ -772,10 +772,10 @@ echo "✅ Commit message validation passed"
                     • Break CI/CD workflows\n\n\
                     💡 Recommended workflow:\n\
                     1. Create a feature branch: git checkout -b feature/my-feature\n\
-                    2. Install hooks: cc hooks install\n\
+                    2. Install hooks: ca hooks install\n\
                     3. Develop with stacked commits (auto-added with hooks)\n\
-                    4. Push & submit: cc push && cc submit (all by default)\n\
-                    5. Auto-land when ready: cc autoland\n\n\
+                    4. Push & submit: ca push && ca submit (all by default)\n\
+                    5. Auto-land when ready: ca autoland\n\n\
                     Use --force to install anyway (not recommended)."
                         .to_string(),
                 ));
@@ -818,9 +818,9 @@ echo "✅ Commit message validation passed"
 
         println!("\n✨ With hooks + new defaults, your workflow becomes:");
         println!("  git commit       → Auto-added to stack");
-        println!("  cc push          → Pushes all by default");
-        println!("  cc submit        → Submits all by default");
-        println!("  cc autoland      → Auto-merges when ready");
+        println!("  ca push          → Pushes all by default");
+        println!("  ca submit        → Submits all by default");
+        println!("  ca autoland      → Auto-merges when ready");
 
         use std::io::{self, Write};
         print!("\n❓ Install Cascade hooks? [Y/n]: ");

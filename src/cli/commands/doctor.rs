@@ -75,7 +75,7 @@ async fn check_cascade_initialization() -> Result<(u32, u32)> {
 
     if !is_repo_initialized(repo_path) {
         println!("  ❌ Repository not initialized for Cascade");
-        println!("     Solution: Run 'cc init' to initialize");
+        println!("     Solution: Run 'ca init' to initialize");
         return Ok((1, 0));
     }
 
@@ -86,7 +86,7 @@ async fn check_cascade_initialization() -> Result<(u32, u32)> {
 
     if !config_dir.exists() {
         println!("  ❌ Configuration directory missing");
-        println!("     Solution: Run 'cc init --force' to recreate");
+        println!("     Solution: Run 'ca init --force' to recreate");
         return Ok((1, 0));
     }
 
@@ -141,7 +141,7 @@ async fn check_configuration() -> Result<u32> {
 
     if settings.bitbucket.url.is_empty() {
         println!("  ⚠️  Bitbucket server URL not configured");
-        println!("     Solution: cc config set bitbucket.url https://your-bitbucket-server.com");
+        println!("     Solution: ca config set bitbucket.url https://your-bitbucket-server.com");
         warnings += 1;
     } else {
         println!("  ✅ Bitbucket server URL configured");
@@ -149,7 +149,7 @@ async fn check_configuration() -> Result<u32> {
 
     if settings.bitbucket.project.is_empty() {
         println!("  ⚠️  Bitbucket project key not configured");
-        println!("     Solution: cc config set bitbucket.project YOUR_PROJECT_KEY");
+        println!("     Solution: ca config set bitbucket.project YOUR_PROJECT_KEY");
         warnings += 1;
     } else {
         println!("  ✅ Bitbucket project key configured");
@@ -157,7 +157,7 @@ async fn check_configuration() -> Result<u32> {
 
     if settings.bitbucket.repo.is_empty() {
         println!("  ⚠️  Bitbucket repository slug not configured");
-        println!("     Solution: cc config set bitbucket.repo your-repo-name");
+        println!("     Solution: ca config set bitbucket.repo your-repo-name");
         warnings += 1;
     } else {
         println!("  ✅ Bitbucket repository slug configured");
@@ -170,7 +170,7 @@ async fn check_configuration() -> Result<u32> {
         .is_none_or(|s| s.is_empty())
     {
         println!("  ⚠️  Bitbucket authentication token not configured");
-        println!("     Solution: cc config set bitbucket.token your-personal-access-token");
+        println!("     Solution: ca config set bitbucket.token your-personal-access-token");
         warnings += 1;
     } else {
         println!("  ✅ Bitbucket authentication token configured");
@@ -246,9 +246,9 @@ fn print_summary(issues: u32, warnings: u32) {
     if issues == 0 && warnings == 0 {
         println!("🎉 All checks passed! Your repository is ready for Cascade.");
         println!("\n💡 Next steps:");
-        println!("  1. Create your first stack: cc create \"Add new feature\"");
-        println!("  2. Submit for review: cc submit");
-        println!("  3. View help: cc --help");
+        println!("  1. Create your first stack: ca create \"Add new feature\"");
+        println!("  2. Submit for review: ca submit");
+        println!("  3. View help: ca --help");
     } else if issues == 0 {
         println!(
             "⚠️  {} warning{} found, but no critical issues.",

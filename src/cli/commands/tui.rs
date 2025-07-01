@@ -428,7 +428,7 @@ impl TuiApp {
         if let Some(stack) = self.stacks.get(self.selected_stack) {
             if stack.entries.is_empty() {
                 let empty = Paragraph::new(
-                    "No commits in this stack.\n\nUse 'cc stack push' to add commits.",
+                    "No commits in this stack.\n\nUse 'ca stack push' to add commits.",
                 )
                 .block(
                     Block::default()

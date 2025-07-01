@@ -49,7 +49,7 @@ git push origin master
 ```bash
 brew tap JAManfredi/cascade-cli
 brew install cascade-cli
-csc --version
+ca --version
 ```
 
 ## Alternative: Use Git directly from cascade-cli directory

@@ -15,7 +15,7 @@ pub async fn run(action: ConfigAction) -> Result<()> {
     // Check if repository is initialized
     if !is_repo_initialized(&repo_root) {
         return Err(CascadeError::not_initialized(
-            "Repository is not initialized for Cascade. Run 'cc init' first.",
+            "Repository is not initialized for Cascade. Run 'ca init' first.",
         ));
     }
 
@@ -46,8 +46,8 @@ async fn set_config_value(config_file: &std::path::Path, key: &str, value: &str)
         }
         "bitbucket.url" => {
             println!("💡 Next: Set your project and repository:");
-            println!("   cc config set bitbucket.project YOUR_PROJECT_KEY");
-            println!("   cc config set bitbucket.repo your-repo-name");
+            println!("   ca config set bitbucket.project YOUR_PROJECT_KEY");
+            println!("   ca config set bitbucket.repo your-repo-name");
         }
         _ => {}
     }
