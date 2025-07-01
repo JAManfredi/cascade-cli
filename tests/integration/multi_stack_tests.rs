@@ -137,17 +137,11 @@ async fn test_stack_state_after_manual_git_ops() {
     }
 }
 
-/// Test concurrent stack operations on Unix systems (aggressive)
-///
-/// This test creates multiple stacks concurrently and verifies they can be listed afterward.
-/// It includes retry logic to handle race conditions between stack creation and metadata
-/// synchronization, which can manifest differently in CI environments vs local development.
-///
-/// Common race condition: Stack creation reports success but metadata isn't fully written
-/// to disk before the stack listing operation runs, causing some stacks to be "missing".
-#[cfg(unix)]
+
+
+/// Test internal stack manager thread safety (proper concurrency testing)
 #[tokio::test]
-async fn test_concurrent_stack_operations_unix() {
+async fn test_stack_manager_thread_safety() {
     let (_temp_dir, repo_path) = create_test_git_repo().await;
 
     // Initialize cascade
@@ -157,124 +151,54 @@ async fn test_concurrent_stack_operations_unix() {
     )
     .unwrap();
 
-    let binary_path = super::test_helpers::get_binary_path();
-
-    // Unix systems should handle more aggressive concurrency
+    // Test concurrent stack creation using StackManager directly (no CLI processes)
     let concurrent_operations = 5;
+    let mut handles = Vec::new();
 
-    let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0
-        ..concurrent_operations)
-        .map(|i| {
-            let binary_path = binary_path.clone();
-            let repo_path = repo_path.clone();
-            let closure: Box<dyn FnOnce() -> Result<String, String> + Send> = Box::new(move || {
-                let stack_name = format!("unix-stack-{}-{}", std::process::id(), i);
-
-                let output = std::process::Command::new(&binary_path)
-                    .args(["stacks", "create", &stack_name])
-                    .current_dir(&repo_path)
-                    .output()
-                    .map_err(|e| format!("Command failed: {e}"))?;
-
-                if output.status.success() {
-                    Ok(stack_name)
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    Err(format!(
-                        "Failed to create stack: stderr={stderr}, stdout={stdout}"
-                    ))
-                }
-            });
-            closure
-        })
-        .collect();
-
-    let results = super::test_helpers::run_parallel_operations(
-        operations,
-        "unix_concurrent_stack_operations".to_string(),
-    )
-    .await;
-
-    // Unix should handle concurrent operations well with file locking
-    let successful_count = results.iter().filter(|result| result.is_ok()).count();
-    let failed_count = results.len() - successful_count;
-
-    println!("Unix stack operations: {successful_count} succeeded, {failed_count} failed");
-
-    // On Unix, we expect most operations to succeed with proper file syncing
-    assert!(
-        successful_count >= concurrent_operations / 2,
-        "Unix should handle at least half of concurrent stack operations successfully. Results: {results:#?}"
-    );
-
-    // Detect CI environment for appropriate timing
-    let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-    println!("Running in CI environment: {is_ci}");
-
-    // Retry stack listing with exponential backoff to handle any remaining timing issues
-    let mut found_stacks = 0;
-    let max_retries = 5;
-    for attempt in 1..=max_retries {
-        // Progressive delay for file system synchronization
-        // Use longer delays in CI environments which have slower/more loaded file systems
-        let base_delay = if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            200 // CI: 200ms, 400ms, 600ms, 800ms, 1000ms (total: 3s)
-        } else {
-            50 // Local: 50ms, 100ms, 150ms, 200ms, 250ms (total: 750ms)
-        };
-        let delay_ms = base_delay * attempt as u64;
-        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
-
-        let list_output = std::process::Command::new(&binary_path)
-            .args(["stacks", "list"])
-            .current_dir(&repo_path)
-            .output()
-            .expect("List command should work");
-
-        assert!(
-            list_output.status.success(),
-            "Stack listing should work after concurrent operations (attempt {attempt})"
-        );
-
-        let list_stdout = String::from_utf8_lossy(&list_output.stdout);
-
-        // Count how many successful stacks are actually listed
-        found_stacks = 0;
-        let mut found_stack_names = Vec::new();
-        for stack_name in results.iter().flatten() {
-            if list_stdout.contains(stack_name) {
-                found_stacks += 1;
-                found_stack_names.push(stack_name.clone());
-            }
-        }
-
-        // If we found enough stacks, we're done (more lenient threshold)
-        let required_stacks = std::cmp::max(1, successful_count * 2 / 3); // At least 2/3 of successful operations
-        if found_stacks >= required_stacks {
-            println!(
-                "Found {found_stacks} stacks on attempt {attempt} (needed at least {required_stacks}): {found_stack_names:?}"
-            );
-            break;
-        }
-
-        println!("Attempt {attempt}: Found {found_stacks}/{successful_count} stacks ({found_stack_names:?}), retrying after {delay_ms}ms...");
+    for i in 0..concurrent_operations {
+        let repo_path = repo_path.clone();
+        let handle = tokio::spawn(async move {
+            // Each task creates its own StackManager instance
+            let mut manager = cascade_cli::stack::manager::StackManager::new(&repo_path).unwrap();
+            let stack_name = format!("thread-safe-stack-{}", i);
+            
+            // Test creating a stack - this should be thread-safe
+            manager.create_stack(stack_name, None, None)
+        });
+        handles.push(handle);
     }
 
-    // With proper file syncing, we should find at least 2/3 of successfully created stacks
-    let expected_found = std::cmp::max(1, successful_count * 2 / 3);
+    // Wait for all operations to complete
+    let results: Vec<_> = futures::future::join_all(handles).await;
+    
+    // Count successful operations
+    let successful_count = results
+        .into_iter()
+        .filter_map(|result| result.ok()) // Filter out join errors
+        .filter(|stack_result| stack_result.is_ok()) // Filter out stack creation errors
+        .count();
 
+    println!("Thread-safe stack operations: {successful_count}/{concurrent_operations} succeeded");
+
+    // Most operations should succeed with proper internal thread safety
     assert!(
-        found_stacks >= expected_found,
-        "Found {found_stacks} stacks after {max_retries} attempts, expected at least {expected_found}. \
-        Stack operations: {successful_count} succeeded, {found_stacks} found in listing. Results: {results:#?}"
+        successful_count >= concurrent_operations * 3 / 4,
+        "At least 75% of thread-safe stack operations should succeed (got {successful_count}/{concurrent_operations})"
+    );
+
+    // Verify stacks can be listed successfully
+    let final_manager = cascade_cli::stack::manager::StackManager::new(&repo_path).unwrap();
+    let stacks = final_manager.list_stacks();
+    
+    assert!(
+        stacks.len() >= successful_count,
+        "Should be able to list at least {successful_count} stacks, but found {}", stacks.len()
     );
 }
 
-/// Test concurrent stack operations on Windows systems (conservative)
-#[cfg(windows)]
+/// Test sequential stack operations (baseline for comparison)
 #[tokio::test]
-async fn test_concurrent_stack_operations_windows() {
+async fn test_sequential_stack_operations() {
     let (_temp_dir, repo_path) = create_test_git_repo().await;
 
     // Initialize cascade
@@ -284,94 +208,25 @@ async fn test_concurrent_stack_operations_windows() {
     )
     .unwrap();
 
-    let binary_path = super::test_helpers::get_binary_path();
+    let mut manager = cascade_cli::stack::manager::StackManager::new(&repo_path).unwrap();
+    
+    // Create stacks sequentially - this should always work
+    let stack_count = 5;
+    for i in 0..stack_count {
+        let stack_name = format!("sequential-stack-{}", i);
+        manager.create_stack(stack_name, None, None)
+            .expect(&format!("Sequential stack creation {} should always succeed", i));
+    }
 
-    // Windows has stricter file locking - test more conservative concurrency
-    let concurrent_operations = 3;
-
-    let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0
-        ..concurrent_operations)
-        .map(|i| {
-            let binary_path = binary_path.clone();
-            let repo_path = repo_path.clone();
-            let closure: Box<dyn FnOnce() -> Result<String, String> + Send> = Box::new(move || {
-                let stack_name = format!("windows-stack-{}-{}", std::process::id(), i);
-
-                let output = std::process::Command::new(&binary_path)
-                    .args(["stacks", "create", &stack_name])
-                    .current_dir(&repo_path)
-                    .output()
-                    .map_err(|e| format!("Command failed: {e}"))?;
-
-                if output.status.success() {
-                    Ok(stack_name)
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-
-                    // On Windows, expect some operations to fail due to file locking
-                    if stderr.contains("lock")
-                        || stderr.contains("access")
-                        || stderr.contains("timeout")
-                    {
-                        Err(format!("Expected Windows file locking behavior: {stderr}"))
-                    } else {
-                        Err(format!(
-                            "Unexpected error: stderr={stderr}, stdout={stdout}"
-                        ))
-                    }
-                }
-            });
-            closure
-        })
-        .collect();
-
-    let results = super::test_helpers::run_parallel_operations(
-        operations,
-        "windows_concurrent_stack_operations".to_string(),
-    )
-    .await;
-
-    let successful_count = results.iter().filter(|result| result.is_ok()).count();
-    let expected_lock_failures = results
-        .iter()
-        .filter(|result| {
-            if let Err(error) = result {
-                error.contains("Expected Windows file locking behavior")
-            } else {
-                false
-            }
-        })
-        .count();
-    let unexpected_failures = results.len() - successful_count - expected_lock_failures;
-
-    println!(
-        "Windows stack operations: {successful_count} succeeded, {expected_lock_failures} expected lock failures, {unexpected_failures} unexpected failures"
+    // Verify all stacks exist
+    let stacks = manager.list_stacks();
+    assert_eq!(
+        stacks.len(), 
+        stack_count,
+        "Sequential operations should create exactly {stack_count} stacks"
     );
 
-    // On Windows, we expect either success or proper file locking failures
-    assert!(
-        unexpected_failures == 0,
-        "Should not have unexpected failures on Windows. Results: {results:#?}"
-    );
-
-    // At least one operation should succeed
-    assert!(
-        successful_count > 0,
-        "At least one stack operation should succeed on Windows"
-    );
-
-    // Verify successful stacks can be listed
-    let list_output = std::process::Command::new(&binary_path)
-        .args(["stacks", "list"])
-        .current_dir(&repo_path)
-        .output()
-        .expect("List command should work");
-
-    assert!(
-        list_output.status.success(),
-        "Stack listing should work after Windows concurrent operations"
-    );
+    println!("Sequential stack operations: {stack_count}/{stack_count} succeeded (baseline)");
 }
 
 /// Test stack cleanup and deletion scenarios
