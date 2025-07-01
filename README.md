@@ -13,26 +13,26 @@ Cascade CLI improves Git workflows by enabling **stacked diffs** for Bitbucket S
 
 ## 📋 Table of Contents
 
-- [✨ Key Features](#key-features)
-- [🌿 How Stacked Diffs Work: Branch Management](#how-stacked-diffs-work-branch-management)
-- [🌟 Why Stacked Diffs?](#why-stacked-diffs)
-- [🚀 Quick Start](#quick-start)
+- [✨ Key Features](#-key-features)
+- [🌿 How Stacked Diffs Work: Branch Management](#-how-stacked-diffs-work-branch-management)
+- [🌟 Why Stacked Diffs?](#-why-stacked-diffs)
+- [🚀 Quick Start](#-quick-start)
   - [1. Installation](#1-installation)
   - [2. Initialize Your Repository](#2-initialize-your-repository)
   - [3. Create Your First Stack](#3-create-your-first-stack)
   - [4. Experience the Magic](#4-experience-the-magic)
-- [🔧 Git Hooks (Recommended)](#git-hooks-recommended)
-- [⚡ Essential Commands](#essential-commands)
-- [📖 Command Reference](#command-reference)
-- [🤖 Smart Conflict Resolution](#smart-conflict-resolution)
-- [🔧 Configuration](#configuration)
-- [🎨 Advanced Features](#advanced-features)
-- [📝 Documentation](#documentation)
-- [🤝 Contributing](#contributing)
-- [🔧 Development](#development)
-- [🏗️ Architecture](#architecture)
-- [🧪 Testing](#testing)
-- [📜 License](#license)
+- [🔧 Git Hooks (Recommended)](#-git-hooks-recommended)
+- [⚡ Essential Commands](#-essential-commands)
+- [📖 Command Reference](#-command-reference)
+- [🤖 Smart Conflict Resolution](#-smart-conflict-resolution)
+- [🔧 Configuration](#-configuration)
+- [🎨 Advanced Features](#-advanced-features)
+- [📝 Documentation](#-documentation)
+- [🤝 Contributing](#-contributing)
+- [🔧 Development](#-development)
+- [🏗️ Architecture](#️-architecture)
+- [🧪 Testing](#-testing)
+- [📜 License](#-license)
 
 ## ✨ **Key Features**
 
@@ -76,14 +76,14 @@ git commit -m "Add password validation logic"
 git commit -m "Add comprehensive auth tests"
 
 # Push to stack - Cascade CLI creates separate branches automatically:
-ca stacks push  # → Creates: add-user-authentication-endpoints
-ca stacks push  # → Creates: add-password-validation-logic  
-ca stacks push  # → Creates: add-comprehensive-auth-tests
+ca push  # → Creates: add-user-authentication-endpoints
+ca push  # → Creates: add-password-validation-logic  
+ca push  # → Creates: add-comprehensive-auth-tests
 
 # Submit creates individual PRs to main:
-ca stacks submit  # PR #101: add-user-authentication-endpoints → main
-ca stacks submit  # PR #102: add-password-validation-logic → main (depends on #101)
-ca stacks submit  # PR #103: add-comprehensive-auth-tests → main (depends on #102)
+ca submit  # PR #101: add-user-authentication-endpoints → main
+ca submit  # PR #102: add-password-validation-logic → main (depends on #101)
+ca submit  # PR #103: add-comprehensive-auth-tests → main (depends on #102)
 ```
 
 ### **Two Workflow Options:**
@@ -214,31 +214,31 @@ git add . && git commit -m "WIP: fix validation bugs"
 git add . && git commit -m "Final: complete auth with tests"
 
 # SQUASH + PUSH - Combine incremental commits into clean commit!
-ca stacks push --squash 4  # Squashes last 4 commits into 1
+ca push --squash 4  # Squashes last 4 commits into 1
 
 # OR: Make some commits normally, then squash later ones
 git commit -m "Add core authentication logic"
-ca stacks push  # Push first clean commit
+ca push  # Push first clean commit
 
 git commit -m "WIP: start tests"
 git commit -m "WIP: more tests"  
 git commit -m "Final: comprehensive test suite"
 
 # SQUASH UNPUSHED - Only squash the last 3 commits
-ca stacks push --squash 3  # Squashes and pushes as second stack entry
+ca push --squash 3  # Squashes and pushes as second stack entry
 
 # BATCH SUBMIT - Submit all unsubmitted entries as separate PRs!
-ca stacks submit
+ca submit
 
 # Alternative options (for granular control):
-ca stacks push                               # Push all unpushed commits separately
-ca stacks push --since HEAD~3                # Push commits since reference
-ca stacks push --commits hash1,hash2,hash3   # Push specific commits
-ca stacks push --squash 4                    # Squash last 4 commits into 1 clean commit
-ca stacks push --squash-since HEAD~5         # Squash all commits since reference
-ca stacks submit                             # Submit all unsubmitted entries
-ca stacks submit --range 1-3                 # Submit entries 1 through 3
-ca stacks submit --range 2,4,6               # Submit specific entries
+ca push                               # Push all unpushed commits separately
+ca push --since HEAD~3                # Push commits since reference
+ca push --commits hash1,hash2,hash3   # Push specific commits
+ca push --squash 4                    # Squash last 4 commits into 1 clean commit
+ca push --squash-since HEAD~5         # Squash all commits since reference
+ca submit                             # Submit all unsubmitted entries
+ca submit --range 1-3                 # Submit entries 1 through 3
+ca submit --range 2,4,6               # Submit specific entries
 ```
 
 ## 🔧 **Git Hooks (Recommended)**
@@ -476,23 +476,23 @@ ca config set conflicts.backup_on_resolve true
 # Stack Management (Multiple Stacks)
 ca stacks create <name> --base <branch>  # Create new stack
 ca stacks list                          # List all stacks  
-ca stacks switch <name>                 # Switch active stack
-ca stacks push                          # Add commits to current stack
-ca stacks submit                        # Submit PRs for current stack
+ca switch <name>                        # Switch active stack
+ca push                                 # Add commits to current stack
+ca submit                               # Submit PRs for current stack
 
 # Current Stack Operations (Shortcuts)
 ca stack                                # Show current stack details
-ca push                                 # Shortcut for 'stacks push'
+ca push                                 # Push commits to stack
 ca land                                 # Merge approved PRs
 ca autoland                             # Auto-merge all ready PRs
 ca sync                                 # Sync with remote repository
 ca rebase                               # Rebase stack on updated base
 
-# Branch Management & Safety (Now with shortcuts!)
-ca deactivate                           # Turn off stack mode (shortcut)
-ca switch <name>                        # Switch to different stack (shortcut)
+# Branch Management & Safety
+ca deactivate                           # Turn off stack mode
+ca switch <name>                        # Switch to different stack
 
-# Or use full commands:
+# Or use full commands when needed:
 ca stacks deactivate                    # Turn off stack mode (use normal Git workflow)
 ca stacks switch <name>                 # Switch to different stack
 
@@ -526,52 +526,52 @@ ca stacks list --active                       # Show only active stack
 ca stacks list --format <format>              # Custom output format
 
 # Switch and view stacks
-ca stacks switch <name>                       # Activate stack
+ca switch <name>                              # Activate stack
 ca stack                                      # Show current stack details
 ca stacks delete <name>                       # Remove stack
 ca stacks delete <name> --force               # Force deletion without confirmation
-ca stacks validate                            # Validate active stack
-ca stacks validate <name>                     # Validate specific stack
+ca validate                                   # Validate active stack
+ca validate <name>                            # Validate specific stack
 ```
 
 ### **Adding Commits to Stack**
 ```bash
 # Basic push operations
-ca stacks push                               # Add current commit (HEAD) to stack
-ca stacks push --branch <name>               # Custom branch name for this commit
-ca stacks push -b <name>                     # Short form
-ca stacks push --message <msg>               # Custom commit message
-ca stacks push -m <msg>                      # Short form  
-ca stacks push --commit <hash>               # Push specific commit instead of HEAD
+ca push                                      # Add current commit (HEAD) to stack
+ca push --branch <name>                      # Custom branch name for this commit
+ca push -b <name>                            # Short form
+ca push --message <msg>                      # Custom commit message
+ca push -m <msg>                             # Short form  
+ca push --commit <hash>                      # Push specific commit instead of HEAD
 
 # Batch operations
-ca stacks push                               # Push all unpushed commits separately
-ca stacks push --since HEAD~3                # Push commits since reference
-ca stacks push --commits hash1,hash2,hash3   # Push specific commits
+ca push                                      # Push all unpushed commits separately
+ca push --since HEAD~3                       # Push commits since reference
+ca push --commits hash1,hash2,hash3          # Push specific commits
 
 # Smart squash operations
-ca stacks push --squash 4                    # Squash last 4 commits into 1 clean commit
-ca stacks push --squash-since HEAD~5         # Squash all commits since reference
+ca push --squash 4                           # Squash last 4 commits into 1 clean commit
+ca push --squash-since HEAD~5                # Squash all commits since reference
 
 # Remove from stack
-ca stacks pop                                # Remove top entry from stack
-ca stacks pop --keep-branch                  # Keep the branch when popping
+ca pop                                       # Remove top entry from stack
+ca pop --keep-branch                         # Keep the branch when popping
 ```
 
 ### **Pull Request Workflow**
 ```bash
 # Submit for review
-ca stacks submit                             # Submit top entry (creates PR)
-ca stacks submit 2                           # Submit specific entry number
-ca stacks submit --title <title>             # Custom PR title
-ca stacks submit -t <title>                  # Short form
-ca stacks submit --description <desc>        # Custom PR description
-ca stacks submit -d <desc>                   # Short form
+ca submit                                    # Submit top entry (creates PR)
+ca submit 2                                  # Submit specific entry number
+ca submit --title <title>                    # Custom PR title
+ca submit -t <title>                         # Short form
+ca submit --description <desc>               # Custom PR description
+ca submit -d <desc>                          # Short form
 
 # Batch submission
-ca stacks submit                             # Submit all unsubmitted entries
-ca stacks submit --range 1-3                 # Submit entries 1 through 3
-ca stacks submit --range 2,4,6               # Submit specific entries
+ca submit                                    # Submit all unsubmitted entries
+ca submit --range 1-3                        # Submit entries 1 through 3
+ca submit --range 2,4,6                      # Submit specific entries
 
 # Status and management
 ca stacks status                             # Show active stack PR status
@@ -585,17 +585,17 @@ ca stacks prs -v                             # Short form
 ### **Sync and Rebase Operations**
 ```bash
 # Sync with remote
-ca stacks sync                               # Sync active stack with remote
-ca stacks sync --force                       # Force sync even with conflicts
+ca sync                                      # Sync active stack with remote
+ca sync --force                              # Force sync even with conflicts
 
 # Rebase operations
-ca stacks rebase                             # Rebase stack on latest base branch
-ca stacks rebase --interactive               # Interactive rebase mode
-ca stacks rebase -i                          # Short form
-ca stacks rebase --onto <branch>             # Rebase onto different target branch
-ca stacks rebase --strategy cherry-pick      # Use specific rebase strategy
-ca stacks rebase --strategy three-way-merge  # Alternative strategies available
-ca stacks rebase --no-auto-resolve           # Disable smart conflict resolution
+ca rebase                                    # Rebase stack on latest base branch
+ca rebase --interactive                      # Interactive rebase mode
+ca rebase -i                                 # Short form
+ca rebase --onto <branch>                    # Rebase onto different target branch
+ca rebase --strategy cherry-pick             # Use specific rebase strategy
+ca rebase --strategy three-way-merge         # Alternative strategies available
+ca rebase --no-auto-resolve                  # Disable smart conflict resolution
 
 # Rebase conflict resolution
 ca stacks continue-rebase                    # Continue after resolving conflicts

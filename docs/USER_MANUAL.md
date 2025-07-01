@@ -155,11 +155,11 @@ ca stack [NAME]
 - Pull request status and links
 - Dependency information
 
-#### **`ca stacks switch`** - Activate Stack
+#### **`ca switch`** - Activate Stack
 Switch to a different stack, making it the active stack.
 
 ```bash
-ca stacks switch <NAME>
+ca switch <NAME>
 
 # Arguments:
 <NAME>                   # Stack name to activate
@@ -167,8 +167,8 @@ ca stacks switch <NAME>
 
 **Examples:**
 ```bash
-ca stacks switch feature-auth
-ca stacks switch fix-bugs
+ca switch feature-auth
+ca switch fix-bugs
 ```
 
 #### **`ca stacks delete`** - Remove Stack
@@ -196,11 +196,11 @@ ca stacks delete feature-x --keep-branches
 
 ### **📤 Stack Operations**
 
-#### **`ca stacks push`** - Add Commits to Stack
+#### **`ca push`** - Add Commits to Stack
 Add commits to the active stack. By default, pushes all unpushed commits.
 
 ```bash
-ca stacks push [OPTIONS]
+ca push [OPTIONS]
 
 # Options:
 --branch <NAME>         # Custom branch name for this commit
@@ -212,7 +212,7 @@ ca stacks push [OPTIONS]
 --squash-since <REF>    # 🎉 Squash all commits since reference
 ```
 
-**Default Behavior:** When no specific targeting options are provided, `ca stacks push` pushes **all unpushed commits** since the last stack push.
+**Default Behavior:** When no specific targeting options are provided, `ca push` pushes **all unpushed commits** since the last stack push.
 
 **Squash Workflow Examples:**
 ```bash
@@ -290,20 +290,20 @@ ca stacks pop [OPTIONS]
 **Examples:**
 ```bash
 # Remove top entry
-ca stacks pop
+ca pop
 
 # Keep the branch
-ca stacks pop --keep-branch
+ca pop --keep-branch
 
 # Force removal
-ca stacks pop --force
+ca pop --force
 ```
 
-#### **`ca stacks submit`** - Create Pull Requests
+#### **`ca submit`** - Create Pull Requests
 Submit stack entries as pull requests. By default, submits all unsubmitted entries.
 
 ```bash
-ca stacks submit [ENTRY] [OPTIONS]
+ca submit [ENTRY] [OPTIONS]
 
 # Arguments:
 [ENTRY]                 # Entry index (defaults to all unsubmitted entries)
@@ -316,37 +316,37 @@ ca stacks submit [ENTRY] [OPTIONS]
 --reviewers <USERS>     # Comma-separated reviewer list
 ```
 
-**Default Behavior:** When no specific entry is provided, `ca stacks submit` submits **all unsubmitted entries** as separate pull requests.
+**Default Behavior:** When no specific entry is provided, `ca submit` submits **all unsubmitted entries** as separate pull requests.
 
 **Examples:**
 ```bash
 # Submit all unsubmitted entries (default behavior)
-ca stacks submit
+ca submit
 
 # Submit specific entry
-ca stacks submit 2
+ca submit 2
 
 # Submit range of entries
-ca stacks submit --range 1-3
+ca submit --range 1-3
 
 # Submit specific entries 
-ca stacks submit --range 2,4,6
+ca submit --range 2,4,6
 
 # Submit with custom details
-ca stacks submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
+ca submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
 
 # Create draft PRs
-ca stacks submit --draft
+ca submit --draft
 
 # Add reviewers
-ca stacks submit --reviewers "alice,bob,charlie"
+ca submit --reviewers "alice,bob,charlie"
 ```
 
-#### **`ca stacks sync`** - Synchronize with Remote
+#### **`ca sync`** - Synchronize with Remote
 Update stack with latest changes from base branch and dependencies.
 
 ```bash
-ca stacks sync [OPTIONS]
+ca sync [OPTIONS]
 
 # Options:
 --force                 # Force sync even with conflicts
@@ -356,20 +356,20 @@ ca stacks sync [OPTIONS]
 **Examples:**
 ```bash
 # Standard sync
-ca stacks sync
+ca sync
 
 # Force sync with conflicts
-ca stacks sync --force
+ca sync --force
 
 # Use specific strategy
-ca stacks sync --strategy rebase
+ca sync --strategy rebase
 ```
 
-#### **`ca stacks rebase`** - Rebase Stack
+#### **`ca rebase`** - Rebase Stack
 Rebase all stack entries on latest base branch using smart force push strategy.
 
 ```bash
-ca stacks rebase [OPTIONS]
+ca rebase [OPTIONS]
 
 # Options:
 --interactive          # Interactive rebase mode
@@ -683,23 +683,23 @@ git pull origin develop
 ```bash
 # First increment: basic profile model
 git add . && git commit -m "Add user profile model"
-ca stacks push
+ca push
 
 # Second increment: profile endpoints
 git add . && git commit -m "Add profile CRUD endpoints"
-ca stacks push
+ca push
 
 # Third increment: profile validation
 git add . && git commit -m "Add profile data validation"
-ca stacks push
+ca push
 ```
 
 #### **3. Submit for Review**
 ```bash
 # Submit each increment as separate PRs
-ca stacks submit 1  # Submit profile model
-ca stacks submit 2  # Submit endpoints (depends on model)
-ca stacks submit 3  # Submit validation (depends on endpoints)
+ca submit 1  # Submit profile model
+ca submit 2  # Submit endpoints (depends on model)
+ca submit 3  # Submit validation (depends on endpoints)
 ```
 
 #### **4. Handle Review Feedback**
@@ -708,18 +708,18 @@ ca stacks submit 3  # Submit validation (depends on endpoints)
 git add . && git commit -m "Address review feedback: improve validation"
 
 # Update existing PR
-ca stacks submit 3 --title "Updated: Add profile data validation"
+ca submit 3 --title "Updated: Add profile data validation"
 
 # Or sync if dependencies changed
-ca stacks sync
+ca sync
 ```
 
 #### **5. Merge and Clean Up**
 ```bash
 # After PRs are approved and merged
-ca stacks pop  # Remove merged entries
-ca stacks pop
-ca stacks pop
+ca pop  # Remove merged entries
+ca pop
+ca pop
 
 # Or delete completed stack
 ca stacks delete feature-user-profiles

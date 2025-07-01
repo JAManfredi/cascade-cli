@@ -121,7 +121,7 @@ git add src/models/user.py
 git commit -m "Add User model with password verification"
 
 # Add to stack
-ca stacks push
+ca push
 
 # Create database schema
 cat << 'EOF' > migrations/001_create_users.sql
@@ -138,11 +138,11 @@ git add migrations/001_create_users.sql
 git commit -m "Add user table migration"
 
 # Add to stack
-ca stacks push
+ca push
 
 # Submit database layer for review
-ca stacks submit 1 --title "Add User model" --description "Core user model with password verification"
-ca stacks submit 2 --title "Add user database schema" --description "Migration to create users table"
+ca submit 1 --title "Add User model" --description "Core user model with password verification"
+ca submit 2 --title "Add user database schema" --description "Migration to create users table"
 
 # Check our progress
 ca stack
@@ -304,8 +304,8 @@ git commit -m "Add API documentation for authentication endpoints"
 ca stacks push
 
 # Submit API layer
-ca stacks submit 5 --title "Add authentication API endpoints" --description "REST API for login, register, and profile"
-ca stacks submit 6 --title "Add API documentation" --description "Complete documentation for auth endpoints"
+ca submit 5 --title "Add authentication API endpoints" --description "REST API for login, register, and profile"
+ca submit 6 --title "Add API documentation" --description "Complete documentation for auth endpoints"
 ```
 
 #### **Phase 5: Review Your Work**
@@ -350,10 +350,10 @@ git add src/models/user.py
 git commit -m "Address review feedback: improve password validation"
 
 # Update the existing PR
-ca stacks submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
+ca submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
 
 # Sync dependent PRs if needed
-ca stacks sync
+ca sync
 ```
 
 ### **Scenario 2: Dependency Changes**
@@ -366,16 +366,16 @@ git checkout main
 git pull origin main
 
 # Sync your stack with new base
-ca stacks sync
+ca sync
 
 # Resolve any conflicts
 # Git will guide you through conflict resolution
 
 # Continue after resolving conflicts
-ca stacks rebase --continue
+ca rebase --continue
 
 # Update affected PRs
-ca stacks submit 2 --title "Add user database schema (updated for new DB version)"
+ca submit 2 --title "Add user database schema (updated for new DB version)"
 ```
 
 ### **Scenario 3: Parallel Development**
@@ -401,7 +401,7 @@ When you run `ca stacks rebase`, Cascade CLI uses a **smart force push strategy*
 
 ```bash
 # When you rebase...
-ca stacks rebase
+ca rebase
 
 # What happens behind the scenes:
 # 1. Creates temporary branches: add-auth-v2, add-tests-v2  

@@ -309,7 +309,7 @@ git add . && git commit -m "WIP: add tests"
 git add . && git commit -m "Final: complete auth with docs"
 
 # Squash all WIP commits into clean final commit
-ca stacks push --squash  # Auto-detects unpushed commits to squash
+ca push --squash  # Auto-detects unpushed commits to squash
 
 # Submit and auto-land when ready
 ca submit            # Create PR
@@ -334,7 +334,7 @@ git commit -m "Fix test bug"
 git commit -m "Documentation"
 
 # Intelligent squashing into logical commits  
-ca stacks push --squash 3  # Squash last 3 commits
+ca push --squash 3  # Squash last 3 commits
 
 # Submit as separate PRs for focused review
 ca submit          # 3 PRs: model → validation → tests
@@ -532,7 +532,7 @@ ca autoland --wait-for-builds
 # ✅ Sends notifications to team about urgent merge
 
 # Switch back to feature work seamlessly
-ca stacks switch feature-oauth
+ca switch feature-oauth
 # ✅ Restored exact working state
 # ✅ No git stash/unstash needed
 
