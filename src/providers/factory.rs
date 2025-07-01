@@ -1,6 +1,6 @@
-use super::{RepositoryProvider, DynProvider, ProviderType};
+use super::{DynProvider, ProviderType, RepositoryProvider};
 use crate::config::CascadeConfig;
-use crate::errors::{Result, CascadeError};
+use crate::errors::{CascadeError, Result};
 
 /// Factory for creating repository providers
 pub struct ProviderFactory;
@@ -9,12 +9,14 @@ impl ProviderFactory {
     /// Create a provider from the given configuration
     pub fn create_provider(config: &CascadeConfig) -> Result<DynProvider> {
         let provider_type = Self::detect_provider_type(config)?;
-        
+
         match provider_type {
             ProviderType::Bitbucket => {
-                let bitbucket_config = config.bitbucket.as_ref()
+                let bitbucket_config = config
+                    .bitbucket
+                    .as_ref()
                     .ok_or_else(|| CascadeError::config("Bitbucket configuration not found"))?;
-                
+
                 let provider = super::bitbucket::BitbucketProvider::new(bitbucket_config.clone())?;
                 Ok(Box::new(provider))
             }
@@ -26,12 +28,12 @@ impl ProviderFactory {
             }
         }
     }
-    
+
     /// Try to create a provider, returning None if no valid configuration is found
     pub fn try_create_provider(config: &CascadeConfig) -> Option<DynProvider> {
         Self::create_provider(config).ok()
     }
-    
+
     /// Detect the provider type from configuration
     fn detect_provider_type(config: &CascadeConfig) -> Result<ProviderType> {
         // For now, only support Bitbucket
@@ -40,16 +42,16 @@ impl ProviderFactory {
         } else {
             Err(CascadeError::config(
                 "No supported repository provider configuration found. \
-                Currently supported: Bitbucket Server"
+                Currently supported: Bitbucket Server",
             ))
         }
     }
-    
+
     /// Get list of supported provider types
     pub fn supported_providers() -> Vec<ProviderType> {
         vec![ProviderType::Bitbucket]
     }
-    
+
     /// Check if a provider type is supported
     pub fn is_provider_supported(provider_type: &ProviderType) -> bool {
         matches!(provider_type, ProviderType::Bitbucket)
@@ -70,9 +72,15 @@ mod tests {
 
     #[test]
     fn test_is_provider_supported() {
-        assert!(ProviderFactory::is_provider_supported(&ProviderType::Bitbucket));
-        assert!(!ProviderFactory::is_provider_supported(&ProviderType::GitHub));
-        assert!(!ProviderFactory::is_provider_supported(&ProviderType::GitLab));
+        assert!(ProviderFactory::is_provider_supported(
+            &ProviderType::Bitbucket
+        ));
+        assert!(!ProviderFactory::is_provider_supported(
+            &ProviderType::GitHub
+        ));
+        assert!(!ProviderFactory::is_provider_supported(
+            &ProviderType::GitLab
+        ));
     }
 
     #[test]

@@ -1,7 +1,10 @@
 use crate::config::CascadeConfig;
 use crate::errors::{CascadeError, Result};
+use crate::providers::{
+    BuildStatus, CreatePullRequestRequest, DynProvider, ProviderFactory, PullRequest,
+    PullRequestStatus,
+};
 use crate::stack::{Stack, StackEntry, StackManager};
-use crate::providers::{ProviderFactory, DynProvider, CreatePullRequestRequest, PullRequest, PullRequestStatus, BuildStatus};
 use std::collections::HashMap;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -51,7 +54,7 @@ impl EnhancedPullRequestStatus {
     /// Get display status string
     pub fn get_display_status(&self) -> String {
         let mut parts = Vec::new();
-        
+
         // PR status
         match self.pr.status {
             PullRequestStatus::Open => parts.push("Open".to_string()),
@@ -59,7 +62,7 @@ impl EnhancedPullRequestStatus {
             PullRequestStatus::Declined => parts.push("Declined".to_string()),
             PullRequestStatus::Superseded => parts.push("Superseded".to_string()),
         }
-        
+
         // Build status
         if let Some(build_status) = &self.build_status {
             match build_status {
@@ -69,7 +72,7 @@ impl EnhancedPullRequestStatus {
                 _ => parts.push("⚪ Build".to_string()),
             }
         }
-        
+
         // Mergeable status
         if let Some(mergeable) = self.mergeable {
             if mergeable {
@@ -78,19 +81,19 @@ impl EnhancedPullRequestStatus {
                 parts.push("❌ Conflicts".to_string());
             }
         }
-        
+
         parts.join(" | ")
     }
-    
+
     /// Check if PR is ready to land
     pub fn is_ready_to_land(&self) -> bool {
         self.is_ready_to_merge
     }
-    
+
     /// Get blocking reasons if PR cannot be merged
     pub fn get_blocking_reasons(&self) -> Vec<String> {
         let mut reasons = Vec::new();
-        
+
         // Check PR status
         match self.pr.status {
             PullRequestStatus::Merged => reasons.push("Already merged".to_string()),
@@ -98,7 +101,7 @@ impl EnhancedPullRequestStatus {
             PullRequestStatus::Superseded => reasons.push("PR was superseded".to_string()),
             PullRequestStatus::Open => {} // Can potentially be merged
         }
-        
+
         // Check build status
         if let Some(build_status) = &self.build_status {
             match build_status {
@@ -109,14 +112,14 @@ impl EnhancedPullRequestStatus {
                 BuildStatus::Success => {} // No blocking reason
             }
         }
-        
+
         // Check mergeable status
         if let Some(mergeable) = self.mergeable {
             if !mergeable {
                 reasons.push("Has merge conflicts".to_string());
             }
         }
-        
+
         reasons
     }
 }
@@ -125,7 +128,7 @@ impl ProviderIntegration {
     /// Create a new provider integration using the configured provider
     pub fn new(stack_manager: StackManager, config: CascadeConfig) -> Result<Self> {
         let provider = ProviderFactory::create_provider(&config)?;
-        
+
         Ok(Self {
             stack_manager,
             provider,
@@ -180,10 +183,16 @@ impl ProviderIntegration {
 
         // Ensure target branch is also pushed to remote (if it's not the base branch)
         if target_branch != stack.base_branch {
-            info!("Ensuring target branch '{}' is pushed to remote", target_branch);
+            info!(
+                "Ensuring target branch '{}' is pushed to remote",
+                target_branch
+            );
             match git_repo.push(&target_branch) {
                 Ok(_) => {
-                    info!("✅ Successfully pushed target branch '{}' to remote", target_branch);
+                    info!(
+                        "✅ Successfully pushed target branch '{}' to remote",
+                        target_branch
+                    );
                 }
                 Err(e) => {
                     warn!("Failed to push target branch '{}': {}", target_branch, e);
@@ -193,7 +202,8 @@ impl ProviderIntegration {
         }
 
         // Create pull request
-        let pr_request = self.create_pr_request(stack, entry, &target_branch, title, description, draft)?;
+        let pr_request =
+            self.create_pr_request(stack, entry, &target_branch, title, description, draft)?;
 
         let pr = match self.provider.create_pull_request(pr_request).await {
             Ok(pr) => pr,
@@ -242,28 +252,28 @@ impl ProviderIntegration {
 
             if let Some(pr_id) = &entry.pull_request_id {
                 submitted_count += 1;
-                
+
                 match self.provider.get_pull_request(pr_id).await {
                     Ok(pr) => {
                         entry_status.pr_status = Some(pr.status.clone());
                         entry_status.pr_url = Some(pr.web_url.clone());
-                        
+
                         match pr.status {
                             PullRequestStatus::Open => open_count += 1,
                             PullRequestStatus::Merged => merged_count += 1,
                             PullRequestStatus::Declined => declined_count += 1,
                             PullRequestStatus::Superseded => {} // Don't count superseded
                         }
-                        
+
                         // Create enhanced status
                         let enhanced_status = EnhancedPullRequestStatus {
                             is_ready_to_merge: pr.status == PullRequestStatus::Open,
                             mergeable: Some(true), // TODO: Get actual mergeable status
-                            build_status: None, // TODO: Get build status for commit
+                            build_status: None,    // TODO: Get build status for commit
                             pr: pr.clone(),
                         };
                         enhanced_statuses.push(enhanced_status);
-                        
+
                         pull_requests.push(pr);
                     }
                     Err(e) => {
@@ -326,8 +336,10 @@ impl ProviderIntegration {
                         info!("Branch '{}' still exists after rebase", entry.branch);
                     }
                     Ok(false) => {
-                        warn!("Branch '{}' no longer exists after rebase, PR {} may need attention", 
-                              entry.branch, pr_id);
+                        warn!(
+                            "Branch '{}' no longer exists after rebase, PR {} may need attention",
+                            entry.branch, pr_id
+                        );
                     }
                     Err(e) => {
                         warn!("Failed to check if branch '{}' exists: {}", entry.branch, e);
@@ -340,7 +352,10 @@ impl ProviderIntegration {
     }
 
     /// Get enhanced status including build information (alias for backward compatibility)
-    pub async fn check_enhanced_stack_status(&self, stack_id: &Uuid) -> Result<StackSubmissionStatus> {
+    pub async fn check_enhanced_stack_status(
+        &self,
+        stack_id: &Uuid,
+    ) -> Result<StackSubmissionStatus> {
         // For now, just return the basic status - enhanced features can be added later
         self.check_stack_status(stack_id).await
     }
@@ -376,9 +391,7 @@ impl ProviderIntegration {
         description: Option<String>,
         _draft: bool, // TODO: Handle draft PRs in provider abstraction
     ) -> Result<CreatePullRequestRequest> {
-        let pr_title = title.unwrap_or_else(|| {
-            format!("[{}] {}", stack.name, entry.message)
-        });
+        let pr_title = title.unwrap_or_else(|| format!("[{}] {}", stack.name, entry.message));
 
         let pr_description = description.unwrap_or_else(|| {
             format!(
@@ -392,7 +405,9 @@ impl ProviderIntegration {
             description: pr_description,
             source_branch: entry.branch.clone(),
             target_branch: target_branch.to_string(),
-            reviewers: self.config.bitbucket
+            reviewers: self
+                .config
+                .bitbucket
                 .as_ref()
                 .map(|b| b.default_reviewers.clone())
                 .unwrap_or_default(),

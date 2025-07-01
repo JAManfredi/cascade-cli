@@ -1,6 +1,8 @@
-use crate::providers::{ProviderIntegration, MergeStrategy as ProviderMergeStrategy, BuildStatus, PullRequestStatus};
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, GitRepository};
+use crate::providers::{
+    BuildStatus, MergeStrategy as ProviderMergeStrategy, ProviderIntegration, PullRequestStatus,
+};
 use crate::stack::{StackManager, StackStatus};
 use clap::{Subcommand, ValueEnum};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -727,8 +729,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             auth: crate::config::AuthConfig::default(),
         };
 
-        let integration =
-            ProviderIntegration::new(stack_manager, cascade_config)?;
+        let integration = ProviderIntegration::new(stack_manager, cascade_config)?;
 
         match integration.check_enhanced_stack_status(&stack_id).await {
             Ok(status) => {
@@ -830,8 +831,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             auth: crate::config::AuthConfig::default(),
         };
 
-        let integration =
-            ProviderIntegration::new(stack_manager, cascade_config)?;
+        let integration = ProviderIntegration::new(stack_manager, cascade_config)?;
 
         match integration.check_stack_status(&stack_id).await {
             Ok(status) => {
@@ -1831,11 +1831,10 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
-                                        let mut integration =
-                                            ProviderIntegration::new(
-                                                integration_stack_manager,
-                                                cascade_config,
-                                            )?;
+                                        let mut integration = ProviderIntegration::new(
+                                            integration_stack_manager,
+                                            cascade_config,
+                                        )?;
 
                                         match integration
                                             .update_prs_after_rebase(

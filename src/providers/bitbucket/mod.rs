@@ -1,20 +1,18 @@
-use async_trait::async_trait;
-use crate::bitbucket::{
-    BitbucketClient, CreatePullRequestRequest as BitbucketCreateRequest, 
-    PullRequest as BitbucketPR, PullRequestState as BitbucketPRState,
-    PullRequestManager
+use super::{
+    BuildInfo, BuildStatus, CreatePullRequestRequest, MergeResult, MergeStrategy, ProviderHealth,
+    ProviderType, PullRequest, PullRequestStatus, RepositoryInfo, RepositoryProvider,
+    UpdatePullRequestRequest,
 };
 use crate::bitbucket::pull_request::{
-    BuildState as BitbucketBuildState, 
-    MergeStrategy as BitbucketMergeStrategy,
+    BuildState as BitbucketBuildState, MergeStrategy as BitbucketMergeStrategy,
+};
+use crate::bitbucket::{
+    BitbucketClient, CreatePullRequestRequest as BitbucketCreateRequest,
+    PullRequest as BitbucketPR, PullRequestManager, PullRequestState as BitbucketPRState,
 };
 use crate::config::BitbucketConfig;
-use crate::errors::{Result, CascadeError};
-use super::{
-    RepositoryProvider, ProviderType, ProviderHealth, RepositoryInfo,
-    CreatePullRequestRequest, UpdatePullRequestRequest, PullRequest,
-    MergeStrategy, MergeResult, BuildStatus, BuildInfo, PullRequestStatus
-};
+use crate::errors::{CascadeError, Result};
+use async_trait::async_trait;
 
 /// Bitbucket Server provider implementation
 pub struct BitbucketProvider {
@@ -41,11 +39,11 @@ impl RepositoryProvider for BitbucketProvider {
     fn name(&self) -> &'static str {
         "Bitbucket Server"
     }
-    
+
     fn provider_type(&self) -> ProviderType {
         ProviderType::Bitbucket
     }
-    
+
     async fn health_check(&self) -> Result<ProviderHealth> {
         // For now, perform a simple check by trying to access the API
         // TODO: Implement a proper health check endpoint
@@ -64,7 +62,7 @@ impl RepositoryProvider for BitbucketProvider {
             }),
         }
     }
-    
+
     async fn get_repository_info(&self) -> Result<RepositoryInfo> {
         Ok(RepositoryInfo {
             provider: ProviderType::Bitbucket,
@@ -74,47 +72,63 @@ impl RepositoryProvider for BitbucketProvider {
             default_branch: "main".to_string(), // TODO: Get from Bitbucket API
         })
     }
-    
+
     async fn create_pull_request(&self, request: CreatePullRequestRequest) -> Result<PullRequest> {
         let bitbucket_request = convert_to_bitbucket_create_request(request)?;
-        let bitbucket_pr = self.pr_manager.create_pull_request(bitbucket_request).await?;
+        let bitbucket_pr = self
+            .pr_manager
+            .create_pull_request(bitbucket_request)
+            .await?;
         convert_from_bitbucket_pr(bitbucket_pr)
     }
-    
+
     async fn get_pull_request(&self, id: &str) -> Result<PullRequest> {
-        let pr_id: u64 = id.parse()
+        let pr_id: u64 = id
+            .parse()
             .map_err(|_| CascadeError::config(format!("Invalid PR ID: {}", id)))?;
         let bitbucket_pr = self.pr_manager.get_pull_request(pr_id).await?;
         convert_from_bitbucket_pr(bitbucket_pr)
     }
-    
-    async fn update_pull_request(&self, id: &str, update: UpdatePullRequestRequest) -> Result<PullRequest> {
+
+    async fn update_pull_request(
+        &self,
+        id: &str,
+        update: UpdatePullRequestRequest,
+    ) -> Result<PullRequest> {
         let _ = update; // Suppress unused variable warning
-        // Bitbucket doesn't support direct PR updates in the same way as other providers
-        // For now, just return the current PR - actual implementation would depend on what's being updated
-        // TODO: Implement title/description updates, reviewer changes, etc.
+                        // Bitbucket doesn't support direct PR updates in the same way as other providers
+                        // For now, just return the current PR - actual implementation would depend on what's being updated
+                        // TODO: Implement title/description updates, reviewer changes, etc.
         self.get_pull_request(id).await
     }
-    
+
     async fn decline_pull_request(&self, id: &str, reason: Option<String>) -> Result<()> {
-        let pr_id: u64 = id.parse()
+        let pr_id: u64 = id
+            .parse()
             .map_err(|_| CascadeError::config(format!("Invalid PR ID: {}", id)))?;
-        let decline_reason = reason.unwrap_or_else(|| "Declined via provider abstraction".to_string());
-        self.pr_manager.decline_pull_request(pr_id, &decline_reason).await
+        let decline_reason =
+            reason.unwrap_or_else(|| "Declined via provider abstraction".to_string());
+        self.pr_manager
+            .decline_pull_request(pr_id, &decline_reason)
+            .await
     }
-    
+
     async fn merge_pull_request(&self, id: &str, strategy: MergeStrategy) -> Result<MergeResult> {
-        let pr_id: u64 = id.parse()
+        let pr_id: u64 = id
+            .parse()
             .map_err(|_| CascadeError::config(format!("Invalid PR ID: {}", id)))?;
         let bitbucket_strategy = convert_to_bitbucket_merge_strategy(strategy.clone());
-        let merged_pr = self.pr_manager.merge_pull_request(pr_id, bitbucket_strategy).await?;
-        
+        let merged_pr = self
+            .pr_manager
+            .merge_pull_request(pr_id, bitbucket_strategy)
+            .await?;
+
         Ok(MergeResult {
             merged_commit_hash: merged_pr.to_ref.latest_commit.clone(),
             message: Some(format!("Merged using {:?} strategy", strategy)),
         })
     }
-    
+
     async fn check_branch_exists(&self, branch: &str) -> Result<bool> {
         // Use Bitbucket API to check if branch exists
         let path = format!("branches/{}", branch);
@@ -123,15 +137,15 @@ impl RepositoryProvider for BitbucketProvider {
             Err(_) => Ok(false), // Branch doesn't exist or we can't access it
         }
     }
-    
+
     async fn get_build_status(&self, commit_hash: &str) -> Result<BuildInfo> {
         let path = format!("commits/{}/builds", commit_hash);
-        
+
         #[derive(serde::Deserialize)]
         struct BuildResponse {
             values: Vec<BitbucketBuildInfo>,
         }
-        
+
         #[derive(serde::Deserialize)]
         struct BitbucketBuildInfo {
             state: BitbucketBuildState,
@@ -139,7 +153,7 @@ impl RepositoryProvider for BitbucketProvider {
             description: Option<String>,
             name: Option<String>,
         }
-        
+
         match self.client.get::<BuildResponse>(&path).await {
             Ok(response) => {
                 if let Some(build) = response.values.first() {
@@ -166,21 +180,21 @@ impl RepositoryProvider for BitbucketProvider {
             }),
         }
     }
-    
+
     async fn wait_for_builds(&self, commit_hash: &str, timeout_seconds: u64) -> Result<BuildInfo> {
         use tokio::time::{sleep, timeout, Duration};
-        
+
         let timeout_duration = Duration::from_secs(timeout_seconds);
-        
+
         timeout(timeout_duration, async {
             loop {
                 let build_status = self.get_build_status(commit_hash).await?;
-                
+
                 match build_status.status {
                     BuildStatus::Success => return Ok(build_status),
                     BuildStatus::Failed => {
                         return Err(CascadeError::bitbucket(format!(
-                            "Build failed: {}", 
+                            "Build failed: {}",
                             build_status.description.unwrap_or_default()
                         )));
                     }
@@ -192,7 +206,9 @@ impl RepositoryProvider for BitbucketProvider {
                         return Err(CascadeError::bitbucket("Build status unknown".to_string()));
                     }
                     _ => {
-                        return Err(CascadeError::bitbucket("Unexpected build status".to_string()));
+                        return Err(CascadeError::bitbucket(
+                            "Unexpected build status".to_string(),
+                        ));
                     }
                 }
             }
@@ -205,7 +221,9 @@ impl RepositoryProvider for BitbucketProvider {
 // Conversion functions between provider abstraction types and Bitbucket types
 
 /// Convert provider CreatePullRequestRequest to Bitbucket CreatePullRequestRequest
-fn convert_to_bitbucket_create_request(request: CreatePullRequestRequest) -> Result<BitbucketCreateRequest> {
+fn convert_to_bitbucket_create_request(
+    request: CreatePullRequestRequest,
+) -> Result<BitbucketCreateRequest> {
     Ok(BitbucketCreateRequest {
         title: request.title,
         description: Some(request.description),
@@ -230,7 +248,7 @@ fn convert_from_bitbucket_pr(pr: BitbucketPR) -> Result<PullRequest> {
     let web_url = pr.web_url().unwrap_or_default();
     let created_at = pr.created_at();
     let updated_at = pr.updated_at();
-    
+
     Ok(PullRequest {
         id: pr.id.to_string(),
         title: pr.title,
