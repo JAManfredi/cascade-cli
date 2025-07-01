@@ -649,9 +649,27 @@ impl GitRepository {
             .find_remote("origin")
             .map_err(|e| CascadeError::branch(format!("No remote 'origin' found: {e}")))?;
 
-        // Fetch with default refspec
+        // Create callbacks for authentication
+        let mut callbacks = git2::RemoteCallbacks::new();
+
+        // Try to use existing authentication from git config/credential manager
+        callbacks.credentials(|_url, username_from_url, _allowed_types| {
+            if let Some(username) = username_from_url {
+                // Try SSH key first
+                git2::Cred::ssh_key_from_agent(username)
+            } else {
+                // Try default credential helper
+                git2::Cred::default()
+            }
+        });
+
+        // Fetch options with authentication
+        let mut fetch_options = git2::FetchOptions::new();
+        fetch_options.remote_callbacks(callbacks);
+
+        // Fetch with authentication
         remote
-            .fetch::<&str>(&[], None, None)
+            .fetch::<&str>(&[], Some(&mut fetch_options), None)
             .map_err(CascadeError::Git)?;
 
         tracing::debug!("Fetch completed successfully");
@@ -751,7 +769,27 @@ impl GitRepository {
 
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
 
-        remote.push(&[&refspec], None).map_err(CascadeError::Git)?;
+        // Create callbacks for authentication
+        let mut callbacks = git2::RemoteCallbacks::new();
+
+        // Try to use existing authentication from git config/credential manager
+        callbacks.credentials(|_url, username_from_url, _allowed_types| {
+            if let Some(username) = username_from_url {
+                // Try SSH key first
+                git2::Cred::ssh_key_from_agent(username)
+            } else {
+                // Try default credential helper
+                git2::Cred::default()
+            }
+        });
+
+        // Push options with authentication
+        let mut push_options = git2::PushOptions::new();
+        push_options.remote_callbacks(callbacks);
+
+        remote
+            .push(&[&refspec], Some(&mut push_options))
+            .map_err(CascadeError::Git)?;
 
         tracing::info!("Push completed successfully");
         Ok(())
