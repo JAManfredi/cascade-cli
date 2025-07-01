@@ -153,7 +153,7 @@ sequenceDiagram
     participant GitRepo
     participant Metadata
 
-    User->>CLI: csc stacks create feature-auth
+    User->>CLI: ca stacks create feature-auth
     CLI->>StackManager: create_stack()
     StackManager->>GitRepo: validate_repository()
     StackManager->>Metadata: create_stack_metadata()

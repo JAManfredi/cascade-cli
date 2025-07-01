@@ -13,7 +13,7 @@ Smart automatic conflict resolution is now **fully implemented** with 4 strategi
 - **✅ Import Reordering**: Sorts and merges import statements in common file types (Rust, Python, JS/TS, Go, Java)
 
 **Status**: ✅ **Implemented and Available**  
-**How to Use**: Enabled by default in `csc stacks rebase` - conflicts are auto-resolved when possible  
+**How to Use**: Enabled by default in `ca stacks rebase` - conflicts are auto-resolved when possible  
 **Benefits**: Reduces manual intervention in routine rebases by 60-80% in typical workflows
 
 This feature has been moved to the main README documentation!
@@ -69,8 +69,8 @@ Further enhancements to conflict resolution beyond the currently implemented str
 Support for Git worktrees to allow working on multiple stacks simultaneously:
 
 ```bash
-csc stacks create --worktree feature-auth
-csc stacks create --worktree bug-fix-123
+ca stacks create --worktree feature-auth
+ca stacks create --worktree bug-fix-123
 ```
 
 **Status**: 🔄 Research phase
@@ -83,7 +83,7 @@ csc stacks create --worktree bug-fix-123
 While designed for Bitbucket Server, GitHub support is planned:
 
 ```bash
-csc init --github-url https://github.com/owner/repo
+ca init --github-url https://github.com/owner/repo
 ```
 
 **Status**: 🔄 Architecture allows, not implemented
@@ -94,7 +94,7 @@ csc init --github-url https://github.com/owner/repo
 GitLab support following the same pattern as GitHub:
 
 ```bash
-csc init --gitlab-url https://gitlab.com/owner/repo
+ca init --gitlab-url https://gitlab.com/owner/repo
 ```
 
 **Status**: 🔄 Planned
@@ -116,7 +116,7 @@ csc init --gitlab-url https://gitlab.com/owner/repo
 Optional web interface for stack management and PR tracking:
 
 ```bash
-csc server start --port 8080
+ca server start --port 8080
 # Opens web dashboard at http://localhost:8080
 ```
 

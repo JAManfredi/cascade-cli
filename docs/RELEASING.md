@@ -27,12 +27,12 @@ Cascade CLI uses GitHub Actions for fully automated cross-platform releases:
 
 | Platform | Architecture | Binary Name |
 |----------|-------------|-------------|
-| **Linux** | x64 | `cc-linux-x64.tar.gz` |
-| **Linux** | ARM64 | `cc-linux-arm64.tar.gz` |
-| **macOS** | x64 | `cc-macos-x64.tar.gz` |
-| **macOS** | ARM64 | `cc-macos-arm64.tar.gz` |
-| **Windows** | x64 | `cc-windows-x64.exe.zip` |
-| **Windows** | ARM64 | `cc-windows-arm64.exe.zip` |
+| **Linux** | x64 | `ca-linux-x64.tar.gz` |
+| **Linux** | ARM64 | `ca-linux-arm64.tar.gz` |
+| **macOS** | x64 | `ca-macos-x64.tar.gz` |
+| **macOS** | ARM64 | `ca-macos-arm64.tar.gz` |
+| **Windows** | x64 | `ca-windows-x64.exe.zip` |
+| **Windows** | ARM64 | `ca-windows-arm64.exe.zip` |
 
 ---
 
@@ -69,14 +69,14 @@ cargo test --no-default-features
 cargo build --release
 
 # Manual testing
-./target/release/csc --version
-./target/release/csc --help
-./target/release/csc stack --help
+./target/release/ca --version
+./target/release/ca --help
+./target/release/ca stack --help
 
 # Test core workflows
-./target/release/csc init
-./target/release/csc stacks create test-stack
-./target/release/csc stacks list
+./target/release/ca init
+./target/release/ca stacks create test-stack
+./target/release/ca stacks list
 ```
 
 ---
@@ -123,7 +123,7 @@ Follow [Semantic Versioning](https://semver.org/):
 **Examples:**
 - `v0.1.1` - Bug fixes and CI improvements
 - `v0.1.0` - Initial Beta release
-- `v1.1.0` - Added new `csc stacks merge` command
+- `v1.1.0` - Added new `ca stacks merge` command
 - `v1.0.1` - Fixed critical bug in rebase logic
 - `v2.0.0` - Changed CLI interface (breaking)
 
@@ -138,8 +138,8 @@ Follow [Semantic Versioning](https://semver.org/):
 open https://github.com/JAManfredi/cascade-cli/releases
 
 # Test installation from release
-curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/cc-linux-x64.tar.gz | tar -xz
-./csc --version
+curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-linux-x64.tar.gz | tar -xz
+./ca --version
 ```
 
 ### **Update Documentation**
@@ -204,7 +204,7 @@ cargo build --release --target x86_64-pc-windows-msvc
 
 # 2. Create packages
 cd target/x86_64-unknown-linux-gnu/release
-tar czf cc-linux-x64.tar.gz cc
+tar czf ca-linux-x64.tar.gz cc
 
 # 3. Upload to GitHub Release manually
 ```
@@ -252,9 +252,9 @@ The workflow automatically generates release notes with:
 
 - **Format**: `cc-{platform}-{arch}.{extension}`
 - **Examples**: 
-  - `cc-linux-x64.tar.gz`
-  - `cc-macos-arm64.tar.gz`
-  - `cc-windows-x64.exe.zip`
+  - `ca-linux-x64.tar.gz`
+  - `ca-macos-arm64.tar.gz`
+  - `ca-windows-x64.exe.zip`
 
 ---
 

@@ -2453,7 +2453,7 @@ async fn land_stack(
         .map(|s| s.id)
         .ok_or_else(|| {
             CascadeError::config(
-                "No active stack. Use 'cc stack create' or 'cc stack switch' to select a stack"
+                "No active stack. Use 'ca stack create' or 'ca stack switch' to select a stack"
                     .to_string(),
             )
         })?;
@@ -2680,7 +2680,7 @@ async fn land_stack(
                                     Err(e) => {
                                         println!("   ⚠️  Failed to update remaining PRs: {e}");
                                         println!(
-                                            "   💡 You may need to run: cc stack rebase --onto {base_branch}"
+                                            "   💡 You may need to run: ca stack rebase --onto {base_branch}"
                                         );
                                     }
                                 }
@@ -2692,10 +2692,10 @@ async fn land_stack(
                             println!("   📝 To resolve conflicts and continue landing:");
                             println!("      1. Resolve conflicts in the affected files");
                             println!("      2. Stage resolved files: git add <files>");
-                            println!("      3. Continue the process: cc stack continue-land");
-                            println!("      4. Or abort the operation: cc stack abort-land");
+                            println!("      3. Continue the process: ca stack continue-land");
+                            println!("      4. Or abort the operation: ca stack abort-land");
                             println!();
-                            println!("   💡 Check current status: cc stack land-status");
+                            println!("   💡 Check current status: ca stack land-status");
                             println!("   ⚠️  Error details: {e}");
 
                             // Stop the land operation here - user needs to resolve conflicts
@@ -2785,14 +2785,14 @@ async fn continue_land() -> Result<()> {
     match rebase_manager.continue_rebase() {
         Ok(_) => {
             println!("✅ Land operation continued successfully");
-            println!("   Check 'cc stack land-status' for current state");
+            println!("   Check 'ca stack land-status' for current state");
         }
         Err(e) => {
             warn!("❌ Failed to continue land operation: {}", e);
             println!("💡 You may need to resolve conflicts first:");
             println!("   1. Edit conflicted files");
             println!("   2. Stage resolved files with 'git add'");
-            println!("   3. Run 'cc stack continue-land' again");
+            println!("   3. Run 'ca stack continue-land' again");
         }
     }
 
@@ -2849,8 +2849,8 @@ async fn land_status() -> Result<()> {
             "   
 📝 Actions available:"
         );
-        println!("     - 'cc stack continue-land' to continue");
-        println!("     - 'cc stack abort-land' to abort");
+        println!("     - 'ca stack continue-land' to continue");
+        println!("     - 'ca stack abort-land' to abort");
         println!("     - 'git status' to see conflicted files");
 
         // Check for conflicts
@@ -2876,7 +2876,7 @@ async fn land_status() -> Result<()> {
                     );
                     println!("     1. Edit the conflicted files");
                     println!("     2. Stage resolved files: git add <file>");
-                    println!("     3. Continue: cc stack continue-land");
+                    println!("     3. Continue: ca stack continue-land");
                 }
             }
             Err(e) => {

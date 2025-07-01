@@ -5,7 +5,7 @@ set -e
 # This script detects your platform and downloads the appropriate binary
 
 REPO="JAManfredi/cascade-cli"
-BINARY_NAME="cc"
+BINARY_NAME="ca"
 INSTALL_DIR="/usr/local/bin"
 
 # Colors for output
@@ -39,15 +39,15 @@ detect_platform() {
     case $os in
         Linux*)
             case $arch in
-                x86_64) echo "cc-linux-x64.tar.gz" ;;
-                aarch64|arm64) echo "cc-linux-arm64.tar.gz" ;;
+                x86_64) echo "ca-linux-x64.tar.gz" ;;
+                aarch64|arm64) echo "ca-linux-arm64.tar.gz" ;;
                 *) print_error "Unsupported architecture: $arch"; exit 1 ;;
             esac
             ;;
         Darwin*)
             case $arch in
-                x86_64) echo "cc-macos-x64.tar.gz" ;;
-                arm64) echo "cc-macos-arm64.tar.gz" ;;
+                x86_64) echo "ca-macos-x64.tar.gz" ;;
+                arm64) echo "ca-macos-arm64.tar.gz" ;;
                 *) print_error "Unsupported architecture: $arch"; exit 1 ;;
             esac
             ;;
@@ -121,11 +121,11 @@ install_cascade() {
     rm -rf "$temp_dir"
     
     print_success "Cascade CLI installed successfully!"
-    print_info "Run 'cc --help' to get started"
+    print_info "Run 'ca --help' to get started"
     
     # Verify installation
-    if command -v cc >/dev/null 2>&1; then
-        print_success "Verification: $(cc --version)"
+    if command -v ca >/dev/null 2>&1; then
+        print_success "Verification: $(ca --version)"
     else
         print_warning "Binary installed but not in PATH. You may need to restart your shell."
     fi
@@ -161,7 +161,7 @@ main() {
     echo "🎉 Installation complete!"
     echo ""
     echo "Next steps:"
-    echo "  1. Run 'cc setup' in your Git repository"
+    echo "  1. Run 'ca setup' in your Git repository"
     echo "  2. Check out the documentation: https://github.com/$REPO"
     echo "  3. Join our community for support and updates"
 }

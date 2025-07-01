@@ -212,7 +212,7 @@ timeout 1800 cargo test --test '*' --verbose || {
 
 # CLI binary test
 echo "Testing CLI binary..."
-./target/release/cc --help
+./target/release/ca --help
 
 # Documentation
 echo "Checking documentation..."

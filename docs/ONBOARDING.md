@@ -24,7 +24,7 @@ Before starting, ensure you have:
 ```bash
 # Check prerequisites
 git --version        # Should be 2.20+
-csc --version         # Should show Cascade CLI version
+ca --version         # Should show Cascade CLI version
 git remote -v        # Should show your Bitbucket remote
 ```
 
@@ -38,7 +38,7 @@ git remote -v        # Should show your Bitbucket remote
 cd my-project
 
 # Run the setup wizard (recommended)
-csc setup
+ca setup
 ```
 
 The setup wizard will:
@@ -51,7 +51,7 @@ The setup wizard will:
 ### **Step 2: Create Your First Stack**
 ```bash
 # Create a new stack for your feature
-csc stacks create my-first-feature --base main --description "Learning stacked diffs"
+ca stacks create my-first-feature --base main --description "Learning stacked diffs"
 
 # Make a simple change
 echo "# My Feature" > FEATURE.md
@@ -59,19 +59,19 @@ git add FEATURE.md
 git commit -m "Add feature documentation"
 
 # Add commit to stack
-csc stacks push
+ca stacks push
 
 # Check status
-csc repo
+ca repo
 ```
 
 ### **Step 3: Submit Your First PR**
 ```bash
 # Submit the commit as a pull request
-csc stacks submit
+ca stacks submit
 
 # Check what happened
-csc stacks status
+ca stacks status
 ```
 
 🎉 **Congratulations!** You've created your first stacked diff. The commit is now a pull request ready for review.
@@ -94,10 +94,10 @@ git checkout main
 git pull origin main
 
 # Create our feature stack
-csc stacks create user-auth --base main --description "Complete user authentication system"
+ca stacks create user-auth --base main --description "Complete user authentication system"
 
 # Verify we're set up correctly
-csc stack
+ca stack
 ```
 
 #### **Phase 2: Database Layer (10 minutes)**
@@ -121,7 +121,7 @@ git add src/models/user.py
 git commit -m "Add User model with password verification"
 
 # Add to stack
-csc stacks push
+ca stacks push
 
 # Create database schema
 cat << 'EOF' > migrations/001_create_users.sql
@@ -138,14 +138,14 @@ git add migrations/001_create_users.sql
 git commit -m "Add user table migration"
 
 # Add to stack
-csc stacks push
+ca stacks push
 
 # Submit database layer for review
-csc stacks submit 1 --title "Add User model" --description "Core user model with password verification"
-csc stacks submit 2 --title "Add user database schema" --description "Migration to create users table"
+ca stacks submit 1 --title "Add User model" --description "Core user model with password verification"
+ca stacks submit 2 --title "Add user database schema" --description "Migration to create users table"
 
 # Check our progress
-csc stack
+ca stack
 ```
 
 #### **Phase 3: Authentication Logic (10 minutes)**
@@ -180,7 +180,7 @@ EOF
 git add src/services/auth.py
 git commit -m "Add authentication service with login/register"
 
-csc stacks push
+ca stacks push
 
 # Add JWT token handling
 cat << 'EOF' > src/services/token.py
@@ -209,14 +209,14 @@ EOF
 git add src/services/token.py
 git commit -m "Add JWT token service for session management"
 
-csc stacks push
+ca stacks push
 
 # Submit authentication layer
-csc stacks submit 3 --title "Add authentication service" --description "Core login/register functionality"
-csc stacks submit 4 --title "Add JWT token service" --description "Session management with secure tokens"
+ca stacks submit 3 --title "Add authentication service" --description "Core login/register functionality"
+ca stacks submit 4 --title "Add JWT token service" --description "Session management with secure tokens"
 
 # Visualize our stack
-csc viz stack
+ca viz stack
 ```
 
 #### **Phase 4: API Endpoints (10 minutes)**
@@ -268,7 +268,7 @@ EOF
 git add src/api/auth_routes.py
 git commit -m "Add authentication API endpoints"
 
-csc stacks push
+ca stacks push
 
 # Add API documentation
 cat << 'EOF' > docs/api/authentication.md
@@ -301,27 +301,27 @@ EOF
 git add docs/api/authentication.md
 git commit -m "Add API documentation for authentication endpoints"
 
-csc stacks push
+ca stacks push
 
 # Submit API layer
-csc stacks submit 5 --title "Add authentication API endpoints" --description "REST API for login, register, and profile"
-csc stacks submit 6 --title "Add API documentation" --description "Complete documentation for auth endpoints"
+ca stacks submit 5 --title "Add authentication API endpoints" --description "REST API for login, register, and profile"
+ca stacks submit 6 --title "Add API documentation" --description "Complete documentation for auth endpoints"
 ```
 
 #### **Phase 5: Review Your Work**
 
 ```bash
 # Show complete stack
-csc stack
+ca stack
 
 # Visualize with dependencies
-csc viz stack --format mermaid
+ca viz stack --format mermaid
 
 # Check all PRs
-csc stacks prs
+ca stacks prs
 
 # Launch interactive TUI to explore
-csc tui
+ca tui
 ```
 
 **What you've accomplished:**
@@ -350,10 +350,10 @@ git add src/models/user.py
 git commit -m "Address review feedback: improve password validation"
 
 # Update the existing PR
-csc stacks submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
+ca stacks submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
 
 # Sync dependent PRs if needed
-csc stacks sync
+ca stacks sync
 ```
 
 ### **Scenario 2: Dependency Changes**
@@ -366,16 +366,16 @@ git checkout main
 git pull origin main
 
 # Sync your stack with new base
-csc stacks sync
+ca stacks sync
 
 # Resolve any conflicts
 # Git will guide you through conflict resolution
 
 # Continue after resolving conflicts
-csc stacks rebase --continue
+ca stacks rebase --continue
 
 # Update affected PRs
-csc stacks submit 2 --title "Add user database schema (updated for new DB version)"
+ca stacks submit 2 --title "Add user database schema (updated for new DB version)"
 ```
 
 ### **Scenario 3: Parallel Development**
@@ -384,24 +384,24 @@ Another developer is working on related features:
 
 ```bash
 # Check what other stacks exist
-csc stacks list
+ca stacks list
 
 # Visualize all dependencies
-csc viz deps --format mermaid --output team-deps.md
+ca viz deps --format mermaid --output team-deps.md
 
 # Create dependent stack
-csc stacks create user-profiles --base user-auth --description "User profile management (depends on auth)"
+ca stacks create user-profiles --base user-auth --description "User profile management (depends on auth)"
 
 # Your stack will automatically be rebased when user-auth merges
 ```
 
 ### **🔄 Understanding Smart Force Push (Important!)**
 
-When you run `csc stacks rebase`, Cascade CLI uses a **smart force push strategy** that preserves all your PR history:
+When you run `ca stacks rebase`, Cascade CLI uses a **smart force push strategy** that preserves all your PR history:
 
 ```bash
 # When you rebase...
-csc stacks rebase
+ca stacks rebase
 
 # What happens behind the scenes:
 # 1. Creates temporary branches: add-auth-v2, add-tests-v2  
@@ -433,7 +433,7 @@ csc stacks rebase
 ### **Terminal User Interface (TUI)**
 ```bash
 # Launch interactive stack browser
-csc tui
+ca tui
 
 # Navigate with keyboard:
 # ↑/↓ - Move between stacks
@@ -445,37 +445,37 @@ csc tui
 ### **Git Hooks Integration**
 ```bash
 # Install automation hooks
-csc hooks install
+ca hooks install
 
 # Now commits are automatically added to active stack
 git commit -m "Auto-added to stack!"
-# No need to run `csc stacks push`
+# No need to run `ca stacks push`
 
 # Check hook status
-csc hooks status
+ca hooks status
 ```
 
 ### **Advanced Visualizations**
 ```bash
 # ASCII art in terminal
-csc viz stack
+ca viz stack
 
 # Export for documentation
-csc viz deps --format mermaid --output docs/architecture.md
+ca viz deps --format mermaid --output docs/architecture.md
 
 # Generate diagrams for presentations
-csc viz stack --format dot --output stack.dot
+ca viz stack --format dot --output stack.dot
 dot -Tpng stack.dot -o stack.png
 ```
 
 ### **Shell Completions**
 ```bash
 # Install completions
-csc completions install
+ca completions install
 
 # Now you can tab-complete:
-csc stack <TAB>        # Shows: create, list, show, switch, etc.
-csc stacks create <TAB> # Shows available options
+ca stack <TAB>        # Shows: create, list, show, switch, etc.
+ca stacks create <TAB> # Shows available options
 ```
 
 ---
@@ -488,16 +488,16 @@ csc stacks create <TAB> # Shows available options
 ```bash
 # Start of day: sync with team
 git checkout main && git pull
-csc stacks list  # See what you're working on
+ca stacks list  # See what you're working on
 
 # Work on features
-csc stacks switch current-feature
+ca stacks switch current-feature
 # ... make commits ...
-csc stacks push  # Add to stack
-csc stacks submit  # Create PRs
+ca stacks push  # Add to stack
+ca stacks submit  # Create PRs
 
 # End of day: check status
-csc repo  # See what's pending review
+ca repo  # See what's pending review
 ```
 
 ### **For Team Leads**
@@ -505,11 +505,11 @@ csc repo  # See what's pending review
 **Stack Review Process:**
 ```bash
 # Review team's work
-csc stacks list --verbose  # See all stacks
-csc viz deps --format mermaid  # Understand dependencies
+ca stacks list --verbose  # See all stacks
+ca viz deps --format mermaid  # Understand dependencies
 
 # Check PR status across team
-csc stacks prs --format json | jq '.[] | select(.status == "open")'
+ca stacks prs --format json | jq '.[] | select(.status == "open")'
 ```
 
 ### **For Release Management**
@@ -517,10 +517,10 @@ csc stacks prs --format json | jq '.[] | select(.status == "open")'
 **Pre-release Validation:**
 ```bash
 # Validate all stacks
-csc stacks list --format name | xargs -I {} csc stacks validate {}
+ca stacks list --format name | xargs -I {} ca stacks validate {}
 
 # Generate release documentation
-csc viz deps --format mermaid > docs/release-dependencies.md
+ca viz deps --format mermaid > docs/release-dependencies.md
 ```
 
 ---
@@ -563,10 +563,10 @@ git commit -m "Add team Cascade CLI configuration"
 
 ```bash
 # Install hooks that enforce team standards
-csc hooks install
+ca hooks install
 
 # Customize commit message format
-csc config set hooks.commit_msg_format "[TICKET-ID] Brief description"
+ca config set hooks.commit_msg_format "[TICKET-ID] Brief description"
 ```
 
 ---
@@ -627,8 +627,8 @@ Try these exercises to build confidence:
 
 If you get stuck:
 
-1. **Check built-in help**: `csc --help` or `csc <command> --help`
-2. **Run diagnostics**: `csc doctor` to identify issues
+1. **Check built-in help**: `ca --help` or `ca <command> --help`
+2. **Run diagnostics**: `ca doctor` to identify issues
 3. **Read documentation**: [User Manual](./USER_MANUAL.md) has detailed examples
 4. **Search issues**: [GitHub Issues](https://github.com/JAManfredi/cascade-cli/issues)
 5. **Ask the community**: [GitHub Discussions](https://github.com/JAManfredi/cascade-cli/discussions)

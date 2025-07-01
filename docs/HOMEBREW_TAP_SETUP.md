@@ -73,12 +73,12 @@ When releasing a new version:
 2. **Calculate new checksums:**
    ```bash
    # Download the release assets
-   curl -L -o cc-macos-arm64.tar.gz https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.2/cc-macos-arm64.tar.gz
-   curl -L -o cc-macos-x64.tar.gz https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.2/cc-macos-x64.tar.gz
+   curl -L -o ca-macos-arm64.tar.gz https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.2/ca-macos-arm64.tar.gz
+   curl -L -o ca-macos-x64.tar.gz https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.2/ca-macos-x64.tar.gz
    
    # Get checksums
-   shasum -a 256 cc-macos-arm64.tar.gz
-   shasum -a 256 cc-macos-x64.tar.gz
+   shasum -a 256 ca-macos-arm64.tar.gz
+   shasum -a 256 ca-macos-x64.tar.gz
    ```
 
 3. **Sync to tap:**

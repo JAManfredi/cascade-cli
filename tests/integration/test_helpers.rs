@@ -211,10 +211,10 @@ pub fn get_binary_path() -> PathBuf {
     // CI environments usually build release binaries
     let release_binary = current_dir
         .join("target/release")
-        .join(cascade_cli::utils::platform::executable_name("csc"));
+        .join(cascade_cli::utils::platform::executable_name("ca"));
     let debug_binary = current_dir
         .join("target/debug")
-        .join(cascade_cli::utils::platform::executable_name("csc"));
+        .join(cascade_cli::utils::platform::executable_name("ca"));
 
     // Try release first, then debug
     if release_binary.exists() && cascade_cli::utils::platform::is_executable(&release_binary) {

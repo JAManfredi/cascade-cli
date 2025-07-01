@@ -132,7 +132,7 @@ else
 fi
 
 # 7. CLI binary test (exact CI command)
-if ! run_check "CLI Binary Test" "./target/release/cc --help"; then
+if ! run_check "CLI Binary Test" "./target/release/ca --help"; then
     FAILED_CHECKS+=("cli-binary")
 fi
 
