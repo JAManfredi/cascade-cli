@@ -47,9 +47,31 @@ impl BitbucketClient {
 
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        let client = Client::builder()
+        let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(30))
-            .default_headers(headers)
+            .default_headers(headers);
+
+        // Add TLS configuration for corporate environments
+        if let Some(accept_invalid_certs) = config.accept_invalid_certs {
+            if accept_invalid_certs {
+                tracing::warn!("⚠️  Accepting invalid TLS certificates - use only in development!");
+                client_builder = client_builder.danger_accept_invalid_certs(true);
+            }
+        }
+
+        // Add custom CA bundle if specified
+        if let Some(ca_bundle_path) = &config.ca_bundle_path {
+            let ca_bundle = std::fs::read(ca_bundle_path)
+                .map_err(|e| CascadeError::config(format!("Failed to read CA bundle from {ca_bundle_path}: {e}")))?;
+            
+            let cert = reqwest::Certificate::from_pem(&ca_bundle)
+                .map_err(|e| CascadeError::config(format!("Invalid CA certificate in {ca_bundle_path}: {e}")))?;
+            
+            client_builder = client_builder.add_root_certificate(cert);
+            tracing::info!("Using custom CA bundle: {ca_bundle_path}");
+        }
+
+        let client = client_builder
             .build()
             .map_err(|e| CascadeError::config(format!("Failed to create HTTP client: {e}")))?;
 

@@ -26,6 +26,10 @@ pub struct BitbucketConfig {
     pub username: Option<String>,
     pub token: Option<String>,
     pub default_reviewers: Vec<String>,
+    /// Accept invalid TLS certificates (development only)
+    pub accept_invalid_certs: Option<bool>,
+    /// Path to custom CA certificate bundle
+    pub ca_bundle_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +76,8 @@ impl Default for BitbucketConfig {
             username: None,
             token: None,
             default_reviewers: Vec::new(),
+            accept_invalid_certs: None,
+            ca_bundle_path: None,
         }
     }
 }
@@ -157,6 +163,14 @@ impl Settings {
             ("bitbucket", "project") => self.bitbucket.project = value.to_string(),
             ("bitbucket", "repo") => self.bitbucket.repo = value.to_string(),
             ("bitbucket", "token") => self.bitbucket.token = Some(value.to_string()),
+            ("bitbucket", "accept_invalid_certs") => {
+                self.bitbucket.accept_invalid_certs = Some(value
+                    .parse()
+                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {value}")))?);
+            }
+            ("bitbucket", "ca_bundle_path") => {
+                self.bitbucket.ca_bundle_path = Some(value.to_string());
+            }
             ("git", "default_branch") => self.git.default_branch = value.to_string(),
             ("git", "author_name") => self.git.author_name = Some(value.to_string()),
             ("git", "author_email") => self.git.author_email = Some(value.to_string()),
@@ -236,6 +250,10 @@ impl Settings {
             ("bitbucket", "project") => &self.bitbucket.project,
             ("bitbucket", "repo") => &self.bitbucket.repo,
             ("bitbucket", "token") => self.bitbucket.token.as_deref().unwrap_or(""),
+            ("bitbucket", "accept_invalid_certs") => {
+                return Ok(self.bitbucket.accept_invalid_certs.unwrap_or(false).to_string())
+            }
+            ("bitbucket", "ca_bundle_path") => self.bitbucket.ca_bundle_path.as_deref().unwrap_or(""),
             ("git", "default_branch") => &self.git.default_branch,
             ("git", "author_name") => self.git.author_name.as_deref().unwrap_or(""),
             ("git", "author_email") => self.git.author_email.as_deref().unwrap_or(""),
