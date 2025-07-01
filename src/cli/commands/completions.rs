@@ -20,8 +20,8 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
     let shells_to_install = if let Some(shell) = shell {
         vec![shell]
     } else {
-        // Auto-detect available shells
-        detect_available_shells()
+        // Detect current shell first, then fall back to available shells
+        detect_current_and_available_shells()
     };
 
     let mut installed = Vec::new();
@@ -58,6 +58,35 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Detect current shell first, then fall back to available shells
+fn detect_current_and_available_shells() -> Vec<Shell> {
+    let mut shells = Vec::new();
+
+    // First, try to detect the current shell from SHELL environment variable
+    if let Some(current_shell) = detect_current_shell() {
+        shells.push(current_shell);
+        println!("🔍 Detected current shell: {:?}", current_shell);
+        return shells; // Only install for current shell
+    }
+
+    // Fall back to detecting all available shells
+    println!("🔍 Could not detect current shell, checking available shells...");
+    detect_available_shells()
+}
+
+/// Detect the current shell from the SHELL environment variable
+fn detect_current_shell() -> Option<Shell> {
+    let shell_path = std::env::var("SHELL").ok()?;
+    let shell_name = std::path::Path::new(&shell_path).file_name()?.to_str()?;
+
+    match shell_name {
+        "bash" => Some(Shell::Bash),
+        "zsh" => Some(Shell::Zsh),
+        "fish" => Some(Shell::Fish),
+        _ => None,
+    }
 }
 
 /// Detect which shells are available on the system
@@ -266,14 +295,35 @@ mod tests {
     #[test]
     fn test_detect_shells() {
         let shells = detect_available_shells();
-        // Should always have at least one shell (bash fallback)
         assert!(!shells.is_empty());
     }
 
     #[test]
     fn test_generate_bash_completion() {
-        // Just test that it doesn't panic
         let result = generate_completions(Shell::Bash);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_detect_current_shell() {
+        // Test with a mocked SHELL environment variable
+        std::env::set_var("SHELL", "/bin/zsh");
+        let shell = detect_current_shell();
+        assert_eq!(shell, Some(Shell::Zsh));
+
+        std::env::set_var("SHELL", "/usr/bin/bash");
+        let shell = detect_current_shell();
+        assert_eq!(shell, Some(Shell::Bash));
+
+        std::env::set_var("SHELL", "/usr/local/bin/fish");
+        let shell = detect_current_shell();
+        assert_eq!(shell, Some(Shell::Fish));
+
+        std::env::set_var("SHELL", "/bin/unknown");
+        let shell = detect_current_shell();
+        assert_eq!(shell, None);
+
+        // Clean up
+        std::env::remove_var("SHELL");
     }
 }

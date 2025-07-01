@@ -1,4 +1,5 @@
 use crate::errors::{CascadeError, Result};
+use crate::git::find_repository_root;
 use crate::stack::{StackManager, StackStatus};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -39,7 +40,10 @@ impl TuiApp {
         let current_dir = env::current_dir()
             .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-        let stack_manager = StackManager::new(&current_dir)?;
+        let repo_root = find_repository_root(&current_dir)
+            .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+        let stack_manager = StackManager::new(&repo_root)?;
         let stacks = stack_manager.get_all_stacks_objects()?;
 
         let mut stack_list_state = ListState::default();

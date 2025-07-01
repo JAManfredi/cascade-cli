@@ -1,4 +1,5 @@
 use crate::errors::{CascadeError, Result};
+use crate::git::find_repository_root;
 use crate::stack::{Stack, StackManager};
 use std::collections::HashMap;
 use std::env;
@@ -629,7 +630,10 @@ pub async fn show_stack(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let manager = StackManager::new(&repo_root)?;
 
     let stack = if let Some(name) = stack_name {
         manager
@@ -678,7 +682,10 @@ pub async fn show_dependencies(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let manager = StackManager::new(&repo_root)?;
     let stacks = manager.get_all_stacks_objects()?;
 
     if stacks.is_empty() {

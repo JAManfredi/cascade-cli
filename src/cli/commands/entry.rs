@@ -1,4 +1,5 @@
 use crate::errors::{CascadeError, Result};
+use crate::git::find_repository_root;
 use crate::stack::StackManager;
 use clap::Subcommand;
 use crossterm::{
@@ -66,7 +67,10 @@ async fn checkout_entry(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
 
     // Get active stack
     let active_stack = manager.get_active_stack().ok_or_else(|| {
@@ -151,7 +155,10 @@ async fn checkout_entry(
     // Checkout the commit
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    let repo = crate::git::GitRepository::open(&current_dir)?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+    let repo = crate::git::GitRepository::open(&repo_root)?;
 
     info!("Checking out commit: {}", entry_commit_hash);
     repo.checkout_commit(&entry_commit_hash)?;
@@ -315,7 +322,10 @@ async fn show_entry_picker(stack: &crate::stack::Stack) -> Result<usize> {
 async fn show_edit_status(quiet: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    let manager = StackManager::new(&current_dir)?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+    let manager = StackManager::new(&repo_root)?;
 
     if !manager.is_in_edit_mode() {
         if quiet {
@@ -363,7 +373,10 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
 async fn list_entries(verbose: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    let manager = StackManager::new(&current_dir)?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+    let manager = StackManager::new(&repo_root)?;
 
     let active_stack = manager.get_active_stack().ok_or_else(|| {
         CascadeError::config(

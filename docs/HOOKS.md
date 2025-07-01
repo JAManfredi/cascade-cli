@@ -190,7 +190,10 @@ ca hooks status
 ### Remove Hooks
 ```bash
 ca hooks uninstall              # Remove all
-ca hooks uninstall post-commit  # Remove specific hook
+ca hooks remove post-commit     # Remove specific hook
+ca hooks remove pre-push        # Remove specific hook
+ca hooks remove commit-msg      # Remove specific hook
+ca hooks remove prepare-commit-msg  # Remove specific hook
 ```
 
 ## 🚨 Troubleshooting

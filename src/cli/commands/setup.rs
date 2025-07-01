@@ -1,6 +1,6 @@
 use crate::config::{get_repo_config_dir, initialize_repo, Settings};
 use crate::errors::{CascadeError, Result};
-use crate::git::GitRepository;
+use crate::git::{find_repository_root, GitRepository};
 use dialoguer::{theme::ColorfulTheme, Confirm, Input};
 use std::env;
 use tracing::{info, warn};
@@ -14,22 +14,20 @@ pub async fn run(force: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    // Step 1: Check Git repository
-    println!("🔍 Step 1: Checking Git repository...");
-    let git_repo = match GitRepository::open(&current_dir) {
-        Ok(repo) => {
-            println!("   ✅ Git repository found");
-            repo
-        }
-        Err(_) => {
-            return Err(CascadeError::config(
-                "No Git repository found. Please run this command from within a Git repository.",
-            ));
-        }
-    };
+    // Step 1: Find Git repository root
+    println!("🔍 Step 1: Finding Git repository...");
+    let repo_root = find_repository_root(&current_dir).map_err(|_| {
+        CascadeError::config(
+            "No Git repository found. Please run this command from within a Git repository.",
+        )
+    })?;
+
+    println!("   ✅ Git repository found at: {}", repo_root.display());
+
+    let git_repo = GitRepository::open(&repo_root)?;
 
     // Step 2: Check if already initialized
-    let config_dir = get_repo_config_dir(&current_dir)?;
+    let config_dir = get_repo_config_dir(&repo_root)?;
     if config_dir.exists() && !force {
         let reinitialize = Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt("Cascade is already initialized. Do you want to reconfigure?")
@@ -60,9 +58,9 @@ pub async fn run(force: bool) -> Result<()> {
     println!("\n⚙️  Step 3: Configure Bitbucket settings...");
     let bitbucket_config = configure_bitbucket_interactive(auto_config).await?;
 
-    // Step 5: Initialize repository
+    // Step 5: Initialize repository (using repo root, not current dir)
     println!("\n🚀 Step 4: Initializing Cascade...");
-    initialize_repo(&current_dir, Some(bitbucket_config.url.clone()))?;
+    initialize_repo(&repo_root, Some(bitbucket_config.url.clone()))?;
 
     // Step 6: Save configuration
     let config_path = config_dir.join("config.json");
@@ -124,15 +122,24 @@ pub async fn run(force: bool) -> Result<()> {
         .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
     if install_hooks {
-        match crate::cli::commands::hooks::install_with_options(false, true, true, false).await {
+        match crate::cli::commands::hooks::install_essential().await {
             Ok(_) => {
                 println!("   ✅ Essential Git hooks installed");
                 println!("   💡 Hooks installed: pre-push, commit-msg, prepare-commit-msg");
+                println!(
+                    "   💡 Optional: Install post-commit hook with 'ca hooks install post-commit'"
+                );
                 println!("   📚 See docs/HOOKS.md for details");
             }
             Err(e) => {
                 warn!("   ⚠️  Failed to install hooks: {}", e);
-                println!("   💡 You can install them later with: ca hooks install");
+                if e.to_string().contains("Git hooks directory not found") {
+                    println!("   💡 This doesn't appear to be a Git repository.");
+                    println!("      Please ensure you're running this command from within a Git repository.");
+                    println!("      You can initialize git with: git init");
+                } else {
+                    println!("   💡 You can install them later with: ca hooks install");
+                }
             }
         }
     }

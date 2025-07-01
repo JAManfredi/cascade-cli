@@ -1,6 +1,6 @@
 use crate::bitbucket::BitbucketIntegration;
 use crate::errors::{CascadeError, Result};
-use crate::git::GitRepository;
+use crate::git::{find_repository_root, GitRepository};
 use crate::stack::{StackManager, StackStatus};
 use clap::{Subcommand, ValueEnum};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -475,7 +475,10 @@ async fn create_stack(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
     let stack_id = manager.create_stack(name.clone(), base.clone(), description.clone())?;
 
     info!("✅ Created stack '{}'", name);
@@ -495,7 +498,10 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let manager = StackManager::new(&repo_root)?;
     let stacks = manager.list_stacks();
 
     if stacks.is_empty() {
@@ -554,7 +560,10 @@ async fn switch_stack(name: String) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
 
     // Verify stack exists
     if manager.get_stack_by_name(&name).is_none() {
@@ -571,7 +580,10 @@ async fn deactivate_stack(force: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
 
     let active_stack = manager.get_active_stack();
 
@@ -613,7 +625,10 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
 
     // Get stack information first to avoid borrow conflicts
     let (stack_id, stack_name, stack_base, stack_entries) = {
@@ -863,8 +878,11 @@ async fn push_to_stack(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
-    let repo = GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
+    let repo = GitRepository::open(&repo_root)?;
 
     // Check for branch changes and prompt user if needed
     if !manager.check_for_branch_change()? {
@@ -1145,7 +1163,7 @@ async fn push_to_stack(
             branch.clone().unwrap()
         } else {
             // Create a temporary GitRepository for branch name generation
-            let temp_repo = GitRepository::open(&current_dir)?;
+            let temp_repo = GitRepository::open(&repo_root)?;
             let branch_mgr = crate::git::BranchManager::new(temp_repo);
             branch_mgr.generate_branch_name(&commit_msg)
         };
@@ -1219,8 +1237,11 @@ async fn pop_from_stack(keep_branch: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
-    let repo = GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
+    let repo = GitRepository::open(&repo_root)?;
 
     let entry = manager.pop_from_stack()?;
 
@@ -1253,7 +1274,10 @@ async fn submit_entry(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut stack_manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut stack_manager = StackManager::new(&repo_root)?;
 
     // Check for branch changes and prompt user if needed
     if !stack_manager.check_for_branch_change()? {
@@ -1372,7 +1396,7 @@ async fn submit_entry(
     pb.inc(1);
 
     // Create a new StackManager for the integration (since the original was moved)
-    let integration_stack_manager = StackManager::new(&current_dir)?;
+    let integration_stack_manager = StackManager::new(&repo_root)?;
     let mut integration =
         BitbucketIntegration::new(integration_stack_manager, cascade_config.clone())?;
 
@@ -1459,7 +1483,10 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
 
     // Load configuration
     let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
@@ -1538,7 +1565,10 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
 
     // Load configuration
     let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
@@ -1622,7 +1652,10 @@ async fn check_stack(_force: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
 
     let active_stack = manager
         .get_active_stack()
@@ -1640,8 +1673,11 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = GitRepository::open(&repo_root)?;
 
     // Get active stack
     let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
@@ -1693,7 +1729,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     // Step 2: Check if stack needs rebase
     println!("🔍 Checking if stack needs rebase...");
 
-    let mut updated_stack_manager = StackManager::new(&current_dir)?;
+    let mut updated_stack_manager = StackManager::new(&repo_root)?;
     let stack_id = active_stack.id;
 
     match updated_stack_manager.sync_stack(&stack_id) {
@@ -1708,7 +1744,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                         println!("🔀 Rebasing stack onto updated '{base_branch}'...");
 
                         // Load configuration for Bitbucket integration
-                        let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+                        let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
                         let config_path = config_dir.join("config.json");
                         let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -1749,7 +1785,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                                         println!("   🔄 Updating pull requests...");
 
                                         let integration_stack_manager =
-                                            StackManager::new(&current_dir)?;
+                                            StackManager::new(&repo_root)?;
                                         let mut integration =
                                             crate::bitbucket::BitbucketIntegration::new(
                                                 integration_stack_manager,
@@ -1838,11 +1874,14 @@ async fn rebase_stack(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = GitRepository::open(&repo_root)?;
 
     // Load configuration for potential Bitbucket integration
-    let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+    let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -1939,7 +1978,7 @@ async fn rebase_stack(
                 // Handle PR updates if enabled
                 if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
                     // Create a new StackManager for the integration (since the original was moved)
-                    let integration_stack_manager = StackManager::new(&current_dir)?;
+                    let integration_stack_manager = StackManager::new(&repo_root)?;
                     let mut integration = BitbucketIntegration::new(
                         integration_stack_manager,
                         cascade_config.clone(),
@@ -2008,8 +2047,11 @@ async fn continue_rebase() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
     let options = crate::stack::RebaseOptions::default();
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
@@ -2040,8 +2082,11 @@ async fn abort_rebase() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
     let options = crate::stack::RebaseOptions::default();
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
@@ -2069,8 +2114,11 @@ async fn rebase_status() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
 
     println!("📊 Rebase Status");
 
@@ -2138,7 +2186,10 @@ async fn delete_stack(name: String, force: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let mut manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
 
     let stack = manager
         .get_stack_by_name(&name)
@@ -2167,7 +2218,10 @@ async fn validate_stack(name: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let manager = StackManager::new(&repo_root)?;
 
     if let Some(name) = name {
         // Validate specific stack
@@ -2445,7 +2499,10 @@ async fn land_stack(
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
 
     // Get stack ID and active stack before moving stack_manager
     let stack_id = stack_manager
@@ -2464,7 +2521,7 @@ async fn land_stack(
         .ok_or_else(|| CascadeError::config("No active stack found".to_string()))?;
 
     // Load configuration and create Bitbucket integration
-    let config_dir = crate::config::get_repo_config_dir(&current_dir)?;
+    let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
     let config_path = config_dir.join("config.json");
     let settings = crate::config::Settings::load_from_file(&config_path)?;
 
@@ -2624,7 +2681,7 @@ async fn land_stack(
 
                     // 1️⃣ CRITICAL: Update base branch to get latest merged state
                     let base_branch = active_stack.base_branch.clone();
-                    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+                    let git_repo = crate::git::GitRepository::open(&repo_root)?;
 
                     println!("   📥 Updating base branch: {base_branch}");
                     match git_repo.pull(&base_branch) {
@@ -2639,7 +2696,7 @@ async fn land_stack(
 
                     // 2️⃣ Use rebase system to retarget remaining PRs
                     let mut rebase_manager = crate::stack::RebaseManager::new(
-                        StackManager::new(&current_dir)?,
+                        StackManager::new(&repo_root)?,
                         git_repo,
                         crate::stack::RebaseOptions {
                             strategy: crate::stack::RebaseStrategy::BranchVersioning,
@@ -2658,7 +2715,7 @@ async fn land_stack(
                                     auth: crate::config::AuthConfig::default(),
                                 };
                                 let mut retarget_integration = BitbucketIntegration::new(
-                                    StackManager::new(&current_dir)?,
+                                    StackManager::new(&repo_root)?,
                                     retarget_config,
                                 )?;
 
@@ -2771,8 +2828,11 @@ async fn continue_land() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
     let options = crate::stack::RebaseOptions::default();
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
@@ -2803,8 +2863,11 @@ async fn abort_land() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
     let options = crate::stack::RebaseOptions::default();
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
@@ -2832,13 +2895,16 @@ async fn land_status() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    let stack_manager = StackManager::new(&current_dir)?;
-    let git_repo = crate::git::GitRepository::open(&current_dir)?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
 
     println!("📊 Land Status");
 
     // Check if land operation is in progress by checking git state directly
-    let git_dir = current_dir.join(".git");
+    let git_dir = repo_root.join(".git");
     let land_in_progress = git_dir.join("REBASE_HEAD").exists()
         || git_dir.join("rebase-merge").exists()
         || git_dir.join("rebase-apply").exists();

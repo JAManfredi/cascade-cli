@@ -124,7 +124,9 @@ impl HooksManager {
         }
 
         println!("✅ Essential Cascade hooks installed successfully!");
-        println!("💡 Note: Post-commit hook available separately with 'ca hooks install post-commit'");
+        println!(
+            "💡 Note: Post-commit hook available separately with 'ca hooks install post-commit'"
+        );
         println!("\n💡 Hooks installed:");
         self.list_installed_hooks()?;
 
@@ -752,7 +754,8 @@ echo "✅ Commit message validation passed"
         }
 
         // 2. Check Cascade configuration
-        let config_path = self.repo_path.join(".cascade").join("config.json");
+        let config_dir = crate::config::get_repo_config_dir(&self.repo_path)?;
+        let config_path = config_dir.join("config.json");
         if !config_path.exists() {
             return Err(CascadeError::config(
                 "🚫 Cascade not initialized!\n\n\
@@ -884,7 +887,7 @@ pub async fn install() -> Result<()> {
 pub async fn install_essential() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    
+
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
@@ -900,7 +903,7 @@ pub async fn install_with_options(
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    
+
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
@@ -919,7 +922,7 @@ pub async fn install_with_options(
 pub async fn uninstall() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    
+
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
@@ -930,7 +933,7 @@ pub async fn uninstall() -> Result<()> {
 pub async fn status() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    
+
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
@@ -949,7 +952,7 @@ pub async fn install_hook_with_options(
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    
+
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
@@ -978,7 +981,7 @@ pub async fn install_hook_with_options(
 pub async fn uninstall_hook(hook_name: &str) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-    
+
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 

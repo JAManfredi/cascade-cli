@@ -261,6 +261,12 @@ ca hooks uninstall
 
 # Check installation status
 ca hooks status
+
+# Remove specific hooks
+ca hooks remove post-commit                 # Remove auto-add behavior
+ca hooks remove pre-push                    # Remove push protection
+ca hooks remove commit-msg                  # Remove message validation
+ca hooks remove prepare-commit-msg          # Remove message enhancement
 ```
 
 **🪝 Default hooks installed:**

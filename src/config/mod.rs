@@ -56,8 +56,10 @@ pub fn ensure_config_dir(config_dir: &Path) -> Result<()> {
 
 /// Check if a repository is initialized for Cascade
 pub fn is_repo_initialized(repo_path: &Path) -> bool {
-    let config_dir = repo_path.join(".cascade");
-    config_dir.exists() && config_dir.join("config.json").exists()
+    match get_repo_config_dir(repo_path) {
+        Ok(config_dir) => config_dir.exists() && config_dir.join("config.json").exists(),
+        Err(_) => false,
+    }
 }
 
 /// Initialize a repository for Cascade

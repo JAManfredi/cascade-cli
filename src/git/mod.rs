@@ -28,5 +28,6 @@ pub fn get_current_repository() -> Result<GitRepository> {
     let current_dir = std::env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
-    GitRepository::open(&current_dir)
+    let repo_root = find_repository_root(&current_dir)?;
+    GitRepository::open(&repo_root)
 }
