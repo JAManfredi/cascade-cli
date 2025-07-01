@@ -3538,7 +3538,7 @@ mod tests {
         }
 
         // Change to the test repository directory to ensure isolation
-        let original_dir = env::current_dir().unwrap();
+        let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
 
         match env::set_current_dir(&repo_path) {
             Ok(_) => {
@@ -3556,8 +3556,10 @@ mod tests {
                 )
                 .await;
 
-                // Restore original directory
-                let _ = env::set_current_dir(original_dir);
+                // Restore original directory (best effort)
+                if let Ok(orig) = original_dir {
+                    let _ = env::set_current_dir(orig);
+                }
 
                 // Should fail gracefully with appropriate error message when no stack is active
                 match &result {

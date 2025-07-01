@@ -57,6 +57,8 @@ async fn test_api_rate_limiting_behavior() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -113,6 +115,8 @@ async fn test_network_timeout_handling() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -171,6 +175,8 @@ async fn test_authentication_token_expiration() {
         username: Some("testuser".to_string()),
         token: Some("expired-token".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -239,6 +245,8 @@ async fn test_partial_api_operation_failures() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -266,6 +274,8 @@ async fn test_network_interruption_scenarios() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client_result = BitbucketClient::new(&config);

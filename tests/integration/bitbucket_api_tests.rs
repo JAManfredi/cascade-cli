@@ -35,6 +35,8 @@ async fn test_bitbucket_client_operations() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -82,6 +84,8 @@ async fn test_pull_request_management() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -119,6 +123,8 @@ async fn test_api_error_handling() {
         username: Some("testuser".to_string()),
         token: Some("testtoken".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&config).unwrap();
@@ -139,6 +145,8 @@ async fn test_authentication_methods() {
         username: None,
         token: Some("test-token".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&token_config);
@@ -152,6 +160,8 @@ async fn test_authentication_methods() {
         username: Some("testuser".to_string()),
         token: Some("testpass".to_string()),
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&user_pass_config);
@@ -165,6 +175,8 @@ async fn test_authentication_methods() {
         username: None,
         token: None,
         default_reviewers: vec![],
+        accept_invalid_certs: None,
+        ca_bundle_path: None,
     };
 
     let client = BitbucketClient::new(&no_auth_config);
