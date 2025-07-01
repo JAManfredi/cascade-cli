@@ -1112,7 +1112,7 @@ async fn push_to_stack(
         // Get commits that are on current branch but not on the base branch
         let base_branch = &active_stack.base_branch;
         let current_branch = repo.get_current_branch()?;
-        
+
         // If we're on the base branch, only include commits that aren't already in the stack
         if current_branch == *base_branch {
             let mut unpushed = Vec::new();
@@ -1147,11 +1147,9 @@ async fn push_to_stack(
             // Use git's commit range calculation to find commits on current branch but not on base
             match repo.get_commits_between(base_branch, &current_branch) {
                 Ok(commits) => {
-                    let mut unpushed: Vec<String> = commits
-                        .into_iter()
-                        .map(|c| c.id().to_string())
-                        .collect();
-                    
+                    let mut unpushed: Vec<String> =
+                        commits.into_iter().map(|c| c.id().to_string()).collect();
+
                     // Filter out commits that are already in the stack
                     unpushed.retain(|commit_hash| {
                         !active_stack
@@ -1159,7 +1157,7 @@ async fn push_to_stack(
                             .iter()
                             .any(|entry| entry.commit_hash == *commit_hash)
                     });
-                    
+
                     unpushed.reverse(); // Reverse to get chronological order (oldest first)
                     unpushed
                 }
@@ -3531,7 +3529,7 @@ mod tests {
             return;
         }
 
-        // Change to the test repository directory to ensure isolation  
+        // Change to the test repository directory to ensure isolation
         let original_dir = match env::current_dir() {
             Ok(dir) => dir,
             Err(_) => {
