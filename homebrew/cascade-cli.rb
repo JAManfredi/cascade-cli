@@ -12,15 +12,15 @@
 class CascadeCli < Formula
   desc "Cascade CLI - Git stacked diffs for Bitbucket Server"
   homepage "https://github.com/JAManfredi/cascade-cli"
-  version "0.1.11"
+  version "0.1.12"
   license "MIT"
 
   # macOS binaries with architecture detection
   if Hardware::CPU.arm?
-    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.11/ca-macos-arm64.tar.gz"
+    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.12/ca-macos-arm64.tar.gz"
     sha256 "7fb29a4c9c3a859117a491455684dd32a3c09ebca46afdd9c29cec115a97d8de"
   else
-    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.11/ca-macos-x64.tar.gz"
+    url "https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.12/ca-macos-x64.tar.gz"
     sha256 "0a67e5766974834d426bb7e9fa85185d8cb8ec8d96c55ee480dd007bc8e3863e"
   end
 
