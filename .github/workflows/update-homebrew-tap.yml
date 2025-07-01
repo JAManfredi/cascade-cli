@@ -24,7 +24,23 @@ jobs:
           path: homebrew-tap
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
           ref: main  # Explicitly checkout main branch
+          fetch-depth: 0  # Fetch full history to avoid detached HEAD issues
       
+      - name: Configure git in tap repository
+        run: |
+          cd homebrew-tap
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Ensure we're on main branch and not detached
+          git checkout main
+          git pull origin main
+          
+          # Verify we're on a branch
+          echo "Current branch: $(git branch --show-current)"
+          echo "Git status:"
+          git status
+          
       - name: Get release info
         id: release_info
         run: |
@@ -75,9 +91,8 @@ jobs:
           # Update the formula in the tap repository
           cd homebrew-tap
           
-          # Ensure we're on the right branch
-          git checkout main
-          git pull origin main
+          # Double-check we're on the right branch
+          echo "Current branch before update: $(git branch --show-current)"
           
           # Update URLs (use $VERSION which includes 'v' prefix)
           sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/${VERSION}/ca-macos-arm64.tar.gz|g" Formula/cascade-cli.rb
@@ -102,6 +117,10 @@ jobs:
           # Show what was updated
           echo "Updated formula content:"
           cat Formula/cascade-cli.rb
+          
+          # Verify git status after changes
+          echo "Git status after formula update:"
+          git status
           
       - name: Test formula syntax
         run: |
@@ -130,3 +149,4 @@ jobs:
           delete-branch: true
           author: "GitHub Actions <actions@github.com>"
           committer: "GitHub Actions <actions@github.com>"
+          base: main  # Explicitly set base branch
