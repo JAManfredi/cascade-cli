@@ -316,6 +316,22 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        ref: master  # Explicitly checkout master branch to avoid detached HEAD
+        fetch-depth: 0  # Fetch full history
+
+    - name: Configure git and ensure on master branch
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Ensure we're on master branch and not detached
+        git checkout master
+        git pull origin master
+        
+        # Verify we're on a branch
+        echo "Current branch: $(git branch --show-current)"
+        echo "Git status:"
+        git status
 
     - name: Get release info
       id: release_info
@@ -368,8 +384,6 @@ jobs:
 
     - name: Commit and push updated formula
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
         git add homebrew/cascade-cli.rb
         git commit -m "Update Homebrew formula to ${{ steps.release_info.outputs.tag }}" || exit 0
         git push
