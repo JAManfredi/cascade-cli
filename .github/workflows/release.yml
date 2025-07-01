@@ -263,14 +263,13 @@ jobs:
     - name: Test Unix releases
       run: |
         cd release-assets
-        for target in ca-linux-x64.tar.gz ca-macos-x64.tar.gz; do
-          if [ -f "$target" ]; then
-            tar -xzf "$target"
-            ./ca --version
-            ./ca --help
-            rm -f ca  # Clean up for next iteration
-          fi
-        done
+        # Only test the Linux x64 binary on Linux runners
+        if [ -f "ca-linux-x64.tar.gz" ]; then
+          tar -xzf "ca-linux-x64.tar.gz"
+          ./ca --version
+          ./ca --help
+          rm -f ca  # Clean up
+        fi
 
     # Test Windows releases separately  
     - name: Test Windows releases
