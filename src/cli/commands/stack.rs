@@ -1104,39 +1104,74 @@ async fn push_to_stack(
         // Single specific commit
         vec![hash]
     } else {
-        // Default: Get all unpushed commits (commits not in any stack entry)
+        // Default: Get all unpushed commits (commits on current branch but not on base branch)
         let active_stack = manager.get_active_stack().ok_or_else(|| {
             CascadeError::config("No active stack. Create a stack first with 'ca stacks create'")
         })?;
 
-        let mut unpushed = Vec::new();
-        let head_commit = repo.get_head_commit()?;
-        let mut current_commit = head_commit;
+        // Get commits that are on current branch but not on the base branch
+        let base_branch = &active_stack.base_branch;
+        let current_branch = repo.get_current_branch()?;
+        
+        // If we're on the base branch, only include commits that aren't already in the stack
+        if current_branch == *base_branch {
+            let mut unpushed = Vec::new();
+            let head_commit = repo.get_head_commit()?;
+            let mut current_commit = head_commit;
 
-        // Walk back from HEAD until we find a commit that's already in the stack
-        loop {
-            let commit_hash = current_commit.id().to_string();
-            let already_in_stack = active_stack
-                .entries
-                .iter()
-                .any(|entry| entry.commit_hash == commit_hash);
+            // Walk back from HEAD until we find a commit that's already in the stack
+            loop {
+                let commit_hash = current_commit.id().to_string();
+                let already_in_stack = active_stack
+                    .entries
+                    .iter()
+                    .any(|entry| entry.commit_hash == commit_hash);
 
-            if already_in_stack {
-                break;
+                if already_in_stack {
+                    break;
+                }
+
+                unpushed.push(commit_hash);
+
+                // Move to parent commit
+                if let Some(parent) = current_commit.parents().next() {
+                    current_commit = parent;
+                } else {
+                    break;
+                }
             }
 
-            unpushed.push(commit_hash);
-
-            // Move to parent commit
-            if let Some(parent) = current_commit.parents().next() {
-                current_commit = parent;
-            } else {
-                break;
+            unpushed.reverse(); // Reverse to get chronological order
+            unpushed
+        } else {
+            // Use git's commit range calculation to find commits on current branch but not on base
+            match repo.get_commits_between(base_branch, &current_branch) {
+                Ok(commits) => {
+                    let mut unpushed: Vec<String> = commits
+                        .into_iter()
+                        .map(|c| c.id().to_string())
+                        .collect();
+                    
+                    // Filter out commits that are already in the stack
+                    unpushed.retain(|commit_hash| {
+                        !active_stack
+                            .entries
+                            .iter()
+                            .any(|entry| entry.commit_hash == *commit_hash)
+                    });
+                    
+                    unpushed.reverse(); // Reverse to get chronological order (oldest first)
+                    unpushed
+                }
+                Err(e) => {
+                    return Err(CascadeError::branch(format!(
+                        "Failed to calculate commits between '{}' and '{}': {}. \
+                         This usually means the branches have diverged or don't share common history.",
+                        base_branch, current_branch, e
+                    )));
+                }
             }
         }
-
-        unpushed.reverse(); // Reverse to get chronological order
-        unpushed
     };
 
     if commits_to_push.is_empty() {
@@ -3496,8 +3531,14 @@ mod tests {
             return;
         }
 
-        // Change to the test repository directory to ensure isolation
-        let original_dir = env::current_dir().unwrap();
+        // Change to the test repository directory to ensure isolation  
+        let original_dir = match env::current_dir() {
+            Ok(dir) => dir,
+            Err(_) => {
+                println!("Skipping test due to current directory access restrictions");
+                return;
+            }
+        };
 
         match env::set_current_dir(&repo_path) {
             Ok(_) => {
