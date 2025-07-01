@@ -238,6 +238,7 @@ name = "cascade-cli"
 version = "0.1.17"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64",
  "chrono",
  "clap",

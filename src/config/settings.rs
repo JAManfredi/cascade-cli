@@ -1,5 +1,6 @@
 use crate::config::auth::AuthConfig;
 use crate::errors::{CascadeError, Result};
+use crate::providers::{ProviderConfig, ProviderType};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -73,6 +74,33 @@ impl Default for BitbucketConfig {
             token: None,
             default_reviewers: Vec::new(),
         }
+    }
+}
+
+impl ProviderConfig for BitbucketConfig {
+    fn provider_type(&self) -> ProviderType {
+        ProviderType::Bitbucket
+    }
+    
+    fn validate(&self) -> Result<()> {
+        if self.url.is_empty() {
+            return Err(CascadeError::config("Bitbucket URL cannot be empty"));
+        }
+        
+        if self.project.is_empty() {
+            return Err(CascadeError::config("Bitbucket project cannot be empty"));
+        }
+        
+        if self.repo.is_empty() {
+            return Err(CascadeError::config("Bitbucket repository cannot be empty"));
+        }
+        
+        // Validate URL format
+        if !self.url.starts_with("http://") && !self.url.starts_with("https://") {
+            return Err(CascadeError::config("Bitbucket URL must start with http:// or https://"));
+        }
+        
+        Ok(())
     }
 }
 
