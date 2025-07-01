@@ -164,9 +164,9 @@ impl Settings {
             ("bitbucket", "repo") => self.bitbucket.repo = value.to_string(),
             ("bitbucket", "token") => self.bitbucket.token = Some(value.to_string()),
             ("bitbucket", "accept_invalid_certs") => {
-                self.bitbucket.accept_invalid_certs = Some(value
-                    .parse()
-                    .map_err(|_| CascadeError::config(format!("Invalid boolean value: {value}")))?);
+                self.bitbucket.accept_invalid_certs = Some(value.parse().map_err(|_| {
+                    CascadeError::config(format!("Invalid boolean value: {value}"))
+                })?);
             }
             ("bitbucket", "ca_bundle_path") => {
                 self.bitbucket.ca_bundle_path = Some(value.to_string());
@@ -251,9 +251,15 @@ impl Settings {
             ("bitbucket", "repo") => &self.bitbucket.repo,
             ("bitbucket", "token") => self.bitbucket.token.as_deref().unwrap_or(""),
             ("bitbucket", "accept_invalid_certs") => {
-                return Ok(self.bitbucket.accept_invalid_certs.unwrap_or(false).to_string())
+                return Ok(self
+                    .bitbucket
+                    .accept_invalid_certs
+                    .unwrap_or(false)
+                    .to_string())
             }
-            ("bitbucket", "ca_bundle_path") => self.bitbucket.ca_bundle_path.as_deref().unwrap_or(""),
+            ("bitbucket", "ca_bundle_path") => {
+                self.bitbucket.ca_bundle_path.as_deref().unwrap_or("")
+            }
             ("git", "default_branch") => &self.git.default_branch,
             ("git", "author_name") => self.git.author_name.as_deref().unwrap_or(""),
             ("git", "author_email") => self.git.author_email.as_deref().unwrap_or(""),
