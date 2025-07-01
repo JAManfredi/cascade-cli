@@ -35,10 +35,21 @@ impl StackManager {
         let stacks_file = config_dir.join("stacks.json");
         let metadata_file = config_dir.join("metadata.json");
 
-        // Determine default base branch
-        let default_base = repo
-            .get_current_branch()
-            .unwrap_or_else(|_| "main".to_string());
+        // Determine default base branch - try current branch first, then check for common defaults
+        let default_base = match repo.get_current_branch() {
+            Ok(branch) => branch,
+            Err(_) => {
+                // Fallback: check if common default branches exist
+                if repo.branch_exists("main") {
+                    "main".to_string()
+                } else if repo.branch_exists("master") {
+                    "master".to_string()
+                } else {
+                    // Final fallback to main (modern Git default)
+                    "main".to_string()
+                }
+            }
+        };
 
         let mut manager = Self {
             repo,

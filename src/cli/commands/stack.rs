@@ -3387,11 +3387,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_push_default_behavior() {
-        // Test the push_to_stack function structure and error handling
-        // This test focuses on ensuring the function can be called and handles errors gracefully
-        // rather than testing full integration (which requires complex setup)
+        // Test the push_to_stack function structure and error handling in an isolated environment
+        let (_temp_dir, repo_path) = create_test_repo().await;
 
-        let (_temp_dir, _repo_path) = create_test_repo().await;
+        // Change to the test repository directory to ensure isolation
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(&repo_path).unwrap();
 
         // Test that push_to_stack properly handles the case when no stack is active
         let result = push_to_stack(
@@ -3406,6 +3407,9 @@ mod tests {
             false, // allow_base_branch
         )
         .await;
+
+        // Restore original directory
+        env::set_current_dir(original_dir).unwrap();
 
         // Should fail gracefully with appropriate error message when no stack is active
         match &result {
@@ -3458,11 +3462,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_default_behavior() {
-        // Test the submit_entry function structure and error handling
-        // This test focuses on ensuring the function can be called and handles errors gracefully
-        // rather than testing full integration (which requires complex setup)
+        // Test the submit_entry function structure and error handling in an isolated environment
+        let (_temp_dir, repo_path) = create_test_repo().await;
 
-        let (_temp_dir, _repo_path) = create_test_repo().await;
+        // Change to the test repository directory to ensure isolation
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(&repo_path).unwrap();
 
         // Test that submit_entry properly handles the case when no stack is active
         let result = submit_entry(
@@ -3473,6 +3478,9 @@ mod tests {
             false, // draft
         )
         .await;
+
+        // Restore original directory
+        env::set_current_dir(original_dir).unwrap();
 
         // Should fail gracefully with appropriate error message when no stack is active
         match &result {
