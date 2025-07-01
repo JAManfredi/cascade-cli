@@ -222,6 +222,24 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+
+    /// Submit a stack entry for review (shortcut for 'stacks submit')
+    Submit {
+        /// Stack entry number (1-based, defaults to all unsubmitted)
+        entry: Option<usize>,
+        /// Pull request title
+        #[arg(long, short)]
+        title: Option<String>,
+        /// Pull request description
+        #[arg(long, short)]
+        description: Option<String>,
+        /// Submit range of entries (e.g., "1-3" or "2,4,6")
+        #[arg(long)]
+        range: Option<String>,
+        /// Create draft pull requests (can be edited later)
+        #[arg(long)]
+        draft: bool,
+    },
 }
 
 /// Git hooks actions
@@ -525,6 +543,24 @@ impl Cli {
             Commands::Switch { name } => commands::stack::switch(name).await,
 
             Commands::Deactivate { force } => commands::stack::deactivate(force).await,
+
+            Commands::Submit {
+                entry,
+                title,
+                description,
+                range,
+                draft,
+            } => {
+                // Delegate to the stacks submit functionality
+                let submit_action = StackAction::Submit {
+                    entry,
+                    title,
+                    description,
+                    range,
+                    draft,
+                };
+                commands::stack::run(submit_action).await
+            }
         }
     }
 

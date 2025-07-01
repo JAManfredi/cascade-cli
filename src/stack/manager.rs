@@ -9,6 +9,26 @@ use std::path::{Path, PathBuf};
 use tracing::info;
 use uuid::Uuid;
 
+/// Types of branch modifications detected during Git integrity checks
+#[derive(Debug)]
+pub enum BranchModification {
+    /// Branch is missing (needs to be created)
+    Missing {
+        branch: String,
+        entry_id: Uuid,
+        expected_commit: String,
+    },
+    /// Branch has extra commits beyond what's expected
+    ExtraCommits {
+        branch: String,
+        entry_id: Uuid,
+        expected_commit: String,
+        actual_commit: String,
+        extra_commit_count: usize,
+        extra_commit_messages: Vec<String>,
+    },
+}
+
 /// Manages all stack operations and persistence
 pub struct StackManager {
     /// Git repository interface
@@ -239,6 +259,17 @@ impl StackManager {
             .get_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Active stack not found"))?;
 
+        // 🆕 VALIDATE GIT INTEGRITY BEFORE PUSHING (if stack is not empty)
+        if !stack.entries.is_empty() {
+            if let Err(integrity_error) = stack.validate_git_integrity(&self.repo) {
+                return Err(CascadeError::validation(format!(
+                    "Cannot push to corrupted stack '{}':\n{}\n\n\
+                     💡 Fix the stack integrity issues first using 'ca stack validate {}' for details.",
+                    stack.name, integrity_error, stack.name
+                )));
+            }
+        }
+
         // Verify the commit exists
         if !self.repo.commit_exists(&commit_hash)? {
             return Err(CascadeError::branch(format!(
@@ -258,6 +289,30 @@ impl StackManager {
                 duplicate_entry.id,
                 &duplicate_entry.commit_hash[..8]
             )));
+        }
+
+        // 🆕 CREATE ACTUAL GIT BRANCH from the specific commit
+        // Check if branch already exists
+        if self.repo.branch_exists(&branch) {
+            tracing::info!("Branch '{}' already exists, skipping creation", branch);
+        } else {
+            // Create the branch from the specific commit hash
+            self.repo
+                .create_branch(&branch, Some(&commit_hash))
+                .map_err(|e| {
+                    CascadeError::branch(format!(
+                        "Failed to create branch '{}' from commit {}: {}",
+                        branch,
+                        &commit_hash[..8],
+                        e
+                    ))
+                })?;
+
+            tracing::info!(
+                "✅ Created Git branch '{}' from commit {}",
+                branch,
+                &commit_hash[..8]
+            );
         }
 
         // Add to stack
@@ -456,6 +511,15 @@ impl StackManager {
             .get_mut(stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
+        // 🆕 ENHANCED: Check Git integrity first (branch HEAD matches stored commits)
+        if let Err(integrity_error) = stack.validate_git_integrity(&self.repo) {
+            stack.update_status(StackStatus::Corrupted);
+            return Err(CascadeError::branch(format!(
+                "Stack '{}' Git integrity check failed:\n{}",
+                stack.name, integrity_error
+            )));
+        }
+
         // Check if all commits still exist
         let mut missing_commits = Vec::new();
         for entry in &stack.entries {
@@ -465,7 +529,7 @@ impl StackManager {
         }
 
         if !missing_commits.is_empty() {
-            stack.update_status(StackStatus::OutOfSync);
+            stack.update_status(StackStatus::Corrupted);
             return Err(CascadeError::branch(format!(
                 "Stack {} has missing commits: {}",
                 stack.name,
@@ -562,13 +626,45 @@ impl StackManager {
         Ok(stacks)
     }
 
-    /// Validate all stacks
+    /// Validate all stacks including Git integrity
     pub fn validate_all(&self) -> Result<()> {
         for stack in self.stacks.values() {
+            // Basic structure validation
             stack.validate().map_err(|e| {
                 CascadeError::config(format!("Stack '{}' validation failed: {}", stack.name, e))
             })?;
+
+            // Git integrity validation
+            stack.validate_git_integrity(&self.repo).map_err(|e| {
+                CascadeError::config(format!(
+                    "Stack '{}' Git integrity validation failed: {}",
+                    stack.name, e
+                ))
+            })?;
         }
+        Ok(())
+    }
+
+    /// Validate a specific stack including Git integrity
+    pub fn validate_stack(&self, stack_id: &Uuid) -> Result<()> {
+        let stack = self
+            .stacks
+            .get(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        // Basic structure validation
+        stack.validate().map_err(|e| {
+            CascadeError::config(format!("Stack '{}' validation failed: {}", stack.name, e))
+        })?;
+
+        // Git integrity validation
+        stack.validate_git_integrity(&self.repo).map_err(|e| {
+            CascadeError::config(format!(
+                "Stack '{}' Git integrity validation failed: {}",
+                stack.name, e
+            ))
+        })?;
+
         Ok(())
     }
 
@@ -730,6 +826,390 @@ impl StackManager {
 
         // No branch change detected
         Ok(true)
+    }
+
+    /// Handle Git integrity issues with multiple user-friendly options
+    /// Provides non-destructive choices for dealing with branch modifications
+    pub fn handle_branch_modifications(
+        &mut self,
+        stack_id: &Uuid,
+        auto_mode: Option<String>,
+    ) -> Result<()> {
+        let stack = self
+            .stacks
+            .get_mut(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        info!("Checking Git integrity for stack '{}'", stack.name);
+
+        // Detect all modifications
+        let mut modifications = Vec::new();
+        for entry in &stack.entries {
+            if !self.repo.branch_exists(&entry.branch) {
+                modifications.push(BranchModification::Missing {
+                    branch: entry.branch.clone(),
+                    entry_id: entry.id,
+                    expected_commit: entry.commit_hash.clone(),
+                });
+            } else if let Ok(branch_head) = self.repo.get_branch_head(&entry.branch) {
+                if branch_head != entry.commit_hash {
+                    // Get extra commits and their messages
+                    let extra_commits = self
+                        .repo
+                        .get_commits_between(&entry.commit_hash, &branch_head)?;
+                    let mut extra_messages = Vec::new();
+                    for commit in &extra_commits {
+                        if let Some(message) = commit.message() {
+                            let first_line =
+                                message.lines().next().unwrap_or("(no message)").to_string();
+                            extra_messages.push(format!(
+                                "{}: {}",
+                                &commit.id().to_string()[..8],
+                                first_line
+                            ));
+                        }
+                    }
+
+                    modifications.push(BranchModification::ExtraCommits {
+                        branch: entry.branch.clone(),
+                        entry_id: entry.id,
+                        expected_commit: entry.commit_hash.clone(),
+                        actual_commit: branch_head,
+                        extra_commit_count: extra_commits.len(),
+                        extra_commit_messages: extra_messages,
+                    });
+                }
+            }
+        }
+
+        if modifications.is_empty() {
+            println!("✅ Stack '{}' has no Git integrity issues", stack.name);
+            return Ok(());
+        }
+
+        // Show detected modifications
+        println!(
+            "🔍 Detected branch modifications in stack '{}':",
+            stack.name
+        );
+        for (i, modification) in modifications.iter().enumerate() {
+            match modification {
+                BranchModification::Missing { branch, .. } => {
+                    println!("   {}. Branch '{}' is missing", i + 1, branch);
+                }
+                BranchModification::ExtraCommits {
+                    branch,
+                    expected_commit,
+                    actual_commit,
+                    extra_commit_count,
+                    extra_commit_messages,
+                    ..
+                } => {
+                    println!(
+                        "   {}. Branch '{}' has {} extra commit(s)",
+                        i + 1,
+                        branch,
+                        extra_commit_count
+                    );
+                    println!(
+                        "      Expected: {} | Actual: {}",
+                        &expected_commit[..8],
+                        &actual_commit[..8]
+                    );
+
+                    // Show extra commit messages (first few only)
+                    for (j, message) in extra_commit_messages.iter().enumerate() {
+                        if j < 3 {
+                            println!("         + {message}");
+                        } else if j == 3 {
+                            println!("         + ... and {} more", extra_commit_count - 3);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        println!();
+
+        // Auto mode handling
+        if let Some(mode) = auto_mode {
+            return self.apply_auto_fix(stack_id, &modifications, &mode);
+        }
+
+        // Interactive mode - ask user for each modification
+        for modification in modifications {
+            self.handle_single_modification(stack_id, &modification)?;
+        }
+
+        self.save_to_disk()?;
+        println!("🎉 All branch modifications handled successfully!");
+        Ok(())
+    }
+
+    /// Handle a single branch modification interactively
+    fn handle_single_modification(
+        &mut self,
+        stack_id: &Uuid,
+        modification: &BranchModification,
+    ) -> Result<()> {
+        match modification {
+            BranchModification::Missing {
+                branch,
+                expected_commit,
+                ..
+            } => {
+                println!("🔧 Missing branch '{branch}'");
+                println!(
+                    "   This will create the branch at commit {}",
+                    &expected_commit[..8]
+                );
+
+                self.repo.create_branch(branch, Some(expected_commit))?;
+                println!("   ✅ Created branch '{branch}'");
+            }
+
+            BranchModification::ExtraCommits {
+                branch,
+                entry_id,
+                expected_commit,
+                extra_commit_count,
+                ..
+            } => {
+                println!(
+                    "🤔 Branch '{branch}' has {extra_commit_count} extra commit(s). What would you like to do?"
+                );
+                println!("   1. 📝 Incorporate - Update stack entry to include extra commits");
+                println!("   2. ➕ Split - Create new stack entry for extra commits");
+                println!("   3. 🗑️  Reset - Remove extra commits (DESTRUCTIVE)");
+                println!("   4. ⏭️  Skip - Leave as-is for now");
+                print!("   Choice (1-4): ");
+
+                use std::io::{self, Write};
+                io::stdout().flush().unwrap();
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input).unwrap();
+
+                match input.trim() {
+                    "1" | "incorporate" | "inc" => {
+                        self.incorporate_extra_commits(stack_id, *entry_id, branch)?;
+                    }
+                    "2" | "split" | "new" => {
+                        self.split_extra_commits(stack_id, *entry_id, branch)?;
+                    }
+                    "3" | "reset" | "remove" => {
+                        self.reset_branch_destructive(branch, expected_commit)?;
+                    }
+                    "4" | "skip" | "ignore" => {
+                        println!("   ⏭️  Skipping '{branch}' (integrity issue remains)");
+                    }
+                    _ => {
+                        println!("   ❌ Invalid choice. Skipping '{branch}'");
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Apply automatic fix based on mode
+    fn apply_auto_fix(
+        &mut self,
+        stack_id: &Uuid,
+        modifications: &[BranchModification],
+        mode: &str,
+    ) -> Result<()> {
+        println!("🤖 Applying automatic fix mode: {mode}");
+
+        for modification in modifications {
+            match (modification, mode) {
+                (
+                    BranchModification::Missing {
+                        branch,
+                        expected_commit,
+                        ..
+                    },
+                    _,
+                ) => {
+                    self.repo.create_branch(branch, Some(expected_commit))?;
+                    println!("   ✅ Created missing branch '{branch}'");
+                }
+
+                (
+                    BranchModification::ExtraCommits {
+                        branch, entry_id, ..
+                    },
+                    "incorporate",
+                ) => {
+                    self.incorporate_extra_commits(stack_id, *entry_id, branch)?;
+                }
+
+                (
+                    BranchModification::ExtraCommits {
+                        branch, entry_id, ..
+                    },
+                    "split",
+                ) => {
+                    self.split_extra_commits(stack_id, *entry_id, branch)?;
+                }
+
+                (
+                    BranchModification::ExtraCommits {
+                        branch,
+                        expected_commit,
+                        ..
+                    },
+                    "reset",
+                ) => {
+                    self.reset_branch_destructive(branch, expected_commit)?;
+                }
+
+                _ => {
+                    return Err(CascadeError::config(format!(
+                        "Unknown auto-fix mode '{mode}'. Use: incorporate, split, reset"
+                    )));
+                }
+            }
+        }
+
+        self.save_to_disk()?;
+        println!("🎉 Auto-fix completed for mode: {mode}");
+        Ok(())
+    }
+
+    /// Incorporate extra commits into the existing stack entry (update commit hash)
+    fn incorporate_extra_commits(
+        &mut self,
+        stack_id: &Uuid,
+        entry_id: Uuid,
+        branch: &str,
+    ) -> Result<()> {
+        let stack = self.stacks.get_mut(stack_id).unwrap();
+
+        if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == entry_id) {
+            let new_head = self.repo.get_branch_head(branch)?;
+            let old_commit = entry.commit_hash[..8].to_string(); // Clone to avoid borrowing issue
+
+            // Get the extra commits for message update
+            let extra_commits = self
+                .repo
+                .get_commits_between(&entry.commit_hash, &new_head)?;
+
+            // Update the entry to point to the new HEAD
+            entry.commit_hash = new_head.clone();
+
+            // Update commit message to reflect the incorporation
+            let mut extra_messages = Vec::new();
+            for commit in &extra_commits {
+                if let Some(message) = commit.message() {
+                    let first_line = message.lines().next().unwrap_or("").to_string();
+                    extra_messages.push(first_line);
+                }
+            }
+
+            if !extra_messages.is_empty() {
+                entry.message = format!(
+                    "{}\n\nIncorporated commits:\n• {}",
+                    entry.message,
+                    extra_messages.join("\n• ")
+                );
+            }
+
+            println!(
+                "   ✅ Incorporated {} commit(s) into entry '{}'",
+                extra_commits.len(),
+                entry.short_hash()
+            );
+            println!("      Updated: {} -> {}", old_commit, &new_head[..8]);
+        }
+
+        Ok(())
+    }
+
+    /// Split extra commits into a new stack entry
+    fn split_extra_commits(&mut self, stack_id: &Uuid, entry_id: Uuid, branch: &str) -> Result<()> {
+        let stack = self.stacks.get_mut(stack_id).unwrap();
+        let new_head = self.repo.get_branch_head(branch)?;
+
+        // Find the position of the current entry
+        let entry_position = stack
+            .entries
+            .iter()
+            .position(|e| e.id == entry_id)
+            .ok_or_else(|| CascadeError::config("Entry not found in stack"))?;
+
+        // Create a new branch name for the split
+        let base_name = branch.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-');
+        let new_branch = format!("{base_name}-continued");
+
+        // Create new branch at the current HEAD
+        self.repo.create_branch(&new_branch, Some(&new_head))?;
+
+        // Get extra commits for message creation
+        let original_entry = &stack.entries[entry_position];
+        let original_commit_hash = original_entry.commit_hash.clone(); // Clone to avoid borrowing issue
+        let extra_commits = self
+            .repo
+            .get_commits_between(&original_commit_hash, &new_head)?;
+
+        // Create commit message from extra commits
+        let mut extra_messages = Vec::new();
+        for commit in &extra_commits {
+            if let Some(message) = commit.message() {
+                let first_line = message.lines().next().unwrap_or("").to_string();
+                extra_messages.push(first_line);
+            }
+        }
+
+        let new_message = if extra_messages.len() == 1 {
+            extra_messages[0].clone()
+        } else {
+            format!("Combined changes:\n• {}", extra_messages.join("\n• "))
+        };
+
+        // Create new stack entry manually (no constructor method exists)
+        let now = chrono::Utc::now();
+        let new_entry = crate::stack::StackEntry {
+            id: uuid::Uuid::new_v4(),
+            branch: new_branch.clone(),
+            commit_hash: new_head,
+            message: new_message,
+            parent_id: Some(entry_id), // Parent is the current entry
+            children: Vec::new(),
+            created_at: now,
+            updated_at: now,
+            is_submitted: false,
+            pull_request_id: None,
+            is_synced: false,
+        };
+
+        // Insert the new entry after the current one
+        stack.entries.insert(entry_position + 1, new_entry);
+
+        // Reset the original branch to its expected commit
+        self.repo
+            .reset_branch_to_commit(branch, &original_commit_hash)?;
+
+        println!(
+            "   ✅ Split {} commit(s) into new entry '{}'",
+            extra_commits.len(),
+            new_branch
+        );
+        println!("      Original branch '{branch}' reset to expected commit");
+
+        Ok(())
+    }
+
+    /// Reset branch to expected commit (destructive - loses extra work)
+    fn reset_branch_destructive(&self, branch: &str, expected_commit: &str) -> Result<()> {
+        self.repo.reset_branch_to_commit(branch, expected_commit)?;
+        println!(
+            "   ⚠️  Reset branch '{}' to {} (extra commits lost)",
+            branch,
+            &expected_commit[..8]
+        );
+        Ok(())
     }
 }
 

@@ -1642,6 +1642,54 @@ impl GitRepository {
         })
         .await
     }
+
+    /// Reset a branch to point to a specific commit
+    pub fn reset_branch_to_commit(&self, branch_name: &str, commit_hash: &str) -> Result<()> {
+        info!(
+            "Resetting branch '{}' to commit {}",
+            branch_name,
+            &commit_hash[..8]
+        );
+
+        // Find the target commit
+        let target_oid = git2::Oid::from_str(commit_hash).map_err(|e| {
+            CascadeError::branch(format!("Invalid commit hash '{commit_hash}': {e}"))
+        })?;
+
+        let _target_commit = self.repo.find_commit(target_oid).map_err(|e| {
+            CascadeError::branch(format!("Could not find commit '{commit_hash}': {e}"))
+        })?;
+
+        // Find the branch
+        let _branch = self
+            .repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .map_err(|e| {
+                CascadeError::branch(format!("Could not find branch '{branch_name}': {e}"))
+            })?;
+
+        // Update the branch reference to point to the target commit
+        let branch_ref_name = format!("refs/heads/{branch_name}");
+        self.repo
+            .reference(
+                &branch_ref_name,
+                target_oid,
+                true,
+                &format!("Reset {branch_name} to {commit_hash}"),
+            )
+            .map_err(|e| {
+                CascadeError::branch(format!(
+                    "Could not reset branch '{branch_name}' to commit '{commit_hash}': {e}"
+                ))
+            })?;
+
+        tracing::info!(
+            "Successfully reset branch '{}' to commit {}",
+            branch_name,
+            &commit_hash[..8]
+        );
+        Ok(())
+    }
 }
 
 #[cfg(test)]

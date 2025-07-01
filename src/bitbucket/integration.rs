@@ -55,13 +55,82 @@ impl BitbucketIntegration {
 
         info!("Submitting stack entry {} as pull request", entry_id);
 
+        // 🆕 VALIDATE GIT INTEGRITY BEFORE SUBMISSION
+        if let Err(integrity_error) = stack.validate_git_integrity(self.stack_manager.git_repo()) {
+            return Err(CascadeError::validation(format!(
+                "Cannot submit entry from corrupted stack '{}':\n{}",
+                stack.name, integrity_error
+            )));
+        }
+
+        // Push branch to remote if not already pushed
+        let git_repo = self.stack_manager.git_repo();
+        info!("Ensuring branch '{}' is pushed to remote", entry.branch);
+
+        match git_repo.push(&entry.branch) {
+            Ok(_) => {
+                info!("✅ Successfully pushed branch '{}' to remote", entry.branch);
+
+                // Mark as pushed in metadata
+                if let Some(commit_meta) = self
+                    .stack_manager
+                    .get_repository_metadata()
+                    .commits
+                    .get(&entry.commit_hash)
+                {
+                    let mut updated_meta = commit_meta.clone();
+                    updated_meta.mark_pushed();
+                    // Note: This would require making mark_pushed public and updating the metadata
+                    // For now, we'll track this as a future enhancement
+                }
+            }
+            Err(e) => {
+                // Check if it's already pushed or if this is a recoverable error
+                warn!("Failed to push branch '{}': {}", entry.branch, e);
+
+                // Try to continue anyway - the branch might already exist remotely
+                info!("Attempting to create PR anyway (branch may already exist remotely)");
+            }
+        }
+
         // Determine target branch (parent entry's branch or stack base)
         let target_branch = self.get_target_branch(stack, entry)?;
+
+        // Ensure target branch is also pushed to remote (if it's not the base branch)
+        if target_branch != stack.base_branch {
+            info!(
+                "Ensuring target branch '{}' is pushed to remote",
+                target_branch
+            );
+            match git_repo.push(&target_branch) {
+                Ok(_) => {
+                    info!(
+                        "✅ Successfully pushed target branch '{}' to remote",
+                        target_branch
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to push target branch '{}': {}", target_branch, e);
+                    info!("Continuing anyway (target branch may already exist remotely)");
+                }
+            }
+        }
 
         // Create pull request
         let pr_request =
             self.create_pr_request(stack, entry, &target_branch, title, description, draft)?;
-        let pr = self.pr_manager.create_pull_request(pr_request).await?;
+
+        let pr = match self.pr_manager.create_pull_request(pr_request).await {
+            Ok(pr) => pr,
+            Err(e) => {
+                return Err(CascadeError::bitbucket(format!(
+                    "Failed to create pull request for branch '{}' -> '{}': {}. \
+                    Ensure both branches exist in the remote repository. \
+                    You can manually push with: git push origin {}",
+                    entry.branch, target_branch, e, entry.branch
+                )));
+            }
+        };
 
         // Update stack manager with PR information
         self.stack_manager

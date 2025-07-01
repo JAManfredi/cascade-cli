@@ -248,56 +248,166 @@ impl Stack {
             .collect()
     }
 
-    /// Validate the stack structure
-    pub fn validate(&self) -> Result<(), String> {
-        // Check that all entries in the vector are also in the map
-        for entry in &self.entries {
-            if !self.entry_map.contains_key(&entry.id) {
-                return Err(format!("Entry {} not found in entry map", entry.id));
-            }
-        }
-
-        // Check that all entries in the map are also in the vector
-        if self.entry_map.len() != self.entries.len() {
-            return Err("Entry map and vector have different sizes".to_string());
+    /// Validate the stack structure and Git state integrity
+    pub fn validate(&self) -> Result<String, String> {
+        // Validate basic structure
+        if self.entries.is_empty() {
+            return Ok("Empty stack is valid".to_string());
         }
 
         // Check parent-child relationships
-        for entry in &self.entries {
-            if let Some(parent_id) = entry.parent_id {
-                if let Some(parent) = self.entry_map.get(&parent_id) {
-                    if !parent.children.contains(&entry.id) {
-                        return Err(format!(
-                            "Parent {} doesn't reference child {}",
-                            parent_id, entry.id
-                        ));
-                    }
-                } else {
+        for (i, entry) in self.entries.iter().enumerate() {
+            if i == 0 {
+                // First entry should have no parent
+                if entry.parent_id.is_some() {
                     return Err(format!(
-                        "Parent {} not found for entry {}",
-                        parent_id, entry.id
+                        "First entry {} should not have a parent",
+                        entry.short_hash()
+                    ));
+                }
+            } else {
+                // Other entries should have the previous entry as parent
+                let expected_parent = &self.entries[i - 1];
+                if entry.parent_id != Some(expected_parent.id) {
+                    return Err(format!(
+                        "Entry {} has incorrect parent relationship",
+                        entry.short_hash()
                     ));
                 }
             }
 
-            for child_id in &entry.children {
-                if let Some(child) = self.entry_map.get(child_id) {
-                    if child.parent_id != Some(entry.id) {
-                        return Err(format!(
-                            "Child {} doesn't reference parent {}",
-                            child_id, entry.id
-                        ));
-                    }
-                } else {
+            // Check if parent exists in map
+            if let Some(parent_id) = entry.parent_id {
+                if !self.entry_map.contains_key(&parent_id) {
                     return Err(format!(
-                        "Child {} not found for entry {}",
-                        child_id, entry.id
+                        "Entry {} references non-existent parent {}",
+                        entry.short_hash(),
+                        parent_id
                     ));
                 }
             }
         }
 
-        Ok(())
+        // Check that all entries are in the map
+        for entry in &self.entries {
+            if !self.entry_map.contains_key(&entry.id) {
+                return Err(format!(
+                    "Entry {} is not in the entry map",
+                    entry.short_hash()
+                ));
+            }
+        }
+
+        // Check for duplicate IDs
+        let mut seen_ids = std::collections::HashSet::new();
+        for entry in &self.entries {
+            if !seen_ids.insert(entry.id) {
+                return Err(format!("Duplicate entry ID: {}", entry.id));
+            }
+        }
+
+        // Check for duplicate branch names
+        let mut seen_branches = std::collections::HashSet::new();
+        for entry in &self.entries {
+            if !seen_branches.insert(&entry.branch) {
+                return Err(format!("Duplicate branch name: {}", entry.branch));
+            }
+        }
+
+        Ok("Stack validation passed".to_string())
+    }
+
+    /// Validate Git state integrity (requires Git repository access)
+    /// This checks that branch HEADs match the expected commit hashes
+    pub fn validate_git_integrity(
+        &self,
+        git_repo: &crate::git::GitRepository,
+    ) -> Result<String, String> {
+        use tracing::warn;
+
+        let mut issues = Vec::new();
+        let mut warnings = Vec::new();
+
+        for entry in &self.entries {
+            // Check if branch exists
+            if !git_repo.branch_exists(&entry.branch) {
+                issues.push(format!(
+                    "Branch '{}' for entry {} does not exist",
+                    entry.branch,
+                    entry.short_hash()
+                ));
+                continue;
+            }
+
+            // Check if branch HEAD matches stored commit hash
+            match git_repo.get_branch_head(&entry.branch) {
+                Ok(branch_head) => {
+                    if branch_head != entry.commit_hash {
+                        issues.push(format!(
+                            "🚨 BRANCH MODIFICATION DETECTED: Branch '{}' has been manually modified!\n   \
+                             Expected commit: {} (from stack entry)\n   \
+                             Actual commit:   {} (current branch HEAD)\n   \
+                             💡 Someone may have checked out '{}' and added commits.\n   \
+                             This breaks stack integrity!",
+                            entry.branch,
+                            &entry.commit_hash[..8],
+                            &branch_head[..8],
+                            entry.branch
+                        ));
+                    }
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "Could not check branch '{}' HEAD: {}",
+                        entry.branch, e
+                    ));
+                }
+            }
+
+            // Check if commit still exists
+            match git_repo.commit_exists(&entry.commit_hash) {
+                Ok(exists) => {
+                    if !exists {
+                        issues.push(format!(
+                            "Commit {} for entry {} no longer exists",
+                            entry.short_hash(),
+                            entry.id
+                        ));
+                    }
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "Could not verify commit {} existence: {}",
+                        entry.short_hash(),
+                        e
+                    ));
+                }
+            }
+        }
+
+        // Log warnings
+        for warning in &warnings {
+            warn!("{}", warning);
+        }
+
+        if !issues.is_empty() {
+            Err(format!(
+                "Git integrity validation failed:\n{}{}",
+                issues.join("\n"),
+                if !warnings.is_empty() {
+                    format!("\n\nWarnings:\n{}", warnings.join("\n"))
+                } else {
+                    String::new()
+                }
+            ))
+        } else if !warnings.is_empty() {
+            Ok(format!(
+                "Git integrity validation passed with warnings:\n{}",
+                warnings.join("\n")
+            ))
+        } else {
+            Ok("Git integrity validation passed".to_string())
+        }
     }
 }
 
@@ -451,7 +561,9 @@ mod tests {
         );
 
         // Valid stack should pass validation
-        assert!(stack.validate().is_ok());
+        let result = stack.validate();
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("validation passed"));
     }
 
     #[test]
