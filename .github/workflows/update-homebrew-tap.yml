@@ -72,11 +72,18 @@ jobs:
           # Update version (use VERSION_NO_V without 'v' prefix)
           sed -i "s/version \"[^\"]*\"/version \"${VERSION_NO_V}\"/g" Formula/cascade-cli.rb
           
-          # Update checksums - handle both placeholder and real SHA patterns
-          sed -i "s/sha256 \"PLACEHOLDER_ARM64_SHA\"/sha256 \"${ARM64_SHA}\"/g" Formula/cascade-cli.rb
-          sed -i "s/sha256 \"PLACEHOLDER_X64_SHA\"/sha256 \"${X64_SHA}\"/g" Formula/cascade-cli.rb
-          sed -i "s/sha256 \"[a-f0-9]*\" # ARM64/sha256 \"${ARM64_SHA}\"/g" Formula/cascade-cli.rb  
-          sed -i "s/sha256 \"[a-f0-9]*\" # x64/sha256 \"${X64_SHA}\"/g" Formula/cascade-cli.rb
+          # Update checksums - update first and second SHA256 lines
+          echo "Current formula before SHA256 update:"
+          grep -A 2 -B 2 "sha256" Formula/cascade-cli.rb || true
+          
+          # Update first SHA256 line (ARM64 - in the if block)  
+          sed -i "0,/sha256 \"[^\"]*\"/{s/sha256 \"[^\"]*\"/sha256 \"${ARM64_SHA}\"/}" Formula/cascade-cli.rb
+          
+          # Update second SHA256 line (x64 - in the else block)
+          sed -i "0,/sha256 \"[^\"]*\"/b; s/sha256 \"[^\"]*\"/sha256 \"${X64_SHA}\"/" Formula/cascade-cli.rb
+          
+          echo "Formula after SHA256 update:"
+          grep -A 2 -B 2 "sha256" Formula/cascade-cli.rb || true
           
           # Show what was updated
           echo "Updated formula content:"
