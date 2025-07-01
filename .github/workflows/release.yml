@@ -330,29 +330,41 @@ jobs:
     - name: Download release assets for checksums
       run: |
         TAG=${{ steps.release_info.outputs.tag }}
+        echo "Downloading assets for tag: $TAG"
+        
         curl -L -o ca-macos-arm64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-arm64.tar.gz"
         curl -L -o ca-macos-x64.tar.gz "https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-x64.tar.gz"
         
-        # Calculate checksums
-        ARM64_SHA=$(sha256sum ca-macos-arm64.tar.gz | cut -d' ' -f1)
-        X64_SHA=$(sha256sum ca-macos-x64.tar.gz | cut -d' ' -f1)
+        # Calculate checksums (use shasum for cross-platform compatibility)
+        ARM64_SHA=$(shasum -a 256 ca-macos-arm64.tar.gz | cut -d' ' -f1)
+        X64_SHA=$(shasum -a 256 ca-macos-x64.tar.gz | cut -d' ' -f1)
         
         echo "ARM64_SHA=$ARM64_SHA" >> $GITHUB_ENV
         echo "X64_SHA=$X64_SHA" >> $GITHUB_ENV
+        echo "Computed SHA256s: ARM64=$ARM64_SHA, X64=$X64_SHA"
 
     - name: Update Homebrew formula
       run: |
         TAG=${{ steps.release_info.outputs.tag }}
-        # Update URLs and checksums
+        VERSION_NO_V="${TAG#v}"  # Remove 'v' prefix for version number
+        
+        echo "Updating homebrew/cascade-cli.rb to version $VERSION_NO_V (tag: $TAG)"
+        
+        # Update URLs 
         sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-arm64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-arm64.tar.gz|g" homebrew/cascade-cli.rb
         sed -i "s|https://github.com/JAManfredi/cascade-cli/releases/download/v[^/]*/ca-macos-x64.tar.gz|https://github.com/JAManfredi/cascade-cli/releases/download/$TAG/ca-macos-x64.tar.gz|g" homebrew/cascade-cli.rb
         
-        # Update version
-        sed -i "s/version \"v[^\"]*\"/version \"$TAG\"/g" homebrew/cascade-cli.rb
+        # Update version (without 'v' prefix)
+        sed -i "s/version \"[^\"]*\"/version \"$VERSION_NO_V\"/g" homebrew/cascade-cli.rb
         
-        # Update checksums
-        sed -i "s/sha256 \"[a-f0-9]*\" # ARM64/sha256 \"$ARM64_SHA\" # ARM64/g" homebrew/cascade-cli.rb
-        sed -i "s/sha256 \"[a-f0-9]*\" # x64/sha256 \"$X64_SHA\" # x64/g" homebrew/cascade-cli.rb
+        # Update ARM64 SHA256 (first sha256 line)
+        sed -i "0,/sha256 \"[^\"]*\"/{s/sha256 \"[^\"]*\"/sha256 \"$ARM64_SHA\"/}" homebrew/cascade-cli.rb
+        
+        # Update x64 SHA256 (second sha256 line) 
+        sed -i "0,/sha256 \"[^\"]*\"/b; s/sha256 \"[^\"]*\"/sha256 \"$X64_SHA\"/" homebrew/cascade-cli.rb
+        
+        echo "Updated formula content:"
+        cat homebrew/cascade-cli.rb
 
     - name: Commit and push updated formula
       run: |
