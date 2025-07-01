@@ -32,7 +32,7 @@ async fn test_post_commit_hook_contains_user_feedback() {
         "Post-commit hook should show success message"
     );
     assert!(
-        hook_content.contains("💡 Next: 'cc submit' to create PRs when ready"),
+        hook_content.contains("💡 Next: 'ca submit' to create PRs when ready"),
         "Post-commit hook should provide next steps"
     );
     assert!(
@@ -40,7 +40,7 @@ async fn test_post_commit_hook_contains_user_feedback() {
         "Post-commit hook should handle uninitialized repos gracefully"
     );
     assert!(
-        hook_content.contains("💡 Run 'cc init' to start using stacked diffs"),
+        hook_content.contains("💡 Run 'ca init' to start using stacked diffs"),
         "Post-commit hook should guide users to initialize"
     );
     assert!(
@@ -48,7 +48,7 @@ async fn test_post_commit_hook_contains_user_feedback() {
         "Post-commit hook should handle missing active stack"
     );
     assert!(
-        hook_content.contains("💡 Use 'cc stack create"),
+        hook_content.contains("💡 Use 'ca stack create"),
         "Post-commit hook should guide users to create stacks"
     );
     assert!(
@@ -91,19 +91,19 @@ async fn test_pre_push_hook_contains_user_feedback() {
         "Pre-push hook should provide alternatives to force push"
     );
     assert!(
-        hook_content.contains("• cc sync"),
+        hook_content.contains("• ca sync"),
         "Pre-push hook should suggest sync command"
     );
     assert!(
-        hook_content.contains("• cc push"),
+        hook_content.contains("• ca push"),
         "Pre-push hook should suggest push command"
     );
     assert!(
-        hook_content.contains("• cc submit"),
+        hook_content.contains("• ca submit"),
         "Pre-push hook should suggest submit command"
     );
     assert!(
-        hook_content.contains("• cc autoland"),
+        hook_content.contains("• ca autoland"),
         "Pre-push hook should suggest autoland command"
     );
     assert!(
@@ -127,7 +127,7 @@ async fn test_pre_push_hook_contains_user_feedback() {
         "Pre-push hook should guide users on fixing issues"
     );
     assert!(
-        hook_content.contains("• cc doctor"),
+        hook_content.contains("• ca doctor"),
         "Pre-push hook should suggest doctor command"
     );
 }
@@ -209,7 +209,7 @@ async fn test_prepare_commit_msg_hook_contains_user_feedback() {
         "Prepare-commit-msg hook should explain automatic behavior"
     );
     assert!(
-        hook_content.contains("# Use 'cc stack status' to see the current stack state"),
+        hook_content.contains("# Use 'ca stack status' to see the current stack state"),
         "Prepare-commit-msg hook should provide helpful commands"
     );
 }
