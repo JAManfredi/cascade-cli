@@ -302,8 +302,14 @@ async fn test_prepare_commit_msg_hook_contains_edit_mode_guidance() {
         hook_content.contains("➕ NEW: To create a new entry on top, use:"),
         "Prepare-commit-msg hook should explain new commit option"
     );
+    // Check for platform-specific version of the command
+    #[cfg(windows)]
+    let expected_command = "git commit    ^(this command^)";
+    #[cfg(not(windows))]
+    let expected_command = "git commit    (this command)";
+    
     assert!(
-        hook_content.contains("git commit    (this command)"),
+        hook_content.contains(expected_command),
         "Prepare-commit-msg hook should explain current command creates new entry"
     );
     assert!(
