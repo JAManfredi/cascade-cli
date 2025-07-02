@@ -67,30 +67,28 @@ impl BitbucketIntegration {
         let git_repo = self.stack_manager.git_repo();
         info!("Ensuring branch '{}' is pushed to remote", entry.branch);
 
-        match git_repo.push(&entry.branch) {
-            Ok(_) => {
-                info!("✅ Successfully pushed branch '{}' to remote", entry.branch);
+        // Push the entry branch - fail fast if this fails
+        git_repo.push(&entry.branch).map_err(|e| {
+            CascadeError::bitbucket(format!(
+                "Failed to push branch '{}': {}. Cannot create PR without remote branch. \
+                Try manually pushing with: git push origin {}",
+                entry.branch, e, entry.branch
+            ))
+        })?;
 
-                // Mark as pushed in metadata
-                if let Some(commit_meta) = self
-                    .stack_manager
-                    .get_repository_metadata()
-                    .commits
-                    .get(&entry.commit_hash)
-                {
-                    let mut updated_meta = commit_meta.clone();
-                    updated_meta.mark_pushed();
-                    // Note: This would require making mark_pushed public and updating the metadata
-                    // For now, we'll track this as a future enhancement
-                }
-            }
-            Err(e) => {
-                // Check if it's already pushed or if this is a recoverable error
-                warn!("Failed to push branch '{}': {}", entry.branch, e);
+        info!("✅ Successfully pushed branch '{}' to remote", entry.branch);
 
-                // Try to continue anyway - the branch might already exist remotely
-                info!("Attempting to create PR anyway (branch may already exist remotely)");
-            }
+        // Mark as pushed in metadata
+        if let Some(commit_meta) = self
+            .stack_manager
+            .get_repository_metadata()
+            .commits
+            .get(&entry.commit_hash)
+        {
+            let mut updated_meta = commit_meta.clone();
+            updated_meta.mark_pushed();
+            // Note: This would require making mark_pushed public and updating the metadata
+            // For now, we'll track this as a future enhancement
         }
 
         // Determine target branch (parent entry's branch or stack base)
@@ -102,18 +100,20 @@ impl BitbucketIntegration {
                 "Ensuring target branch '{}' is pushed to remote",
                 target_branch
             );
-            match git_repo.push(&target_branch) {
-                Ok(_) => {
-                    info!(
-                        "✅ Successfully pushed target branch '{}' to remote",
-                        target_branch
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to push target branch '{}': {}", target_branch, e);
-                    info!("Continuing anyway (target branch may already exist remotely)");
-                }
-            }
+            
+            // Push target branch - fail fast if this fails
+            git_repo.push(&target_branch).map_err(|e| {
+                CascadeError::bitbucket(format!(
+                    "Failed to push target branch '{}': {}. Cannot create PR without target branch. \
+                    Try manually pushing with: git push origin {}",
+                    target_branch, e, target_branch
+                ))
+            })?;
+            
+            info!(
+                "✅ Successfully pushed target branch '{}' to remote",
+                target_branch
+            );
         }
 
         // Create pull request

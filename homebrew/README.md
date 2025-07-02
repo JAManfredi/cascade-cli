@@ -1,6 +1,6 @@
-# Homebrew Tap for Cascade CLI
+# Homebrew Integration
 
-This is the Homebrew tap for Cascade CLI, containing the formula to install the `ca` command.
+This directory contains information about Homebrew integration for Cascade CLI.
 
 ## Installation
 
@@ -15,58 +15,49 @@ brew install cascade-cli
 ca --version
 ```
 
-## Updating the Formula
+## Automated Formula Updates
 
-When releasing a new version of Cascade CLI:
+**The Homebrew formula is now automatically updated via GitHub Actions!** 🎉
 
-### 1. Build Release Binaries
+### How It Works
 
-First, create GitHub release with binaries for both architectures:
-- `ca-macos-arm64.tar.gz` (Apple Silicon)
-- `ca-macos-x64.tar.gz` (Intel)
+1. **Release Creation**: When a new release is created (via `git tag vX.Y.Z && git push --tags`)
+2. **Automatic Trigger**: The release workflow automatically triggers the Homebrew tap update
+3. **Formula Update**: The tap repository gets a Pull Request with:
+   - Updated version number
+   - New download URLs
+   - Fresh SHA256 checksums
+   - Automated testing
 
-### 2. Generate SHA256 Checksums
+### Repository Structure
 
-Download the release binaries and generate checksums:
+- **Main Repository**: `JAManfredi/cascade-cli` (this repo)
+  - Contains release workflows
+  - Triggers tap updates automatically
+
+- **Tap Repository**: `JAManfredi/homebrew-cascade-cli` 
+  - Contains the actual formula file
+  - Gets updated via automated PRs
+  - Users install from this tap
+
+### Manual Override (if needed)
+
+If you need to manually trigger a formula update:
 
 ```bash
-# Download releases
-curl -L -O https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.6/ca-macos-arm64.tar.gz
-curl -L -O https://github.com/JAManfredi/cascade-cli/releases/download/v0.1.6/ca-macos-x64.tar.gz
-
-# Generate checksums
-shasum -a 256 ca-macos-arm64.tar.gz
-shasum -a 256 ca-macos-x64.tar.gz
+# From the main repository, trigger the workflow
+gh workflow run update-homebrew-tap.yml -f version=v1.2.3
 ```
 
-### 3. Update Formula
-
-Edit `cascade-cli.rb`:
-
-1. Update the `version` field
-2. Update the URLs to point to the new release
-3. Replace the SHA256 values with the checksums from step 2
-
-### 4. Test the Formula
+Or update the tap repository directly (not recommended):
 
 ```bash
-# Test installation
-brew install --build-from-source cascade-cli
+# Clone the tap repository  
+git clone https://github.com/JAManfredi/homebrew-cascade-cli.git
+cd homebrew-cascade-cli
 
-# Test the installed binary
-ca --version
-ca doctor
-
-# Uninstall test version
-brew uninstall cascade-cli
-```
-
-### 5. Commit and Push
-
-```bash
-git add cascade-cli.rb
-git commit -m "Update Cascade CLI to v0.1.6"
-git push origin main
+# Edit Formula/cascade-cli.rb manually
+# Commit and push changes
 ```
 
 ## Formula Structure
