@@ -61,25 +61,8 @@ update_cargo_toml() {
     print_success "Updated Cargo.toml"
 }
 
-# Function to update homebrew formula
-update_homebrew_formula() {
-    local new_version=$1
-    local homebrew_file="homebrew/cascade-cli.rb"
-    
-    print_status "Updating Homebrew formula to version $new_version"
-    
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS version
-        sed -i '' "s|releases/download/v[0-9]*\.[0-9]*\.[0-9]*|releases/download/v$new_version|g" "$homebrew_file"
-        sed -i '' "s/version \"[0-9]*\.[0-9]*\.[0-9]*\"/version \"$new_version\"/g" "$homebrew_file"
-    else
-        # Linux version
-        sed -i "s|releases/download/v[0-9]*\.[0-9]*\.[0-9]*|releases/download/v$new_version|g" "$homebrew_file"
-        sed -i "s/version \"[0-9]*\.[0-9]*\.[0-9]*\"/version \"$new_version\"/g" "$homebrew_file"
-    fi
-    
-    print_success "Updated Homebrew formula"
-}
+# Note: Homebrew formula is now managed in separate tap repository
+# and will be updated automatically by GitHub workflow on release
 
 # Function to update Cargo.lock
 update_cargo_lock() {
@@ -121,16 +104,15 @@ create_git_commit_and_tag() {
     fi
     
     # Add changed files
-    git add Cargo.toml Cargo.lock homebrew/cascade-cli.rb
+    git add Cargo.toml Cargo.lock
     
     # Create commit
     local commit_message="chore: Bump version from $current_version to $new_version
 
 - Updated Cargo.toml package version
-- Updated Homebrew formula URLs and version fields
 - Refreshed Cargo.lock dependencies
 
-Ready for v$new_version release with all version references updated."
+Ready for v$new_version release. Homebrew formula will be updated automatically by GitHub workflow."
     
     git commit -m "$commit_message"
     print_success "Created commit for version $new_version"
@@ -161,6 +143,7 @@ show_next_steps() {
     echo "  3. Push the tag: git push origin v$new_version"
     echo "  4. Create GitHub release from the tag"
     echo "  5. Build and upload release binaries"
+    echo "  6. Homebrew tap will be updated automatically by GitHub workflow"
     echo ""
     print_status "Current git status:"
     git log --oneline -n 3
@@ -173,9 +156,9 @@ main() {
     echo ""
     
     # Check if we're in the right directory
-    if [[ ! -f "Cargo.toml" ]] || [[ ! -f "homebrew/cascade-cli.rb" ]]; then
+    if [[ ! -f "Cargo.toml" ]] || [[ ! -d "src" ]]; then
         print_error "Must be run from the project root directory"
-        print_error "Make sure Cargo.toml and homebrew/cascade-cli.rb exist"
+        print_error "Make sure Cargo.toml and src/ directory exist"
         exit 1
     fi
     
@@ -218,7 +201,6 @@ main() {
     
     # Perform updates
     update_cargo_toml "$new_version"
-    update_homebrew_formula "$new_version" 
     update_cargo_lock
     check_other_references "$current_version" "$new_version"
     create_git_commit_and_tag "$new_version" "$current_version"
