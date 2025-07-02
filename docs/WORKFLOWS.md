@@ -10,17 +10,14 @@ A comprehensive guide to real-world development workflows using Cascade CLI's st
   - [WIP to Clean Commits](#wip-to-clean-commits)
   - [Auto-Landing Ready PRs](#auto-landing-ready-prs)
 - [🔄 Complex Scenarios](#complex-scenarios)
-  - [Code Review Feedback on Middle Commit](#code-review-feedback-on-middle-commit)
+
   - [Base Branch Updates (Smart Force Push)](#base-branch-updates-smart-force-push)
-  - [Modifying First Commit in Stack](#modifying-first-commit-in-stack)
+      - [Modifying Any Commit in Stack](#modifying-any-commit-in-stack)
   - [Managing Multiple Related Stacks](#managing-multiple-related-stacks)
   - [Handling Merge Conflicts During Rebase](#handling-merge-conflicts-during-rebase)
   - [Emergency Hotfix with Parallel Development](#emergency-hotfix-with-parallel-development)
   - [Stack Cleanup After Merges](#stack-cleanup-after-merges)
-- [🎯 Team Collaboration Patterns](#team-collaboration-patterns)
-  - [Cross-Team Dependencies](#cross-team-dependencies)
-  - [Shared Infrastructure Changes](#shared-infrastructure-changes)
-  - [Release Train Management](#release-train-management)
+- [🚧 Future: Team Collaboration](#future-team-collaboration)
 
 ---
 
@@ -371,35 +368,7 @@ ca stack  # Shows PR status with auto-land indicators
 
 ## 🔄 **Complex Scenarios**
 
-### **Code Review Feedback on Middle Commit**
 
-You have a 3-commit stack and need to modify the middle commit based on review feedback:
-
-```bash
-# Your stack: A -> B -> C (need to modify B)
-ca stack
-# Entry 1: [abc123] Add authentication endpoints    (PR #101 - Open)
-# Entry 2: [def456] Add password validation        (PR #102 - Changes Requested) ← Need to fix
-# Entry 3: [ghi789] Add user registration tests    (PR #103 - Open)
-
-# Method 1: Direct checkout and amend (traditional)
-git checkout def456
-git add .
-git commit --amend -m "Add password validation (addressed security review)"
-ca rebase  # Update all dependent commits
-
-# Method 2: Interactive rebase (modern approach)
-git rebase -i HEAD~3   # Pick the commit to edit
-# Edit the commit, then:
-ca rebase              # Cascade handles the rest
-
-# Auto-update dependent PRs
-ca sync  
-
-# ✅ Force-pushed new content to existing branches (preserves PR #101, #102, #103)
-# ✅ All dependent commits automatically updated
-# ✅ Review history preserved on all PRs
-```
 
 ### **Base Branch Updates (Smart Force Push)**
 
@@ -432,21 +401,21 @@ ca sync --check-conflicts
    ✅ Backup branches created: implement-oauth-v2, oauth-tests-v2
 ```
 
-### **Modifying First Commit in Stack**
+### **Modifying Any Commit in Stack**
 
-Need to change the foundation commit that other commits depend on:
+Need to change any commit in your stack? The entry editing system works for **any position** - first, middle, or last commit:
 
 ```bash
-# Stack with dependencies: A -> B -> C (need to modify A)
+# Stack with dependencies: A -> B -> C (need to modify any entry)
 ca stack  
 # Entry 1: [abc123] Add database schema     (PR #110)
-# Entry 2: [def456] Add user model         (PR #111) ← depends on schema
+# Entry 2: [def456] Add user model         (PR #111) ← Need to modify this one
 # Entry 3: [ghi789] Add user endpoints     (PR #112) ← depends on model
 
-# 🆕 Modern Approach: Use entry editing (Recommended)
-ca entry checkout 1  # Checkout first entry for editing
+# 🆕 Modern Approach: Use entry editing (Works for ANY position!)
+ca entry checkout 2  # Checkout middle entry for editing (or 1, 3, etc.)
 # ✅ Automatically enters edit mode
-# ✅ Checks out commit abc123 safely
+# ✅ Checks out commit def456 safely  
 # ✅ Tracks editing state
 
 # Make your changes
@@ -465,12 +434,12 @@ git commit
 # Your choice (A/n/c): A
 #
 # ✅ Running: git commit --amend
-# [Opens editor with: "Add database schema (fixed column types)"]
+# [Opens editor with: "Add user model (fixed validation logic)"]
 # 💡 Entry updated! Run 'ca sync' to update PRs
 
 # Sync all dependent entries automatically
 ca rebase  # Cascade handles all dependencies
-# ✅ All dependent commits automatically incorporate the schema changes
+# ✅ All dependent commits automatically incorporate the model changes
 # ✅ All PRs (#110, #111, #112) updated with new code but preserve review history
 
 # Alternative: Interactive picker for multiple entries
@@ -481,7 +450,7 @@ ca entry status    # Shows current edit mode info
 ca entry list      # Shows all entries with edit indicators
 
 # Legacy Method (still works but not recommended):
-# git checkout abc123 && git commit --amend && ca rebase
+# git checkout def456 && git commit --amend && ca rebase
 ```
 
 ### **Managing Multiple Related Stacks**
@@ -598,95 +567,89 @@ ca stack
 
 ---
 
-## 🎯 **Team Collaboration Patterns**
+## 🚧 **Future: Team Collaboration**
 
-### **Cross-Team Dependencies**
+**Current Status**: Cascade CLI is currently **individual/local-only**. Stack metadata is stored in `.cascade/` (gitignored) and not shared between team members.
 
-Managing features that depend on work from other teams:
+### **Why No Team Features Yet?**
 
+The current architecture prioritizes:
+- **Simplicity**: No backend infrastructure required
+- **Reliability**: Works offline, no network dependencies  
+- **Individual productivity**: Focus on personal workflow optimization
+
+### **Team Collaboration Options Under Consideration**
+
+#### **Option 1: Git-Based Sharing**
 ```bash
-# Team A working on database layer
-# Team B (you) working on API layer that depends on database
+# Commit stack metadata to share with team
+git add .cascade/
+git commit -m "Share feature-auth stack"
 
-# Create stack with explicit dependency
-ca stacks create api-v2 --base team-a/database-refactor
-ca stacks create payments --base api-v2  # Further dependency
-
-# Team coordination features
-ca repo  # See all team stacks
-ca stacks deps --team="Team A"
-# Shows: team-a/database-refactor (2 commits ahead, 0 behind)
-# Shows: Estimated completion: 2 days (based on Team A velocity)
-
-# Get notified of upstream changes
-ca sync --watch --team="Team A"
-# ✅ Monitors team-a/database-refactor for changes
-# ✅ Auto-syncs your stack when their changes are ready
-# ✅ Notifies about breaking changes requiring attention
+# Team members can see and build on each other's stacks
+ca stacks list --all-contributors
 ```
 
-### **Shared Infrastructure Changes**
+**Pros:** Simple, no infrastructure  
+**Cons:** JSON merge conflicts, complex rebasing
 
-Managing changes that affect multiple teams:
-
+#### **Option 2: Backend Service**
 ```bash
-# Infrastructure change affecting 3 teams
-ca stacks create auth-migration --base main --shared
-ca tag add breaking-change
-
-# Build migration with rollback plan
-git commit -m "Add OAuth 2.0 support (backward compatible)"
-ca push
-git commit -m "Migrate existing auth tokens"
-ca push  
-git commit -m "Remove legacy auth (breaking change)"
-ca push
-
-# Coordinated rollout
-ca submit --strategy=rolling
-# ✅ Creates PR #1 (non-breaking) - can merge immediately
-# ✅ Creates PR #2 (migration) - scheduled for next sprint
-# ✅ Creates PR #3 (breaking) - blocked until migration complete
-
-# Teams can prepare for changes
-ca share-preview --teams="frontend,mobile,backend"
-# ✅ Sends preview branches to other teams
-# ✅ Enables parallel testing and adaptation
-# ✅ Collects feedback before final merge
+# Future API-based collaboration
+ca stacks sync --remote
+ca stacks share feature-auth --with-team backend-team
+ca stacks deps --cross-team
 ```
 
-### **Release Train Management**
+**Pros:** Real-time sync, advanced conflict resolution  
+**Cons:** Requires infrastructure, network dependency
 
-Coordinating multiple features for a scheduled release:
-
+#### **Option 3: Hybrid Local-First**
 ```bash
-# Release train for Q1 features
-ca stacks create q1-release --base main --release="2024.1"
-
-# Add features from different teams to release
-ca stacks merge feature-auth --target=q1-release
-ca stacks merge feature-search --target=q1-release  
-ca stacks merge feature-billing --target=q1-release
-
-# Release coordination
-ca release plan q1-release
-# 📋 Feature readiness:
-#   ✅ feature-auth: Ready (approved, tested)
-#   ⚠️  feature-search: Waiting for QA approval
-#   ❌ feature-billing: Failing integration tests
-
-# Selective release if needed
-ca release deploy --features="auth,search" --exclude="billing"
-# ✅ Deploys ready features
-# ✅ Keeps failing features in development
-# ✅ Maintains clean release history
-
-# Monitor release health
-ca release status q1-release
-# 📊 Deployment: 95% success rate
-# 📊 Performance: +2% improvement
-# 📊 Rollback plan: Ready if needed
+# Local-first with optional sync
+ca stacks create feature --shared   # Opt-in to sharing
+ca stacks sync                      # When network available
+ca stacks work --offline           # Always works locally
 ```
+
+**Pros:** Best of both worlds  
+**Cons:** Most complex to implement
+
+### **Current Workarounds for Teams**
+
+While we design the best collaboration approach:
+
+#### **Share via Pull Requests**
+```bash
+# Current workflow: Share through PRs
+ca push          # Creates feature branches
+ca submit        # Creates PRs
+# Team reviews PRs normally through GitHub/Bitbucket
+```
+
+#### **Coordinate Base Branches**
+```bash
+# Team lead creates shared integration branch
+git checkout -b team/integration-branch
+ca stacks create my-feature --base team/integration-branch
+```
+
+#### **Stack Documentation**
+```bash
+# Document stack architecture in commit messages
+ca push -m "Entry 1/3: Add user model (part of auth feature)"
+ca push -m "Entry 2/3: Add validation (depends on user model)"
+```
+
+### **Your Input Needed!**
+
+We're designing team collaboration features. What's most important to your team?
+
+1. **Simple Git-based sharing** (fastest to implement)
+2. **Advanced backend features** (most powerful)
+3. **Hybrid approach** (most flexible)
+
+**Share feedback**: [GitHub Discussions](https://github.com/org/cascade-cli/discussions) or `ca feedback --feature="team-collaboration"`
 
 ---
 

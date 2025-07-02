@@ -146,7 +146,7 @@ curl -L https://github.com/JAManfredi/cascade-cli/releases/latest/download/ca-li
 
 - [ ] **Update README.md**: Change "coming soon" to actual download links
 - [ ] **Update INSTALLATION.md**: Verify installation instructions work
-- [ ] **Update docs/UPCOMING.md**: Move completed features to README
+
 - [ ] **Social media**: Announce release on relevant platforms
 
 ### **Monitor Release**
