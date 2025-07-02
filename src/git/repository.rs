@@ -616,22 +616,18 @@ impl GitRepository {
                 "Using system certificate store for SSL verification (default behavior)"
             );
 
-            // Use CertificatePassthrough to let the system handle certificate validation
-            // This allows the underlying TLS implementation to use system certificates
-            // which is what git CLI does and why it works in corporate environments
-            callbacks.certificate_check(|_cert, host| {
-                tracing::debug!("System certificate validation for host: {}", host);
-
-                // Let the system TLS stack handle certificate validation
-                // This includes corporate CA certificates installed on the system
-                // The exact certificate type checking has changed in newer git2,
-                // so we use a general approach that works with system certificates
-                tracing::debug!("Using system certificate validation for host: {}", host);
-
-                // Pass through to system certificate validation for all certificate types
-                // This works with both X.509 certificates and SSH hostkeys
-                Ok(git2::CertificateCheckStatus::CertificatePassthrough)
-            });
+            // For macOS with SecureTransport backend, try default certificate validation first
+            if cfg!(target_os = "macos") {
+                tracing::debug!("macOS detected - using default certificate validation");
+                // Don't set any certificate callback - let git2 use its default behavior
+                // This often works better with SecureTransport backend on macOS
+            } else {
+                // Use CertificatePassthrough for other platforms
+                callbacks.certificate_check(|_cert, host| {
+                    tracing::debug!("System certificate validation for host: {}", host);
+                    Ok(git2::CertificateCheckStatus::CertificatePassthrough)
+                });
+            }
         }
 
         Ok(callbacks)
@@ -915,6 +911,13 @@ impl GitRepository {
                 Ok(())
             }
             Err(e) => {
+                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
+                let error_string = e.to_string();
+                if error_string.contains("TLS stream") || error_string.contains("SSL") {
+                    tracing::warn!("git2 TLS error detected, falling back to git CLI for push operation");
+                    return self.push_with_git_cli(branch);
+                }
+
                 // Enhanced error message with debugging hints
                 let error_msg = format!(
                     "Failed to push branch '{}' to remote '{}': {}. \
@@ -934,6 +937,58 @@ impl GitRepository {
                 tracing::error!("{}", error_msg);
                 Err(CascadeError::branch(error_msg))
             }
+        }
+    }
+
+    /// Fallback push method using git CLI instead of git2
+    /// This is used when git2 has TLS/SSL issues but git CLI works fine
+    fn push_with_git_cli(&self, branch: &str) -> Result<()> {
+        tracing::info!("Using git CLI fallback for push operation: {}", branch);
+
+        let output = std::process::Command::new("git")
+            .args(["push", "origin", branch])
+            .current_dir(&self.path)
+            .output()
+            .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {}", e)))?;
+
+        if output.status.success() {
+            tracing::info!("✅ Git CLI push succeeded for branch: {}", branch);
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let error_msg = format!(
+                "Git CLI push failed for branch '{}': {}\nStdout: {}\nStderr: {}",
+                branch, output.status, stdout, stderr
+            );
+            tracing::error!("{}", error_msg);
+            Err(CascadeError::branch(error_msg))
+        }
+    }
+
+    /// Fallback force push method using git CLI instead of git2
+    /// This is used when git2 has TLS/SSL issues but git CLI works fine
+    fn force_push_with_git_cli(&self, branch: &str) -> Result<()> {
+        tracing::info!("Using git CLI fallback for force push operation: {}", branch);
+
+        let output = std::process::Command::new("git")
+            .args(["push", "--force", "origin", branch])
+            .current_dir(&self.path)
+            .output()
+            .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {}", e)))?;
+
+        if output.status.success() {
+            tracing::info!("✅ Git CLI force push succeeded for branch: {}", branch);
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let error_msg = format!(
+                "Git CLI force push failed for branch '{}': {}\nStdout: {}\nStderr: {}",
+                branch, output.status, stdout, stderr
+            );
+            tracing::error!("{}", error_msg);
+            Err(CascadeError::branch(error_msg))
         }
     }
 
@@ -1082,11 +1137,18 @@ impl GitRepository {
         let mut push_options = git2::PushOptions::new();
         push_options.remote_callbacks(callbacks);
 
-        remote
-            .push(&[&refspec], Some(&mut push_options))
-            .map_err(|e| {
-                CascadeError::config(format!("Failed to force push {target_branch}: {e}"))
-            })?;
+        match remote.push(&[&refspec], Some(&mut push_options)) {
+            Ok(_) => {}
+            Err(e) => {
+                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
+                let error_string = e.to_string();
+                if error_string.contains("TLS stream") || error_string.contains("SSL") {
+                    tracing::warn!("git2 TLS error detected, falling back to git CLI for force push operation");
+                    return self.force_push_with_git_cli(target_branch);
+                }
+                return Err(CascadeError::config(format!("Failed to force push {target_branch}: {e}")));
+            }
+        }
 
         info!(
             "✅ Successfully force pushed {} to preserve PR history",
