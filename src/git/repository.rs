@@ -914,7 +914,9 @@ impl GitRepository {
                 // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
-                    tracing::warn!("git2 TLS error detected, falling back to git CLI for push operation");
+                    tracing::warn!(
+                        "git2 TLS error detected, falling back to git CLI for push operation"
+                    );
                     return self.push_with_git_cli(branch);
                 }
 
@@ -969,7 +971,10 @@ impl GitRepository {
     /// Fallback force push method using git CLI instead of git2
     /// This is used when git2 has TLS/SSL issues but git CLI works fine
     fn force_push_with_git_cli(&self, branch: &str) -> Result<()> {
-        tracing::info!("Using git CLI fallback for force push operation: {}", branch);
+        tracing::info!(
+            "Using git CLI fallback for force push operation: {}",
+            branch
+        );
 
         let output = std::process::Command::new("git")
             .args(["push", "--force", "origin", branch])
@@ -1143,10 +1148,14 @@ impl GitRepository {
                 // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
-                    tracing::warn!("git2 TLS error detected, falling back to git CLI for force push operation");
+                    tracing::warn!(
+                        "git2 TLS error detected, falling back to git CLI for force push operation"
+                    );
                     return self.force_push_with_git_cli(target_branch);
                 }
-                return Err(CascadeError::config(format!("Failed to force push {target_branch}: {e}")));
+                return Err(CascadeError::config(format!(
+                    "Failed to force push {target_branch}: {e}"
+                )));
             }
         }
 
