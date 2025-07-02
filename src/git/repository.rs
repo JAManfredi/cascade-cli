@@ -891,7 +891,7 @@ impl GitRepository {
         callbacks.push_update_reference(|refname, status| {
             if let Some(msg) = status {
                 tracing::error!("Push failed for ref {}: {}", refname, msg);
-                return Err(git2::Error::from_str(&format!("Push failed: {}", msg)));
+                return Err(git2::Error::from_str(&format!("Push failed: {msg}")));
             }
             tracing::debug!("Push succeeded for ref: {}", refname);
             Ok(())

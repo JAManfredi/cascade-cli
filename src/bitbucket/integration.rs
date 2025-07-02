@@ -104,9 +104,8 @@ impl BitbucketIntegration {
             // Push target branch - fail fast if this fails
             git_repo.push(&target_branch).map_err(|e| {
                 CascadeError::bitbucket(format!(
-                    "Failed to push target branch '{}': {}. Cannot create PR without target branch. \
-                    Try manually pushing with: git push origin {}",
-                    target_branch, e, target_branch
+                    "Failed to push target branch '{target_branch}': {e}. Cannot create PR without target branch. \
+                    Try manually pushing with: git push origin {target_branch}"
                 ))
             })?;
 
