@@ -812,7 +812,9 @@ impl GitRepository {
                 // If fetch failed even with CLI fallback, try full git pull as last resort
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
-                    tracing::warn!("git2 TLS error detected, falling back to git CLI for pull operation");
+                    tracing::warn!(
+                        "git2 TLS error detected, falling back to git CLI for pull operation"
+                    );
                     return self.pull_with_git_cli(branch);
                 }
                 return Err(e);
@@ -999,7 +1001,11 @@ impl GitRepository {
             .args(["fetch", "origin"])
             .current_dir(&self.path)
             .output()
-            .map_err(|e| CascadeError::Git(git2::Error::from_str(&format!("Failed to execute git command: {e}"))))?;
+            .map_err(|e| {
+                CascadeError::Git(git2::Error::from_str(&format!(
+                    "Failed to execute git command: {e}"
+                )))
+            })?;
 
         if output.status.success() {
             tracing::info!("✅ Git CLI fetch succeeded");
@@ -1025,7 +1031,11 @@ impl GitRepository {
             .args(["pull", "origin", branch])
             .current_dir(&self.path)
             .output()
-            .map_err(|e| CascadeError::Git(git2::Error::from_str(&format!("Failed to execute git command: {e}"))))?;
+            .map_err(|e| {
+                CascadeError::Git(git2::Error::from_str(&format!(
+                    "Failed to execute git command: {e}"
+                )))
+            })?;
 
         if output.status.success() {
             tracing::info!("✅ Git CLI pull succeeded for branch: {}", branch);
