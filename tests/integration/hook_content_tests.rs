@@ -307,7 +307,7 @@ async fn test_prepare_commit_msg_hook_contains_edit_mode_guidance() {
     let expected_command = "git commit    ^(this command^)";
     #[cfg(not(windows))]
     let expected_command = "git commit    (this command)";
-    
+
     assert!(
         hook_content.contains(expected_command),
         "Prepare-commit-msg hook should explain current command creates new entry"
