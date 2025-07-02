@@ -13,7 +13,7 @@ Complete reference guide for Cascade CLI commands, workflows, and advanced usage
 
 ---
 
-## 🧭 **Core Concepts**
+## Core Concepts
 
 ### **What is a Stack?**
 A **stack** is a logical grouping of related commits that represent incremental progress toward a larger feature or fix. Each commit in the stack can be submitted as a separate pull request while maintaining dependencies.
@@ -40,7 +40,7 @@ A **stack** is a logical grouping of related commits that represent incremental 
 
 ---
 
-## 📖 **Command Reference**
+## Command Reference
 
 ### **🎯 Core Commands**
 
@@ -765,7 +765,7 @@ ca version [OPTIONS]
 
 ---
 
-## 🔄 **Workflow Patterns**
+## Workflow Patterns
 
 ### **Feature Development Workflow**
 
@@ -860,43 +860,9 @@ ca stacks submit 1 --title "Add memory profiling tools"
 ca stacks submit 3 --title "Fix memory leak in cache layer"
 ```
 
-### **Team Collaboration Patterns**
-
-#### **Dependent Feature Development**
-```bash
-# Team member A: Core infrastructure
-ca stacks create auth-core --base main
-git commit -m "Add OAuth2 infrastructure"
-ca stacks push
-ca stacks submit
-
-# Team member B: Dependent feature (waits for A's PR)
-ca stacks create user-management --base auth-core
-git commit -m "Add user management using OAuth2"
-ca stacks push
-
-# After A's PR is merged, B syncs
-ca stacks sync  # Rebase on latest main including A's changes
-ca stacks submit
-```
-
-#### **Parallel Development with Coordination**
-```bash
-# Feature A: Independent
-ca stacks create feature-a --base develop
-# ... development work ...
-
-# Feature B: Independent
-ca stacks create feature-b --base develop  
-# ... development work ...
-
-# Visualize dependencies
-ca viz deps --format mermaid > team-deps.md
-```
-
 ---
 
-## 🎯 **Advanced Usage**
+## Advanced Usage
 
 ### **Custom Workflow Integration**
 
@@ -957,7 +923,7 @@ ca viz deps --format plantuml | plantuml -pipe > deps.svg
 
 ---
 
-## ⚙️ **Configuration**
+## Configuration
 
 ### **Configuration File Location**
 ```
@@ -1011,7 +977,7 @@ BITBUCKET_URL="https://bitbucket.company.com"
 
 ---
 
-## 🚨 **Troubleshooting**
+## Troubleshooting
 
 ### **Common Issues and Solutions**
 
