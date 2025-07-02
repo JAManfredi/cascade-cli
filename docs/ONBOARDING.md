@@ -337,23 +337,31 @@ ca tui
 
 ### **Scenario 1: Handling Review Feedback**
 
-Your reviewer wants changes to the User model. Here's how to handle it:
+Your reviewer wants changes to the User model. Here's how to handle it with modern Cascade tools:
 
 ```bash
-# Switch to the relevant commit
-git checkout <commit-hash-for-user-model>
+# 🆕 Modern approach: Use entry editing
+ca entry checkout 1    # Checkout the User model entry for editing
+# ✅ Automatically enters edit mode
+# ✅ Checks out the right commit safely
 
 # Make the requested changes
 # Edit src/models/user.py with improvements
 
 git add src/models/user.py
-git commit -m "Address review feedback: improve password validation"
+git commit --amend -m "Add User model with improved password validation"
 
-# Update the existing PR
-ca submit 1 --title "Add User model (updated)" --description "Core user model with improved password validation"
+# Update all dependent entries automatically
+ca rebase
+# ✅ All dependent PRs automatically updated
+# ✅ Dependencies preserved and managed
 
-# Sync dependent PRs if needed
-ca sync
+# Check your work
+ca entry list    # See updated entry status
+ca stack        # View full stack state
+
+# Legacy approach (still works but not recommended):
+# git checkout <commit-hash> && git commit --amend && ca sync
 ```
 
 ### **Scenario 2: Dependency Changes**

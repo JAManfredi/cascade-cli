@@ -59,6 +59,8 @@ pub enum HookType {
     PrePush,
     /// Validates commit messages follow conventions
     CommitMsg,
+    /// Smart edit mode guidance before commit
+    PreCommit,
     /// Prepares commit message with stack context
     PrepareCommitMsg,
 }
@@ -69,6 +71,7 @@ impl HookType {
             HookType::PostCommit => "post-commit",
             HookType::PrePush => "pre-push",
             HookType::CommitMsg => "commit-msg",
+            HookType::PreCommit => "pre-commit",
             HookType::PrepareCommitMsg => "prepare-commit-msg",
         };
         format!(
@@ -83,6 +86,7 @@ impl HookType {
             HookType::PostCommit => "Auto-add new commits to active stack",
             HookType::PrePush => "Prevent force pushes and validate stack state",
             HookType::CommitMsg => "Validate commit message format",
+            HookType::PreCommit => "Smart edit mode guidance for better UX",
             HookType::PrepareCommitMsg => "Add stack context to commit messages",
         }
     }
@@ -113,11 +117,7 @@ impl HooksManager {
     pub fn install_essential(&self) -> Result<()> {
         println!("🪝 Installing essential Cascade Git hooks...");
 
-        let essential_hooks = vec![
-            HookType::PrePush,
-            HookType::CommitMsg,
-            HookType::PrepareCommitMsg,
-        ];
+        let essential_hooks = vec![HookType::PrePush, HookType::CommitMsg, HookType::PreCommit];
 
         for hook in essential_hooks {
             self.install_hook(&hook)?;
@@ -315,6 +315,7 @@ impl HooksManager {
             HookType::PostCommit => self.generate_post_commit_hook(&cascade_cli),
             HookType::PrePush => self.generate_pre_push_hook(&cascade_cli),
             HookType::CommitMsg => self.generate_commit_msg_hook(&cascade_cli),
+            HookType::PreCommit => self.generate_pre_commit_hook(&cascade_cli),
             HookType::PrepareCommitMsg => self.generate_prepare_commit_msg_hook(&cascade_cli),
         };
 
@@ -593,6 +594,103 @@ echo "✅ Commit message validation passed"
         }
     }
 
+    fn generate_pre_commit_hook(&self, cascade_cli: &str) -> String {
+        #[cfg(windows)]
+        {
+            format!(
+                "@echo off\n\
+                 rem Cascade CLI Hook - Pre Commit\n\
+                 rem Smart edit mode guidance for better UX\n\n\
+                 rem Check if Cascade is initialized\n\
+                 for /f \\\"tokens=*\\\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
+                 if \\\"%REPO_ROOT%\\\"==\\\"\\\" set REPO_ROOT=.\n\
+                 if not exist \\\"%REPO_ROOT%\\.cascade\\\" exit /b 0\n\n\
+                 rem Check if we're in edit mode\n\
+                 \\\"{cascade_cli}\\\" entry status --quiet >nul 2>&1\n\
+                 if %ERRORLEVEL% equ 0 (\n\
+                     echo ⚠️ You're in EDIT MODE for a stack entry!\n\
+                     echo.\n\
+                     echo Choose your action:\n\
+                     echo   🔄 [A]mend: Modify the current entry\n\
+                     echo   ➕ [N]ew:   Create new entry on top ^(current behavior^)\n\
+                     echo   ❌ [C]ancel: Stop and think about it\n\
+                     echo.\n\
+                     set /p choice=\\\"Your choice (A/n/c): \\\"\n\
+                     \n\
+                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
+                         echo ✅ Running: git commit --amend\n\
+                         git commit --amend\n\
+                         if %ERRORLEVEL% equ 0 (\n\
+                             echo 💡 Entry updated! Run 'ca sync' to update PRs\n\
+                         )\n\
+                         exit /b %ERRORLEVEL%\n\
+                     ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
+                         echo ❌ Commit cancelled\n\
+                         exit /b 1\n\
+                     ) else (\n\
+                         echo ➕ Creating new stack entry...\n\
+                         rem Let the commit proceed normally\n\
+                         exit /b 0\n\
+                     )\n\
+                 )\n\n\
+                 rem Not in edit mode, proceed normally\n\
+                 exit /b 0\n",
+                cascade_cli = cascade_cli
+            )
+        }
+
+        #[cfg(not(windows))]
+        {
+            format!(
+                "#!/bin/sh\n\
+                 # Cascade CLI Hook - Pre Commit\n\
+                 # Smart edit mode guidance for better UX\n\n\
+                 set -e\n\n\
+                 # Check if Cascade is initialized\n\
+                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \\\".\\\")\n\
+                 if [ ! -d \\\"$REPO_ROOT/.cascade\\\" ]; then\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Check if we're in edit mode\n\
+                 if \\\"{cascade_cli}\\\" entry status --quiet >/dev/null 2>&1; then\n\
+                     echo \\\"⚠️ You're in EDIT MODE for a stack entry!\\\"\n\
+                     echo \\\"\\\"\n\
+                     echo \\\"Choose your action:\\\"\n\
+                     echo \\\"  🔄 [A]mend: Modify the current entry\\\"\n\
+                     echo \\\"  ➕ [N]ew:   Create new entry on top (current behavior)\\\"\n\
+                     echo \\\"  ❌ [C]ancel: Stop and think about it\\\"\n\
+                     echo \\\"\\\"\n\
+                     \n\
+                     # Read user choice with default to 'new'\n\
+                     read -p \\\"Your choice (A/n/c): \\\" choice\n\
+                     \n\
+                     case \\\"$choice\\\" in\n\
+                         [Aa])\n\
+                             echo \\\"✅ Running: git commit --amend\\\"\n\
+                             # Temporarily disable hooks to avoid recursion\n\
+                             git -c core.hooksPath=/dev/null commit --amend\n\
+                             if [ $? -eq 0 ]; then\n\
+                                 echo \\\"💡 Entry updated! Run 'ca sync' to update PRs\\\"\n\
+                             fi\n\
+                             exit $?\n\
+                             ;;\n\
+                         [Cc])\n\
+                             echo \\\"❌ Commit cancelled\\\"\n\
+                             exit 1\n\
+                             ;;\n\
+                         *)\n\
+                             echo \\\"➕ Creating new stack entry...\\\"\n\
+                             # Let the commit proceed normally\n\
+                             exit 0\n\
+                             ;;\n\
+                     esac\n\
+                 fi\n\n\
+                 # Not in edit mode, proceed normally\n\
+                 exit 0\n"
+            )
+        }
+    }
+
     fn generate_prepare_commit_msg_hook(&self, cascade_cli: &str) -> String {
         #[cfg(windows)]
         {
@@ -609,22 +707,49 @@ echo "✅ Commit message validation passed"
                  for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
                  if not exist \"%REPO_ROOT%\\.cascade\" exit /b 0\n\n\
-                 rem Get active stack info\n\
-                 for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" stack list --active --format=name 2^>nul') do set ACTIVE_STACK=%%i\n\n\
-                 if not \"%ACTIVE_STACK%\"==\"\" (\n\
-                     rem Get current commit message\n\
+                 rem Check if in edit mode first\n\
+                 for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
+                 if \"%EDIT_STATUS%\"==\"\" set EDIT_STATUS=inactive\n\n\
+                 if not \"%EDIT_STATUS%\"==\"inactive\" (\n\
+                     rem In edit mode - provide smart guidance\n\
                      set /p CURRENT_MSG=<%COMMIT_MSG_FILE%\n\n\
-                     rem Skip if message already has stack context\n\
-                     echo !CURRENT_MSG! | findstr \"[stack:\" >nul\n\
+                     rem Skip if message already has edit guidance\n\
+                     echo !CURRENT_MSG! | findstr \"[EDIT MODE]\" >nul\n\
                      if %ERRORLEVEL% equ 0 exit /b 0\n\n\
-                     rem Add stack context to commit message\n\
+                     rem Add edit mode guidance to commit message\n\
                      echo.\n\
-                     echo # Stack: %ACTIVE_STACK%\n\
-                     echo # This commit will be added to the active stack automatically.\n\
-                     echo # Use 'ca stack status' to see the current stack state.\n\
+                     echo # [EDIT MODE] You're editing a stack entry\n\
+                     echo #\n\
+                     echo # Choose your action:\n\
+                     echo #   🔄 AMEND: To modify the current entry, use:\n\
+                     echo #       git commit --amend\n\
+                     echo #\n\
+                     echo #   ➕ NEW: To create a new entry on top, use:\n\
+                     echo #       git commit    ^(this command^)\n\
+                     echo #\n\
+                     echo # 💡 After committing, run 'ca sync' to update PRs\n\
+                     echo.\n\
                      type \"%COMMIT_MSG_FILE%\"\n\
-                 ) > \"%COMMIT_MSG_FILE%.tmp\"\n\
-                 move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n"
+                 ) > \"%COMMIT_MSG_FILE%.tmp\" && (\n\
+                     move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n\
+                 ) else (\n\
+                     rem Regular stack mode - check for active stack\n\
+                     for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" stack list --active --format=name 2^>nul') do set ACTIVE_STACK=%%i\n\n\
+                     if not \"%ACTIVE_STACK%\"==\"\" (\n\
+                         rem Get current commit message\n\
+                         set /p CURRENT_MSG=<%COMMIT_MSG_FILE%\n\n\
+                         rem Skip if message already has stack context\n\
+                         echo !CURRENT_MSG! | findstr \"[stack:\" >nul\n\
+                         if %ERRORLEVEL% equ 0 exit /b 0\n\n\
+                         rem Add stack context to commit message\n\
+                         echo.\n\
+                         echo # Stack: %ACTIVE_STACK%\n\
+                         echo # This commit will be added to the active stack automatically.\n\
+                         echo # Use 'ca stack status' to see the current stack state.\n\
+                         type \"%COMMIT_MSG_FILE%\"\n\
+                     ) > \"%COMMIT_MSG_FILE%.tmp\"\n\
+                     move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n\
+                 )\n"
             )
         }
 
@@ -647,23 +772,51 @@ echo "✅ Commit message validation passed"
                  if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
-                 # Get active stack info\n\
-                 ACTIVE_STACK=$(\"{cascade_cli}\" stack list --active --format=name 2>/dev/null || echo \"\")\n\n\
-                 if [ -n \"$ACTIVE_STACK\" ]; then\n\
-                     # Get current commit message\n\
+                 # Check if in edit mode first\n\
+                 EDIT_STATUS=$(\"{cascade_cli}\" entry status --quiet 2>/dev/null || echo \"inactive\")\n\
+                 \n\
+                 if [ \"$EDIT_STATUS\" != \"inactive\" ]; then\n\
+                     # In edit mode - provide smart guidance\n\
                      CURRENT_MSG=$(cat \"$COMMIT_MSG_FILE\")\n\
                      \n\
-                     # Skip if message already has stack context\n\
-                     if echo \"$CURRENT_MSG\" | grep -q \"\\[stack:\"; then\n\
+                     # Skip if message already has edit guidance\n\
+                     if echo \"$CURRENT_MSG\" | grep -q \"\\[EDIT MODE\\]\"; then\n\
                          exit 0\n\
                      fi\n\
                      \n\
-                     # Add stack context to commit message\n\
                      echo \"\n\
-                 # Stack: $ACTIVE_STACK\n\
-                 # This commit will be added to the active stack automatically.\n\
-                 # Use 'ca stack status' to see the current stack state.\n\
+                 # [EDIT MODE] You're editing a stack entry\n\
+                 #\n\
+                 # Choose your action:\n\
+                 #   🔄 AMEND: To modify the current entry, use:\n\
+                 #       git commit --amend\n\
+                 #\n\
+                 #   ➕ NEW: To create a new entry on top, use:\n\
+                 #       git commit    (this command)\n\
+                 #\n\
+                 # 💡 After committing, run 'ca sync' to update PRs\n\
+                 \n\
                  $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
+                 else\n\
+                     # Regular stack mode - check for active stack\n\
+                     ACTIVE_STACK=$(\"{cascade_cli}\" stack list --active --format=name 2>/dev/null || echo \"\")\n\
+                     \n\
+                     if [ -n \"$ACTIVE_STACK\" ]; then\n\
+                         # Get current commit message\n\
+                         CURRENT_MSG=$(cat \"$COMMIT_MSG_FILE\")\n\
+                         \n\
+                         # Skip if message already has stack context\n\
+                         if echo \"$CURRENT_MSG\" | grep -q \"\\[stack:\"; then\n\
+                             exit 0\n\
+                         fi\n\
+                         \n\
+                         # Add stack context to commit message\n\
+                         echo \"\n\
+                     # Stack: $ACTIVE_STACK\n\
+                     # This commit will be added to the active stack automatically.\n\
+                     # Use 'ca stack status' to see the current stack state.\n\
+                     $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
+                     fi\n\
                  fi\n"
             )
         }
@@ -962,6 +1115,7 @@ pub async fn install_hook_with_options(
         "post-commit" => HookType::PostCommit,
         "pre-push" => HookType::PrePush,
         "commit-msg" => HookType::CommitMsg,
+        "pre-commit" => HookType::PreCommit,
         "prepare-commit-msg" => HookType::PrepareCommitMsg,
         _ => {
             return Err(CascadeError::config(format!(
@@ -991,6 +1145,7 @@ pub async fn uninstall_hook(hook_name: &str) -> Result<()> {
         "post-commit" => HookType::PostCommit,
         "pre-push" => HookType::PrePush,
         "commit-msg" => HookType::CommitMsg,
+        "pre-commit" => HookType::PreCommit,
         "prepare-commit-msg" => HookType::PrepareCommitMsg,
         _ => {
             return Err(CascadeError::config(format!(

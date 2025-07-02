@@ -337,9 +337,35 @@ git checkout main
 ca push --auto-branch  # Creates feature branch & moves commits safely
 ```
 
-### **🔍 Scattered Commit Detection**
+### **🎯 Smart Interactive Edit Mode**
 
-Cascade CLI detects when you're adding commits from different Git branches to the same stack and warns you:
+When editing stack entries, Cascade CLI **intercepts your Git commands** and provides smart interactive guidance:
+
+```bash
+ca entry checkout 1  # Enter edit mode for first entry
+
+# Just commit normally - the system takes care of the rest!
+git commit
+
+# ⚠️ You're in EDIT MODE for a stack entry!
+#
+# Choose your action:
+#   🔄 [A]mend: Modify the current entry
+#   ➕ [N]ew:   Create new entry on top (current behavior) 
+#   ❌ [C]ancel: Stop and think about it
+#
+# Your choice (A/n/c): A
+#
+# ✅ Running: git commit --amend
+# [Opens editor for amending]
+# 💡 Entry updated! Run 'ca sync' to update PRs
+```
+
+**No more remembering commands** - just type `git commit` and Cascade guides you to the right action automatically!
+
+### **🔍 Scattered Commit Detection & Auto-Fix**
+
+Cascade CLI detects when you're adding commits from different Git branches to the same stack and provides automatic resolution options:
 
 ```bash
 # This creates a "scattered commit" problem:
@@ -359,6 +385,10 @@ ca push
 #    
 #    This makes branch cleanup confusing after merge.
 #    Consider organizing commits into separate stacks instead.
+
+# 🔧 Modern Fix: Use validation to detect and resolve
+ca validate --fix incorporate  # Automatically incorporate extra commits
+ca validate --fix split        # Split extra commits into new stack entries
 ```
 
 ### **📝 Smart PR Creation**
@@ -475,7 +505,7 @@ ca config set conflicts.backup_on_resolve true
 ```bash
 # Stack Management (Multiple Stacks)
 ca stacks create <name> --base <branch>  # Create new stack
-ca stacks list                          # List all stacks  
+ca stacks list                          # List all stacks
 ca switch <name>                        # Switch active stack
 ca push                                 # Add commits to current stack
 ca submit                               # Submit PRs for current stack
@@ -493,11 +523,16 @@ ca deactivate                           # Turn off stack mode
 ca switch <name>                        # Switch to different stack
 
 # Or use full commands when needed:
-ca stacks deactivate                    # Turn off stack mode (use normal Git workflow)
-ca stacks switch <name>                 # Switch to different stack
+ca deactivate                           # Turn off stack mode (use normal Git workflow)  
+ca switch <name>                        # Switch to different stack
 
 # 🔍 Automatic branch change detection: Cascade detects when you switch branches
 #     and prompts you to continue with current stack, deactivate, or switch stacks
+
+# Entry Editing (Modern Convenience)
+ca entry checkout [number]              # Interactive checkout for editing entries
+ca entry status                         # Show current edit mode status  
+ca entry list                           # List all entries with edit indicators
 
 # Repository Overview
 ca repo                                 # Show all stacks and repository status
@@ -532,6 +567,21 @@ ca stacks delete <name>                       # Remove stack
 ca stacks delete <name> --force               # Force deletion without confirmation
 ca validate                                   # Validate active stack
 ca validate <name>                            # Validate specific stack
+```
+
+### **Entry Editing (Modern Convenience)**
+```bash
+# Checkout specific entries for editing
+ca entry checkout                           # Interactive picker to select entry
+ca entry checkout 1                         # Checkout first entry for editing
+ca entry checkout 3 --yes                   # Skip confirmation prompts
+ca entry checkout 2 --direct                # Skip picker when using entry number
+
+# Track edit status
+ca entry status                             # Show current edit mode info
+ca entry status --quiet                     # Brief status only
+ca entry list                               # List all entries with edit status
+ca entry list --verbose                     # Show detailed entry information
 ```
 
 ### **Adding Commits to Stack**

@@ -443,20 +443,45 @@ ca stack
 # Entry 2: [def456] Add user model         (PR #111) ← depends on schema
 # Entry 3: [ghi789] Add user endpoints     (PR #112) ← depends on model
 
-# Method 1: Checkout and amend foundation
-git checkout abc123
+# 🆕 Modern Approach: Use entry editing (Recommended)
+ca entry checkout 1  # Checkout first entry for editing
+# ✅ Automatically enters edit mode
+# ✅ Checks out commit abc123 safely
+# ✅ Tracks editing state
+
+# Make your changes
 git add .
-git commit --amend -m "Add database schema (fixed column types)"
+
+# 🎯 Smart interactive guidance - just type git commit as usual:
+git commit
+
+# ⚠️ You're in EDIT MODE for a stack entry!
+#
+# Choose your action:
+#   🔄 [A]mend: Modify the current entry
+#   ➕ [N]ew:   Create new entry on top (current behavior) 
+#   ❌ [C]ancel: Stop and think about it
+#
+# Your choice (A/n/c): A
+#
+# ✅ Running: git commit --amend
+# [Opens editor with: "Add database schema (fixed column types)"]
+# 💡 Entry updated! Run 'ca sync' to update PRs
+
+# Sync all dependent entries automatically
 ca rebase  # Cascade handles all dependencies
-
-# Method 2: Interactive rebase for multiple changes
-git rebase -i HEAD~3   # Mark first commit as 'edit'
-# Make changes, git add ., git commit --amend
-# git rebase --continue, then:
-ca rebase  # Cascade synchronizes all PRs
-
 # ✅ All dependent commits automatically incorporate the schema changes
 # ✅ All PRs (#110, #111, #112) updated with new code but preserve review history
+
+# Alternative: Interactive picker for multiple entries
+ca entry checkout  # Shows TUI picker to select which entry to edit
+
+# Check edit status anytime
+ca entry status    # Shows current edit mode info
+ca entry list      # Shows all entries with edit indicators
+
+# Legacy Method (still works but not recommended):
+# git checkout abc123 && git commit --amend && ca rebase
 ```
 
 ### **Managing Multiple Related Stacks**

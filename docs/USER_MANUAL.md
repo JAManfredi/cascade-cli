@@ -194,6 +194,106 @@ ca stacks delete temp-stack --force
 ca stacks delete feature-x --keep-branches
 ```
 
+### **🎯 Entry Editing (Modern Convenience)**
+
+Cascade CLI provides modern convenience commands for editing specific stack entries without manual Git operations.
+
+#### **`ca entry checkout`** - Interactive Entry Checkout
+Checkout a specific stack entry for editing with intelligent tracking.
+
+```bash
+ca entry checkout [ENTRY] [OPTIONS]
+
+# Arguments:
+[ENTRY]                  # Entry number (1-based index)
+
+# Options:
+--direct                 # Skip interactive picker when using entry number
+--yes, -y               # Skip confirmation prompts
+```
+
+**Examples:**
+```bash
+# Interactive picker (recommended)
+ca entry checkout
+# Shows TUI interface to select which entry to edit
+
+# Direct checkout
+ca entry checkout 1     # Checkout first entry
+ca entry checkout 3 --yes  # Skip confirmation
+
+# Direct mode (for scripting)
+ca entry checkout 2 --direct --yes
+```
+
+**What it does:**
+- ✅ Enters edit mode tracking for safety
+- ✅ Checks out the specific commit safely
+- ✅ Preserves stack state and metadata
+- ✅ Shows clear guidance for next steps
+
+#### **`ca entry status`** - Edit Mode Status
+Show current edit mode status and guidance.
+
+```bash
+ca entry status [OPTIONS]
+
+# Options:
+--quiet                  # Brief status output (for scripts)
+```
+
+**Examples:**
+```bash
+# Detailed status
+ca entry status
+
+# Brief output
+ca entry status --quiet
+# Output: "active:entry-uuid" or "inactive"
+```
+
+#### **`ca entry list`** - List Entries with Edit Status
+List all entries in the active stack with edit status indicators.
+
+```bash
+ca entry list [OPTIONS]
+
+# Options:
+--verbose, -v           # Show detailed information
+```
+
+**Examples:**
+```bash
+# Basic list with edit indicators
+ca entry list
+
+# Detailed view
+ca entry list --verbose
+```
+
+**🎯 Modern Entry Editing Workflow:**
+```bash
+# 1. Select entry to edit
+ca entry checkout         # Interactive picker
+
+# 2. Make changes normally
+git add src/auth.rs
+git commit --amend -m "Add database schema (fixed column types)"
+
+# 3. Update all dependent entries automatically
+ca rebase               # Cascade handles dependencies
+
+# 4. Verify changes
+ca entry list           # Check updated status
+ca stack               # See full stack state
+```
+
+**💡 Benefits over Manual Git:**
+- **Safety**: Tracks edit state, prevents corruption
+- **Convenience**: No need to remember commit hashes
+- **Intelligence**: Interactive picker with rich information
+- **Guidance**: Clear next steps and status tracking
+
 ### **📤 Stack Operations**
 
 #### **`ca push`** - Add Commits to Stack

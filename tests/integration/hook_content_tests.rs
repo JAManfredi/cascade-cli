@@ -215,6 +215,104 @@ async fn test_prepare_commit_msg_hook_contains_user_feedback() {
 }
 
 #[tokio::test]
+async fn test_pre_commit_hook_contains_edit_mode_guidance() {
+    let (_temp_dir, repo_path) = create_test_git_repo().await;
+
+    // Initialize cascade
+    cascade_cli::config::initialize_repo(
+        &repo_path,
+        Some("https://test.bitbucket.com".to_string()),
+    )
+    .unwrap();
+
+    let hooks_manager = cascade_cli::cli::commands::hooks::HooksManager::new(&repo_path).unwrap();
+    let hook_content = hooks_manager
+        .generate_hook_script(&cascade_cli::cli::commands::hooks::HookType::PreCommit)
+        .unwrap();
+
+    // Verify edit mode guidance is present
+    assert!(
+        hook_content.contains("entry status --quiet"),
+        "Pre-commit hook should check edit mode status"
+    );
+    assert!(
+        hook_content.contains("⚠️ You're in EDIT MODE for a stack entry!"),
+        "Pre-commit hook should provide edit mode warning"
+    );
+    assert!(
+        hook_content.contains("🔄 [A]mend: Modify the current entry"),
+        "Pre-commit hook should explain amend option"
+    );
+    assert!(
+        hook_content.contains("➕ [N]ew:   Create new entry on top"),
+        "Pre-commit hook should explain new commit option"
+    );
+    assert!(
+        hook_content.contains("❌ [C]ancel: Stop and think about it"),
+        "Pre-commit hook should provide cancel option"
+    );
+    assert!(
+        hook_content.contains("✅ Running: git commit --amend"),
+        "Pre-commit hook should show what happens when amending"
+    );
+    assert!(
+        hook_content.contains("💡 Entry updated! Run 'ca sync' to update PRs"),
+        "Pre-commit hook should provide next steps guidance"
+    );
+    assert!(
+        hook_content.contains("➕ Creating new stack entry..."),
+        "Pre-commit hook should indicate new entry creation"
+    );
+}
+
+#[tokio::test]
+async fn test_prepare_commit_msg_hook_contains_edit_mode_guidance() {
+    let (_temp_dir, repo_path) = create_test_git_repo().await;
+
+    // Initialize cascade
+    cascade_cli::config::initialize_repo(
+        &repo_path,
+        Some("https://test.bitbucket.com".to_string()),
+    )
+    .unwrap();
+
+    let hooks_manager = cascade_cli::cli::commands::hooks::HooksManager::new(&repo_path).unwrap();
+    let hook_content = hooks_manager
+        .generate_hook_script(&cascade_cli::cli::commands::hooks::HookType::PrepareCommitMsg)
+        .unwrap();
+
+    // Verify edit mode guidance is present
+    assert!(
+        hook_content.contains("entry status --quiet"),
+        "Prepare-commit-msg hook should check edit mode status"
+    );
+    assert!(
+        hook_content.contains("[EDIT MODE] You're editing a stack entry"),
+        "Prepare-commit-msg hook should provide edit mode header"
+    );
+    assert!(
+        hook_content.contains("🔄 AMEND: To modify the current entry, use:"),
+        "Prepare-commit-msg hook should explain amend option"
+    );
+    assert!(
+        hook_content.contains("git commit --amend"),
+        "Prepare-commit-msg hook should show amend command"
+    );
+    assert!(
+        hook_content.contains("➕ NEW: To create a new entry on top, use:"),
+        "Prepare-commit-msg hook should explain new commit option"
+    );
+    assert!(
+        hook_content.contains("git commit    (this command)"),
+        "Prepare-commit-msg hook should explain current command creates new entry"
+    );
+    assert!(
+        hook_content.contains("💡 After committing, run 'ca sync' to update PRs"),
+        "Prepare-commit-msg hook should provide next steps guidance"
+    );
+}
+
+#[tokio::test]
 async fn test_hooks_are_platform_specific() {
     let (_temp_dir, repo_path) = create_test_git_repo().await;
 
