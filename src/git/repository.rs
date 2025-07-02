@@ -613,14 +613,14 @@ impl GitRepository {
         if !ssl_configured {
             callbacks.certificate_check(|_cert, host| {
                 tracing::debug!("Default SSL certificate check for host: {}", host);
-                
+
                 // For common Bitbucket/HTTPS issues, be more permissive with certificate validation
                 // This helps with corporate environments and self-signed certificates
                 if host.contains("bitbucket") || host.contains("atlassian") {
                     tracing::debug!("Accepting certificate for Bitbucket host: {}", host);
                     return Ok(git2::CertificateCheckStatus::CertificateOk);
                 }
-                
+
                 // For other hosts, use default validation
                 tracing::debug!("Using default certificate validation for host: {}", host);
                 Ok(git2::CertificateCheckStatus::CertificatePassthrough)
@@ -886,7 +886,7 @@ impl GitRepository {
 
         // Configure callbacks with enhanced SSL settings and error handling
         let mut callbacks = self.configure_remote_callbacks()?;
-        
+
         // Add enhanced progress and error callbacks for better debugging
         callbacks.push_update_reference(|refname, status| {
             if let Some(msg) = status {
@@ -917,11 +917,13 @@ impl GitRepository {
                     \n  - Test manual push: git push origin {}\
                     \n  - Check SSL settings if using HTTPS\
                     \n  - For corporate networks, consider SSL certificate configuration",
-                    branch, remote_url, e, 
-                    remote_url.split("://").nth(1).unwrap_or("unknown"), 
+                    branch,
+                    remote_url,
+                    e,
+                    remote_url.split("://").nth(1).unwrap_or("unknown"),
                     branch
                 );
-                
+
                 tracing::error!("{}", error_msg);
                 Err(CascadeError::branch(error_msg))
             }

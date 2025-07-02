@@ -100,7 +100,7 @@ impl BitbucketIntegration {
                 "Ensuring target branch '{}' is pushed to remote",
                 target_branch
             );
-            
+
             // Push target branch - fail fast if this fails
             git_repo.push(&target_branch).map_err(|e| {
                 CascadeError::bitbucket(format!(
@@ -109,7 +109,7 @@ impl BitbucketIntegration {
                     target_branch, e, target_branch
                 ))
             })?;
-            
+
             info!(
                 "✅ Successfully pushed target branch '{}' to remote",
                 target_branch
