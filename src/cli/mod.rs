@@ -587,6 +587,8 @@ impl Cli {
     /// Initialize git2 to use system certificates by default
     /// This makes Cascade work like git CLI in corporate environments
     fn init_git2_ssl(&self) -> Result<()> {
+        // Only import SSL functions on platforms that use them
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         use git2::opts::{set_ssl_cert_dir, set_ssl_cert_file};
 
         // Configure git2 to use system certificate store
