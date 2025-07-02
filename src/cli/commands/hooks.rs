@@ -594,6 +594,7 @@ echo "✅ Commit message validation passed"
         }
     }
 
+    #[allow(clippy::uninlined_format_args)]
     fn generate_pre_commit_hook(&self, cascade_cli: &str) -> String {
         #[cfg(windows)]
         {
@@ -606,7 +607,7 @@ echo "✅ Commit message validation passed"
                  if \\\"%REPO_ROOT%\\\"==\\\"\\\" set REPO_ROOT=.\n\
                  if not exist \\\"%REPO_ROOT%\\.cascade\\\" exit /b 0\n\n\
                  rem Check if we're in edit mode\n\
-                 \\\"{cascade_cli}\\\" entry status --quiet >nul 2>&1\n\
+                 \\\"{0}\\\" entry status --quiet >nul 2>&1\n\
                  if %ERRORLEVEL% equ 0 (\n\
                      echo ⚠️ You're in EDIT MODE for a stack entry!\n\
                      echo.\n\
@@ -635,7 +636,7 @@ echo "✅ Commit message validation passed"
                  )\n\n\
                  rem Not in edit mode, proceed normally\n\
                  exit /b 0\n",
-                cascade_cli = cascade_cli
+                cascade_cli
             )
         }
 
@@ -652,7 +653,7 @@ echo "✅ Commit message validation passed"
                      exit 0\n\
                  fi\n\n\
                  # Check if we're in edit mode\n\
-                 if \\\"{cascade_cli}\\\" entry status --quiet >/dev/null 2>&1; then\n\
+                 if \\\"{0}\\\" entry status --quiet >/dev/null 2>&1; then\n\
                      echo \\\"⚠️ You're in EDIT MODE for a stack entry!\\\"\n\
                      echo \\\"\\\"\n\
                      echo \\\"Choose your action:\\\"\n\
@@ -686,7 +687,8 @@ echo "✅ Commit message validation passed"
                      esac\n\
                  fi\n\n\
                  # Not in edit mode, proceed normally\n\
-                 exit 0\n"
+                 exit 0\n",
+                cascade_cli
             )
         }
     }
