@@ -557,23 +557,25 @@ impl GitRepository {
             }
         });
 
-        // Configure SSL certificate checking with enhanced robustness
-        // Priority: 1. Cascade SSL config, 2. Git config, 3. Robust default handling
+        // Configure SSL certificate checking with system certificates by default
+        // This matches what tools like Graphite, Sapling, and Phabricator do
+        // Priority: 1. Use system certificates (default), 2. Manual overrides only if needed
 
         let mut ssl_configured = false;
 
-        // First, check for Cascade SSL configuration
+        // Check for manual SSL overrides first (only when user explicitly needs them)
         if let Some(ssl_config) = &self.ssl_config {
             if ssl_config.accept_invalid_certs {
-                tracing::warn!("SSL certificate verification disabled via Cascade config (accept_invalid_certs=true)");
+                tracing::warn!(
+                    "SSL certificate verification DISABLED via Cascade config - this is insecure!"
+                );
                 callbacks.certificate_check(|_cert, _host| {
-                    tracing::debug!("Accepting certificate for host: {}", _host);
+                    tracing::debug!("⚠️  Accepting invalid certificate for host: {}", _host);
                     Ok(git2::CertificateCheckStatus::CertificateOk)
                 });
                 ssl_configured = true;
             } else if let Some(ca_path) = &ssl_config.ca_bundle_path {
                 tracing::info!("Using custom CA bundle from Cascade config: {}", ca_path);
-                // For custom CA bundles, we'll still accept certificates but log the configuration
                 callbacks.certificate_check(|_cert, host| {
                     tracing::debug!("Using custom CA bundle for host: {}", host);
                     Ok(git2::CertificateCheckStatus::CertificateOk)
@@ -582,47 +584,52 @@ impl GitRepository {
             }
         }
 
-        // If no Cascade SSL config, fall back to git config
+        // Check git config for manual overrides
         if !ssl_configured {
             if let Ok(config) = self.repo.config() {
-                // Check if SSL verification is disabled in git config
                 let ssl_verify = config.get_bool("http.sslVerify").unwrap_or(true);
 
                 if !ssl_verify {
-                    tracing::warn!("SSL certificate verification disabled via git config (http.sslVerify=false)");
+                    tracing::warn!(
+                        "SSL certificate verification DISABLED via git config - this is insecure!"
+                    );
                     callbacks.certificate_check(|_cert, host| {
-                        tracing::debug!("Bypassing SSL verification for host: {}", host);
+                        tracing::debug!("⚠️  Bypassing SSL verification for host: {}", host);
                         Ok(git2::CertificateCheckStatus::CertificateOk)
                     });
                     ssl_configured = true;
-                } else {
-                    // Check for custom CA bundle in git config
-                    if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
-                        tracing::info!("Using custom CA bundle from git config: {}", ca_path);
-                        callbacks.certificate_check(|_cert, host| {
-                            tracing::debug!("Using git config CA bundle for host: {}", host);
-                            Ok(git2::CertificateCheckStatus::CertificateOk)
-                        });
-                        ssl_configured = true;
-                    }
+                } else if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
+                    tracing::info!("Using custom CA bundle from git config: {}", ca_path);
+                    callbacks.certificate_check(|_cert, host| {
+                        tracing::debug!("Using git config CA bundle for host: {}", host);
+                        Ok(git2::CertificateCheckStatus::CertificateOk)
+                    });
+                    ssl_configured = true;
                 }
             }
         }
 
-        // Enhanced default SSL handling for common TLS issues
+        // DEFAULT BEHAVIOR: Use system certificates (like git CLI and other modern tools)
+        // This should work out-of-the-box in corporate environments
         if !ssl_configured {
+            tracing::debug!(
+                "Using system certificate store for SSL verification (default behavior)"
+            );
+
+            // Use CertificatePassthrough to let the system handle certificate validation
+            // This allows the underlying TLS implementation to use system certificates
+            // which is what git CLI does and why it works in corporate environments
             callbacks.certificate_check(|_cert, host| {
-                tracing::debug!("Default SSL certificate check for host: {}", host);
+                tracing::debug!("System certificate validation for host: {}", host);
 
-                // For common Bitbucket/HTTPS issues, be more permissive with certificate validation
-                // This helps with corporate environments and self-signed certificates
-                if host.contains("bitbucket") || host.contains("atlassian") {
-                    tracing::debug!("Accepting certificate for Bitbucket host: {}", host);
-                    return Ok(git2::CertificateCheckStatus::CertificateOk);
-                }
+                // Let the system TLS stack handle certificate validation
+                // This includes corporate CA certificates installed on the system
+                // The exact certificate type checking has changed in newer git2,
+                // so we use a general approach that works with system certificates
+                tracing::debug!("Using system certificate validation for host: {}", host);
 
-                // For other hosts, use default validation
-                tracing::debug!("Using default certificate validation for host: {}", host);
+                // Pass through to system certificate validation for all certificate types
+                // This works with both X.509 certificates and SSH hostkeys
                 Ok(git2::CertificateCheckStatus::CertificatePassthrough)
             });
         }

@@ -390,6 +390,11 @@ impl Cli {
         // Set up logging based on verbosity
         self.setup_logging();
 
+        // Initialize git2 to use system certificates by default
+        // This ensures we work out-of-the-box in corporate environments
+        // just like git CLI and other modern dev tools (Graphite, Sapling, Phabricator)
+        self.init_git2_ssl()?;
+
         match self.command {
             Commands::Init {
                 bitbucket_url,
@@ -577,6 +582,101 @@ impl Cli {
                 commands::stack::run(validate_action).await
             }
         }
+    }
+
+    /// Initialize git2 to use system certificates by default
+    /// This makes Cascade work like git CLI in corporate environments
+    fn init_git2_ssl(&self) -> Result<()> {
+        use git2::opts::{set_ssl_cert_dir, set_ssl_cert_file};
+
+        // Configure git2 to use system certificate store
+        // This matches behavior of git CLI and tools like Graphite/Sapling
+        tracing::debug!("Initializing git2 SSL configuration with system certificates");
+
+        // Try to use system certificate locations
+        // On macOS: /etc/ssl/cert.pem, /usr/local/etc/ssl/cert.pem
+        // On Linux: /etc/ssl/certs/ca-certificates.crt, /etc/ssl/certs/ca-bundle.crt
+        // On Windows: Uses Windows certificate store automatically
+
+        #[cfg(target_os = "macos")]
+        {
+            // macOS certificate locations (certificate files)
+            let cert_files = [
+                "/etc/ssl/cert.pem",
+                "/usr/local/etc/ssl/cert.pem",
+                "/opt/homebrew/etc/ca-certificates/cert.pem",
+            ];
+
+            for cert_path in &cert_files {
+                if std::path::Path::new(cert_path).exists() {
+                    tracing::debug!("Using macOS system certificates from: {}", cert_path);
+                    if let Err(e) = unsafe { set_ssl_cert_file(cert_path) } {
+                        tracing::warn!("Failed to set SSL cert file {}: {}", cert_path, e);
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
+
+            // Fallback to certificate directories
+            let cert_dirs = ["/etc/ssl/certs", "/usr/local/etc/ssl/certs"];
+
+            for cert_dir in &cert_dirs {
+                if std::path::Path::new(cert_dir).exists() {
+                    tracing::debug!("Using macOS system certificate directory: {}", cert_dir);
+                    if let Err(e) = unsafe { set_ssl_cert_dir(cert_dir) } {
+                        tracing::warn!("Failed to set SSL cert directory {}: {}", cert_dir, e);
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Linux certificate files
+            let cert_files = [
+                "/etc/ssl/certs/ca-certificates.crt", // Debian/Ubuntu
+                "/etc/ssl/certs/ca-bundle.crt",       // RHEL/CentOS
+                "/etc/pki/tls/certs/ca-bundle.crt",   // Fedora/RHEL
+                "/etc/ssl/ca-bundle.pem",             // OpenSUSE
+            ];
+
+            for cert_path in &cert_files {
+                if std::path::Path::new(cert_path).exists() {
+                    tracing::debug!("Using Linux system certificates from: {}", cert_path);
+                    if let Err(e) = unsafe { set_ssl_cert_file(cert_path) } {
+                        tracing::warn!("Failed to set SSL cert file {}: {}", cert_path, e);
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
+
+            // Fallback to certificate directories
+            let cert_dirs = ["/etc/ssl/certs", "/etc/pki/tls/certs"];
+
+            for cert_dir in &cert_dirs {
+                if std::path::Path::new(cert_dir).exists() {
+                    tracing::debug!("Using Linux system certificate directory: {}", cert_dir);
+                    if let Err(e) = unsafe { set_ssl_cert_dir(cert_dir) } {
+                        tracing::warn!("Failed to set SSL cert directory {}: {}", cert_dir, e);
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // Windows uses system certificate store automatically via git2's default configuration
+            tracing::debug!("Using Windows system certificate store (automatic)");
+        }
+
+        tracing::debug!("System SSL certificate configuration complete");
+        Ok(())
     }
 
     fn setup_logging(&self) {
