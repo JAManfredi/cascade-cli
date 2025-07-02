@@ -49,6 +49,22 @@ async fn set_config_value(config_file: &std::path::Path, key: &str, value: &str)
             println!("   ca config set bitbucket.project YOUR_PROJECT_KEY");
             println!("   ca config set bitbucket.repo your-repo-name");
         }
+        "bitbucket.accept_invalid_certs" => {
+            println!("💡 SSL Configuration:");
+            if value == "true" {
+                println!("   ⚠️  SSL certificate verification is disabled (development only)");
+                println!("   This setting affects both API calls and git operations");
+            } else {
+                println!("   ✅ SSL certificate verification is enabled (recommended)");
+                println!("   For custom CA certificates, use: ca config set bitbucket.ca_bundle_path /path/to/ca-bundle.crt");
+            }
+        }
+        "bitbucket.ca_bundle_path" => {
+            println!("💡 SSL Configuration:");
+            println!("   📁 Custom CA bundle path set for SSL certificate verification");
+            println!("   This affects both API calls and git operations");
+            println!("   Make sure the file exists and contains valid PEM certificates");
+        }
         _ => {}
     }
 

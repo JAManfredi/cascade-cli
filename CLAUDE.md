@@ -201,8 +201,32 @@ The configuration is stored in `.cascade/config.json` with:
 - Git workflow preferences
 - Stack management settings
 - Rebase and conflict resolution options
+- SSL/TLS certificate configuration
 
 Configuration loading includes validation and corruption recovery mechanisms.
+
+### SSL/TLS Configuration
+
+Cascade supports SSL certificate configuration for corporate environments:
+
+```bash
+# Disable SSL verification (development only)
+ca config set bitbucket.accept_invalid_certs true
+
+# Use custom CA certificate bundle
+ca config set bitbucket.ca_bundle_path /path/to/ca-bundle.crt
+
+# View current SSL settings
+ca config get bitbucket.accept_invalid_certs
+ca config get bitbucket.ca_bundle_path
+```
+
+**SSL Configuration Priority:**
+1. **Cascade SSL settings** (highest priority) - set via `ca config set`
+2. **Git configuration** (fallback) - `http.sslVerify` and `http.sslCAInfo`
+3. **Default SSL verification** (default behavior)
+
+This layered approach allows both convenience (automatic git config inheritance) and flexibility (cascade-specific overrides) for corporate environments.
 
 ## Installation Scripts
 

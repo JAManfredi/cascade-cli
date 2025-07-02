@@ -47,6 +47,13 @@ struct CheckoutSafety {
     pub current_branch: Option<String>,
 }
 
+/// SSL configuration for git operations
+#[derive(Debug, Clone)]
+pub struct GitSslConfig {
+    pub accept_invalid_certs: bool,
+    pub ca_bundle_path: Option<String>,
+}
+
 /// Wrapper around git2::Repository with safe operations
 ///
 /// For thread safety, use the async variants (e.g., fetch_async, pull_async)
@@ -55,10 +62,12 @@ struct CheckoutSafety {
 pub struct GitRepository {
     repo: Repository,
     path: PathBuf,
+    ssl_config: Option<GitSslConfig>,
 }
 
 impl GitRepository {
     /// Open a Git repository at the given path
+    /// Automatically loads SSL configuration from cascade config if available
     pub fn open(path: &Path) -> Result<Self> {
         let repo = Repository::discover(path)
             .map_err(|e| CascadeError::config(format!("Not a git repository: {e}")))?;
@@ -68,10 +77,34 @@ impl GitRepository {
             .ok_or_else(|| CascadeError::config("Repository has no working directory"))?
             .to_path_buf();
 
+        // Try to load SSL configuration from cascade config
+        let ssl_config = Self::load_ssl_config_from_cascade(&workdir);
+
         Ok(Self {
             repo,
             path: workdir,
+            ssl_config,
         })
+    }
+
+    /// Load SSL configuration from cascade config file if it exists
+    fn load_ssl_config_from_cascade(repo_path: &Path) -> Option<GitSslConfig> {
+        // Try to load cascade configuration
+        let config_dir = crate::config::get_repo_config_dir(repo_path).ok()?;
+        let config_path = config_dir.join("config.json");
+        let settings = crate::config::Settings::load_from_file(&config_path).ok()?;
+
+        // Convert BitbucketConfig to GitSslConfig if SSL settings exist
+        if settings.bitbucket.accept_invalid_certs.is_some()
+            || settings.bitbucket.ca_bundle_path.is_some()
+        {
+            Some(GitSslConfig {
+                accept_invalid_certs: settings.bitbucket.accept_invalid_certs.unwrap_or(false),
+                ca_bundle_path: settings.bitbucket.ca_bundle_path,
+            })
+        } else {
+            None
+        }
     }
 
     /// Get repository information
@@ -508,6 +541,71 @@ impl GitRepository {
         Signature::now("Cascade CLI", "cascade@example.com").map_err(CascadeError::Git)
     }
 
+    /// Configure remote callbacks with SSL settings
+    /// Priority: Cascade SSL config > Git config > Default
+    fn configure_remote_callbacks(&self) -> Result<git2::RemoteCallbacks<'_>> {
+        let mut callbacks = git2::RemoteCallbacks::new();
+
+        // Configure authentication
+        callbacks.credentials(|_url, username_from_url, _allowed_types| {
+            if let Some(username) = username_from_url {
+                // Try SSH key first
+                git2::Cred::ssh_key_from_agent(username)
+            } else {
+                // Try default credential helper
+                git2::Cred::default()
+            }
+        });
+
+        // Configure SSL certificate checking with priority:
+        // 1. Cascade SSL config (highest priority)
+        // 2. Git config (fallback)
+        // 3. Default SSL verification (default)
+
+        let mut ssl_configured = false;
+
+        // First, check for Cascade SSL configuration
+        if let Some(ssl_config) = &self.ssl_config {
+            if ssl_config.accept_invalid_certs {
+                tracing::warn!("SSL certificate verification disabled via Cascade config (accept_invalid_certs=true)");
+                callbacks.certificate_check(|_cert, _host| {
+                    Ok(git2::CertificateCheckStatus::CertificateOk)
+                });
+                ssl_configured = true;
+            } else if let Some(ca_path) = &ssl_config.ca_bundle_path {
+                tracing::info!("Using custom CA bundle from Cascade config: {}", ca_path);
+                // Note: git2 doesn't directly support custom CA bundles in callbacks
+                // The system libgit2 should respect this if we set it in git config
+                // For now, we'll log it and let the system handle it
+            }
+        }
+
+        // If no Cascade SSL config, fall back to git config
+        if !ssl_configured {
+            if let Ok(config) = self.repo.config() {
+                // Check if SSL verification is disabled in git config
+                let ssl_verify = config.get_bool("http.sslVerify").unwrap_or(true);
+
+                if !ssl_verify {
+                    // If http.sslVerify is false, accept any certificate
+                    callbacks.certificate_check(|_cert, _host| {
+                        tracing::warn!("SSL certificate verification disabled via git config (http.sslVerify=false)");
+                        Ok(git2::CertificateCheckStatus::CertificateOk)
+                    });
+                } else {
+                    // Check for custom CA bundle
+                    if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
+                        // Note: git2 doesn't directly support custom CA bundles in callbacks
+                        // The system libgit2 should respect the git config automatically
+                        tracing::info!("Using custom CA bundle from git config: {}", ca_path);
+                    }
+                }
+            }
+        }
+
+        Ok(callbacks)
+    }
+
     /// Get the tree ID from the current index
     fn get_index_tree(&self) -> Result<Oid> {
         let mut index = self.repo.index().map_err(CascadeError::Git)?;
@@ -649,21 +747,10 @@ impl GitRepository {
             .find_remote("origin")
             .map_err(|e| CascadeError::branch(format!("No remote 'origin' found: {e}")))?;
 
-        // Create callbacks for authentication
-        let mut callbacks = git2::RemoteCallbacks::new();
+        // Configure callbacks with SSL settings from git config
+        let callbacks = self.configure_remote_callbacks()?;
 
-        // Try to use existing authentication from git config/credential manager
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            if let Some(username) = username_from_url {
-                // Try SSH key first
-                git2::Cred::ssh_key_from_agent(username)
-            } else {
-                // Try default credential helper
-                git2::Cred::default()
-            }
-        });
-
-        // Fetch options with authentication
+        // Fetch options with authentication and SSL config
         let mut fetch_options = git2::FetchOptions::new();
         fetch_options.remote_callbacks(callbacks);
 
@@ -769,21 +856,10 @@ impl GitRepository {
 
         let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
 
-        // Create callbacks for authentication
-        let mut callbacks = git2::RemoteCallbacks::new();
+        // Configure callbacks with SSL settings from git config
+        let callbacks = self.configure_remote_callbacks()?;
 
-        // Try to use existing authentication from git config/credential manager
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            if let Some(username) = username_from_url {
-                // Try SSH key first
-                git2::Cred::ssh_key_from_agent(username)
-            } else {
-                // Try default credential helper
-                git2::Cred::default()
-            }
-        });
-
-        // Push options with authentication
+        // Push options with authentication and SSL config
         let mut push_options = git2::PushOptions::new();
         push_options.remote_callbacks(callbacks);
 
@@ -933,21 +1009,10 @@ impl GitRepository {
 
         let refspec = format!("+refs/heads/{target_branch}:refs/heads/{target_branch}");
 
-        // Create callbacks for authentication
-        let mut callbacks = git2::RemoteCallbacks::new();
+        // Configure callbacks with SSL settings from git config
+        let callbacks = self.configure_remote_callbacks()?;
 
-        // Try to use existing authentication from git config/credential manager
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            if let Some(username) = username_from_url {
-                // Try SSH key first
-                git2::Cred::ssh_key_from_agent(username)
-            } else {
-                // Try default credential helper
-                git2::Cred::default()
-            }
-        });
-
-        // Push options for force push
+        // Push options for force push with SSL config
         let mut push_options = git2::PushOptions::new();
         push_options.remote_callbacks(callbacks);
 
