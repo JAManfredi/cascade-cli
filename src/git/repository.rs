@@ -782,20 +782,42 @@ impl GitRepository {
         fetch_options.remote_callbacks(callbacks);
 
         // Fetch with authentication
-        remote
-            .fetch::<&str>(&[], Some(&mut fetch_options), None)
-            .map_err(CascadeError::Git)?;
-
-        tracing::debug!("Fetch completed successfully");
-        Ok(())
+        match remote.fetch::<&str>(&[], Some(&mut fetch_options), None) {
+            Ok(_) => {
+                tracing::debug!("Fetch completed successfully");
+                Ok(())
+            }
+            Err(e) => {
+                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
+                let error_string = e.to_string();
+                if error_string.contains("TLS stream") || error_string.contains("SSL") {
+                    tracing::warn!(
+                        "git2 TLS error detected, falling back to git CLI for fetch operation"
+                    );
+                    return self.fetch_with_git_cli();
+                }
+                Err(CascadeError::Git(e))
+            }
+        }
     }
 
     /// Pull changes from remote (fetch + merge)
     pub fn pull(&self, branch: &str) -> Result<()> {
         tracing::info!("Pulling branch: {}", branch);
 
-        // First fetch
-        self.fetch()?;
+        // First fetch - this now includes TLS fallback
+        match self.fetch() {
+            Ok(_) => {}
+            Err(e) => {
+                // If fetch failed even with CLI fallback, try full git pull as last resort
+                let error_string = e.to_string();
+                if error_string.contains("TLS stream") || error_string.contains("SSL") {
+                    tracing::warn!("git2 TLS error detected, falling back to git CLI for pull operation");
+                    return self.pull_with_git_cli(branch);
+                }
+                return Err(e);
+            }
+        }
 
         // Get remote tracking branch
         let remote_branch_name = format!("origin/{branch}");
@@ -965,6 +987,58 @@ impl GitRepository {
             );
             tracing::error!("{}", error_msg);
             Err(CascadeError::branch(error_msg))
+        }
+    }
+
+    /// Fallback fetch method using git CLI instead of git2
+    /// This is used when git2 has TLS/SSL issues but git CLI works fine
+    fn fetch_with_git_cli(&self) -> Result<()> {
+        tracing::info!("Using git CLI fallback for fetch operation");
+
+        let output = std::process::Command::new("git")
+            .args(["fetch", "origin"])
+            .current_dir(&self.path)
+            .output()
+            .map_err(|e| CascadeError::Git(git2::Error::from_str(&format!("Failed to execute git command: {e}"))))?;
+
+        if output.status.success() {
+            tracing::info!("✅ Git CLI fetch succeeded");
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let error_msg = format!(
+                "Git CLI fetch failed: {}\nStdout: {}\nStderr: {}",
+                output.status, stdout, stderr
+            );
+            tracing::error!("{}", error_msg);
+            Err(CascadeError::Git(git2::Error::from_str(&error_msg)))
+        }
+    }
+
+    /// Fallback pull method using git CLI instead of git2
+    /// This is used when git2 has TLS/SSL issues but git CLI works fine
+    fn pull_with_git_cli(&self, branch: &str) -> Result<()> {
+        tracing::info!("Using git CLI fallback for pull operation: {}", branch);
+
+        let output = std::process::Command::new("git")
+            .args(["pull", "origin", branch])
+            .current_dir(&self.path)
+            .output()
+            .map_err(|e| CascadeError::Git(git2::Error::from_str(&format!("Failed to execute git command: {e}"))))?;
+
+        if output.status.success() {
+            tracing::info!("✅ Git CLI pull succeeded for branch: {}", branch);
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let error_msg = format!(
+                "Git CLI pull failed for branch '{}': {}\nStdout: {}\nStderr: {}",
+                branch, output.status, stdout, stderr
+            );
+            tracing::error!("{}", error_msg);
+            Err(CascadeError::Git(git2::Error::from_str(&error_msg)))
         }
     }
 
