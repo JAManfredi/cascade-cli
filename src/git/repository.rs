@@ -951,7 +951,7 @@ impl GitRepository {
             .args(["push", "origin", branch])
             .current_dir(&self.path)
             .output()
-            .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {}", e)))?;
+            .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
             tracing::info!("✅ Git CLI push succeeded for branch: {}", branch);
@@ -980,7 +980,7 @@ impl GitRepository {
             .args(["push", "--force", "origin", branch])
             .current_dir(&self.path)
             .output()
-            .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {}", e)))?;
+            .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
             tracing::info!("✅ Git CLI force push succeeded for branch: {}", branch);
