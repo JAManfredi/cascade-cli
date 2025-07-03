@@ -792,7 +792,8 @@ impl GitRepository {
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
                     tracing::warn!(
-                        "git2 TLS error detected, falling back to git CLI for fetch operation"
+                        "git2 TLS error detected: {}, falling back to git CLI for fetch operation",
+                        e
                     );
                     return self.fetch_with_git_cli();
                 }
@@ -813,7 +814,8 @@ impl GitRepository {
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
                     tracing::warn!(
-                        "git2 TLS error detected, falling back to git CLI for pull operation"
+                        "git2 TLS error detected: {}, falling back to git CLI for pull operation",
+                        e
                     );
                     return self.pull_with_git_cli(branch);
                 }
@@ -939,7 +941,8 @@ impl GitRepository {
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
                     tracing::warn!(
-                        "git2 TLS error detected, falling back to git CLI for push operation"
+                        "git2 TLS error detected: {}, falling back to git CLI for push operation",
+                        e
                     );
                     return self.push_with_git_cli(branch);
                 }
@@ -1233,7 +1236,8 @@ impl GitRepository {
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
                     tracing::warn!(
-                        "git2 TLS error detected, falling back to git CLI for force push operation"
+                        "git2 TLS error detected: {}, falling back to git CLI for force push operation",
+                        e
                     );
                     return self.force_push_with_git_cli(target_branch);
                 }
