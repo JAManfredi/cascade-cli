@@ -540,6 +540,9 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
             ""
         };
 
+        // Get the actual stack object to access branch information
+        let stack = manager.get_stack(&stack_id);
+
         if verbose {
             println!("  {status_icon} {name} [{entry_count}]{active_indicator}");
             println!("    ID: {stack_id}");
@@ -556,9 +559,42 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
                     println!("    ⚠️  Has conflicts");
                 }
             }
+
+            // Show branch information in verbose mode
+            if let Some(stack_obj) = stack {
+                if !stack_obj.entries.is_empty() {
+                    println!("    Branches:");
+                    for (i, entry) in stack_obj.entries.iter().enumerate() {
+                        let entry_num = i + 1;
+                        let submitted_indicator = if entry.is_submitted { "📤" } else { "📝" };
+                        let branch_name = &entry.branch;
+                        let short_message = if entry.message.len() > 40 {
+                            format!("{}...", &entry.message[..37])
+                        } else {
+                            entry.message.clone()
+                        };
+                        println!("      {entry_num}. {submitted_indicator} {branch_name} - {short_message}");
+                    }
+                }
+            }
             println!();
         } else {
-            println!("  {status_icon} {name} [{entry_count}]{active_indicator}");
+            // Show compact branch info in non-verbose mode
+            let branch_info = if let Some(stack_obj) = stack {
+                if stack_obj.entries.is_empty() {
+                    String::new()
+                } else if stack_obj.entries.len() == 1 {
+                    format!(" → {}", stack_obj.entries[0].branch)
+                } else {
+                    let first_branch = &stack_obj.entries[0].branch;
+                    let last_branch = &stack_obj.entries.last().unwrap().branch;
+                    format!(" → {} … {}", first_branch, last_branch)
+                }
+            } else {
+                String::new()
+            };
+            
+            println!("  {status_icon} {name} [{entry_count}]{branch_info}{active_indicator}");
         }
     }
 
