@@ -139,16 +139,32 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
 
     let (completion_dir, filename) = match shell {
         Shell::Bash => {
-            // Find the first suitable bash completion directory
+            // Prioritize user directories over system directories
             let bash_dirs: Vec<_> = completion_dirs
                 .iter()
                 .filter(|(name, _)| name.contains("bash"))
-                .map(|(_, path)| path.clone())
                 .collect();
 
-            let dir = bash_dirs
-                .into_iter()
-                .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+            // First try user directories
+            let user_dir = bash_dirs
+                .iter()
+                .find(|(name, _)| name.contains("user"))
+                .map(|(_, path)| path.clone())
+                .filter(|d| d.exists() || d.parent().is_some_and(|p| p.exists()));
+
+            // If no user directory works, try system directories
+            let system_dir = if user_dir.is_none() {
+                bash_dirs
+                    .iter()
+                    .find(|(name, _)| name.contains("system"))
+                    .map(|(_, path)| path.clone())
+                    .filter(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+            } else {
+                None
+            };
+
+            let dir = user_dir
+                .or(system_dir)
                 .or_else(|| {
                     // Fallback to user-specific directory
                     dirs::home_dir().map(|h| h.join(".bash_completion.d"))
@@ -160,16 +176,32 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
             (dir, "ca")
         }
         Shell::Zsh => {
-            // Find the first suitable zsh completion directory
+            // Prioritize user directories over system directories
             let zsh_dirs: Vec<_> = completion_dirs
                 .iter()
                 .filter(|(name, _)| name.contains("zsh"))
-                .map(|(_, path)| path.clone())
                 .collect();
 
-            let dir = zsh_dirs
-                .into_iter()
-                .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+            // First try user directories
+            let user_dir = zsh_dirs
+                .iter()
+                .find(|(name, _)| name.contains("user"))
+                .map(|(_, path)| path.clone())
+                .filter(|d| d.exists() || d.parent().is_some_and(|p| p.exists()));
+
+            // If no user directory works, try system directories
+            let system_dir = if user_dir.is_none() {
+                zsh_dirs
+                    .iter()
+                    .find(|(name, _)| name.contains("system"))
+                    .map(|(_, path)| path.clone())
+                    .filter(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+            } else {
+                None
+            };
+
+            let dir = user_dir
+                .or(system_dir)
                 .or_else(|| {
                     // Fallback to user-specific directory
                     dirs::home_dir().map(|h| h.join(".zsh/completions"))
@@ -181,16 +213,32 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
             (dir, "_ca")
         }
         Shell::Fish => {
-            // Find the first suitable fish completion directory
+            // Prioritize user directories over system directories
             let fish_dirs: Vec<_> = completion_dirs
                 .iter()
                 .filter(|(name, _)| name.contains("fish"))
-                .map(|(_, path)| path.clone())
                 .collect();
 
-            let dir = fish_dirs
-                .into_iter()
-                .find(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+            // First try user directories
+            let user_dir = fish_dirs
+                .iter()
+                .find(|(name, _)| name.contains("user"))
+                .map(|(_, path)| path.clone())
+                .filter(|d| d.exists() || d.parent().is_some_and(|p| p.exists()));
+
+            // If no user directory works, try system directories
+            let system_dir = if user_dir.is_none() {
+                fish_dirs
+                    .iter()
+                    .find(|(name, _)| name.contains("system"))
+                    .map(|(_, path)| path.clone())
+                    .filter(|d| d.exists() || d.parent().is_some_and(|p| p.exists()))
+            } else {
+                None
+            };
+
+            let dir = user_dir
+                .or(system_dir)
                 .or_else(|| {
                     // Fallback to user-specific directory
                     dirs::home_dir().map(|h| h.join(".config/fish/completions"))
@@ -224,8 +272,26 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
     let mut content = Vec::new();
     generate(shell, &mut cmd, "ca", &mut content);
 
-    // Write to file atomically
-    crate::utils::atomic_file::write_bytes(&completion_file, &content)?;
+    // Write to file atomically, with fallback for lock failures
+    match crate::utils::atomic_file::write_bytes(&completion_file, &content) {
+        Ok(()) => {}
+        Err(e) if e.to_string().contains("Timeout waiting for lock") => {
+            // Lock failure - try without locking for user directories
+            if completion_dir.to_string_lossy().contains(
+                &dirs::home_dir()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string(),
+            ) {
+                // This is a user directory, try direct write
+                std::fs::write(&completion_file, &content)?;
+            } else {
+                // System directory, propagate the error
+                return Err(e);
+            }
+        }
+        Err(e) => return Err(e),
+    }
 
     Ok(completion_file)
 }

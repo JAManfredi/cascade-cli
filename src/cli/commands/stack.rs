@@ -629,8 +629,8 @@ async fn switch_stack(name: String) -> Result<()> {
         // Empty stack - stay on base branch or current branch
         None
     } else {
-        // Get the top (latest) entry in the stack
-        stack.entries.last().map(|entry| &entry.branch)
+        // Get the first (base) entry in the stack - this is the original feature branch
+        stack.entries.first().map(|entry| &entry.branch)
     };
 
     // Check current branch
