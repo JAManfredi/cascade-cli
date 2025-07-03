@@ -613,11 +613,7 @@ impl Cli {
                 if std::path::Path::new(cert_path).exists() {
                     tracing::debug!("Using macOS system certificates from: {}", cert_path);
                     if let Err(e) = unsafe { set_ssl_cert_file(cert_path) } {
-                        tracing::debug!(
-                            "SSL cert file {} not supported by TLS backend: {}",
-                            cert_path,
-                            e
-                        );
+                        tracing::debug!("SSL cert file {} not supported by TLS backend: {}", cert_path, e);
                     } else {
                         return Ok(());
                     }
@@ -631,11 +627,7 @@ impl Cli {
                 if std::path::Path::new(cert_dir).exists() {
                     tracing::debug!("Using macOS system certificate directory: {}", cert_dir);
                     if let Err(e) = unsafe { set_ssl_cert_dir(cert_dir) } {
-                        tracing::debug!(
-                            "SSL cert directory {} not supported by TLS backend: {}",
-                            cert_dir,
-                            e
-                        );
+                        tracing::debug!("SSL cert directory {} not supported by TLS backend: {}", cert_dir, e);
                     } else {
                         return Ok(());
                     }
@@ -657,11 +649,7 @@ impl Cli {
                 if std::path::Path::new(cert_path).exists() {
                     tracing::debug!("Using Linux system certificates from: {}", cert_path);
                     if let Err(e) = unsafe { set_ssl_cert_file(cert_path) } {
-                        tracing::debug!(
-                            "SSL cert file {} not supported by TLS backend: {}",
-                            cert_path,
-                            e
-                        );
+                        tracing::debug!("SSL cert file {} not supported by TLS backend: {}", cert_path, e);
                     } else {
                         return Ok(());
                     }
@@ -675,11 +663,7 @@ impl Cli {
                 if std::path::Path::new(cert_dir).exists() {
                     tracing::debug!("Using Linux system certificate directory: {}", cert_dir);
                     if let Err(e) = unsafe { set_ssl_cert_dir(cert_dir) } {
-                        tracing::debug!(
-                            "SSL cert directory {} not supported by TLS backend: {}",
-                            cert_dir,
-                            e
-                        );
+                        tracing::debug!("SSL cert directory {} not supported by TLS backend: {}", cert_dir, e);
                     } else {
                         return Ok(());
                     }
