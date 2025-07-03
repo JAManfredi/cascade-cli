@@ -577,12 +577,54 @@ async fn switch_stack(name: String) -> Result<()> {
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
     let mut manager = StackManager::new(&repo_root)?;
+    let repo = GitRepository::open(&repo_root)?;
 
-    // Verify stack exists
-    if manager.get_stack_by_name(&name).is_none() {
-        return Err(CascadeError::config(format!("Stack '{name}' not found")));
+    // Get stack information before switching
+    let stack = manager.get_stack_by_name(&name)
+        .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
+
+    // Determine the target branch
+    let target_branch = if stack.entries.is_empty() {
+        // Empty stack - stay on base branch or current branch
+        None
+    } else {
+        // Get the top (latest) entry in the stack
+        stack.entries.last().map(|entry| &entry.branch)
+    };
+
+    // Check current branch
+    let current_branch = repo.get_current_branch().ok();
+
+    // Smart branch switching logic
+    if let Some(target) = target_branch {
+        if current_branch.as_ref() != Some(target) {
+            println!("🔄 Switching to stack branch: {}", target);
+            
+            // Check if target branch exists
+            if repo.branch_exists(target) {
+                match repo.checkout_branch(target) {
+                    Ok(_) => {
+                        println!("✅ Checked out branch: {}", target);
+                    }
+                    Err(e) => {
+                        println!("⚠️  Failed to checkout '{}': {}", target, e);
+                        println!("   Stack activated but stayed on current branch");
+                        println!("   You can manually checkout with: git checkout {}", target);
+                    }
+                }
+            } else {
+                println!("⚠️  Stack branch '{}' doesn't exist locally", target);
+                println!("   Stack activated but stayed on current branch");
+                println!("   You may need to create the branch or fetch from remote");
+            }
+        } else {
+            println!("✅ Already on stack branch: {}", target);
+        }
+    } else {
+        println!("ℹ️  Empty stack - staying on current branch");
     }
 
+    // Activate the stack (this will record the correct current branch)
     manager.set_active_stack_by_name(&name)?;
     info!("✅ Switched to stack '{}'", name);
 
