@@ -593,7 +593,7 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
             } else {
                 String::new()
             };
-            
+
             println!("  {status_icon} {name} [{entry_count}]{branch_info}{active_indicator}");
         }
     }
