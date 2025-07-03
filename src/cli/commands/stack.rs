@@ -588,7 +588,7 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
                 } else {
                     let first_branch = &stack_obj.entries[0].branch;
                     let last_branch = &stack_obj.entries.last().unwrap().branch;
-                    format!(" → {} … {}", first_branch, last_branch)
+                    format!(" → {first_branch} … {last_branch}")
                 }
             } else {
                 String::new()
