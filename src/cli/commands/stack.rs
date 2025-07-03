@@ -599,27 +599,27 @@ async fn switch_stack(name: String) -> Result<()> {
     // Smart branch switching logic
     if let Some(target) = target_branch {
         if current_branch.as_ref() != Some(target) {
-            println!("🔄 Switching to stack branch: {}", target);
+            println!("🔄 Switching to stack branch: {target}");
 
             // Check if target branch exists
             if repo.branch_exists(target) {
                 match repo.checkout_branch(target) {
                     Ok(_) => {
-                        println!("✅ Checked out branch: {}", target);
+                        println!("✅ Checked out branch: {target}");
                     }
                     Err(e) => {
-                        println!("⚠️  Failed to checkout '{}': {}", target, e);
+                        println!("⚠️  Failed to checkout '{target}': {e}");
                         println!("   Stack activated but stayed on current branch");
-                        println!("   You can manually checkout with: git checkout {}", target);
+                        println!("   You can manually checkout with: git checkout {target}");
                     }
                 }
             } else {
-                println!("⚠️  Stack branch '{}' doesn't exist locally", target);
+                println!("⚠️  Stack branch '{target}' doesn't exist locally");
                 println!("   Stack activated but stayed on current branch");
                 println!("   You may need to create the branch or fetch from remote");
             }
         } else {
-            println!("✅ Already on stack branch: {}", target);
+            println!("✅ Already on stack branch: {target}");
         }
     } else {
         println!("ℹ️  Empty stack - staying on current branch");
