@@ -293,6 +293,9 @@ pub enum StackAction {
 
     /// Show status of in-progress land operation
     LandStatus,
+
+    /// Repair data consistency issues in stack metadata
+    Repair,
 }
 
 pub async fn run(action: StackAction) -> Result<()> {
@@ -391,6 +394,7 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::ContinueLand => continue_land().await,
         StackAction::AbortLand => abort_land().await,
         StackAction::LandStatus => land_status().await,
+        StackAction::Repair => repair_stack_data().await,
     }
 }
 
@@ -804,6 +808,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             bitbucket: Some(settings.bitbucket.clone()),
             git: settings.git.clone(),
             auth: crate::config::AuthConfig::default(),
+            cascade: settings.cascade.clone(),
         };
 
         let integration =
@@ -907,6 +912,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             bitbucket: Some(settings.bitbucket.clone()),
             git: settings.git.clone(),
             auth: crate::config::AuthConfig::default(),
+            cascade: settings.cascade.clone(),
         };
 
         let integration =
@@ -944,7 +950,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     }
                 }
 
-                println!("\n💡 Use 'ca stack show --mergeable' to see detailed status including build and review information");
+                println!("\n💡 Use 'ca stack --mergeable' to see detailed status including build and review information");
             }
             Err(e) => {
                 warn!("Failed to check stack status: {}", e);
@@ -1418,6 +1424,7 @@ async fn submit_entry(
         bitbucket: Some(settings.bitbucket.clone()),
         git: settings.git.clone(),
         auth: crate::config::AuthConfig::default(),
+        cascade: settings.cascade.clone(),
     };
 
     // Get the active stack
@@ -1622,6 +1629,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
         bitbucket: Some(settings.bitbucket.clone()),
         git: settings.git.clone(),
         auth: crate::config::AuthConfig::default(),
+        cascade: settings.cascade.clone(),
     };
 
     // Get stack information BEFORE moving stack_manager
@@ -1704,6 +1712,7 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
         bitbucket: Some(settings.bitbucket.clone()),
         git: settings.git.clone(),
         auth: crate::config::AuthConfig::default(),
+        cascade: settings.cascade.clone(),
     };
 
     // Create Bitbucket integration
@@ -1876,6 +1885,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                             bitbucket: Some(settings.bitbucket.clone()),
                             git: settings.git.clone(),
                             auth: crate::config::AuthConfig::default(),
+                            cascade: settings.cascade.clone(),
                         };
 
                         // Use the existing rebase system
@@ -1886,6 +1896,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                             preserve_merges: true,
                             auto_resolve: !interactive,
                             max_retries: 3,
+                            skip_pull: Some(true), // Skip pull since we already pulled above
                         };
 
                         let mut rebase_manager = crate::stack::RebaseManager::new(
@@ -2014,6 +2025,7 @@ async fn rebase_stack(
         bitbucket: Some(settings.bitbucket.clone()),
         git: settings.git.clone(),
         auth: crate::config::AuthConfig::default(),
+        cascade: settings.cascade.clone(),
     };
 
     // Get active stack
@@ -2062,6 +2074,7 @@ async fn rebase_stack(
         preserve_merges: true,
         auto_resolve: !interactive, // Auto-resolve unless interactive
         max_retries: 3,
+        skip_pull: None, // Normal rebase should pull latest changes
     };
 
     info!("   Strategy: {:?}", rebase_strategy);
@@ -2701,6 +2714,7 @@ async fn land_stack(
         bitbucket: Some(settings.bitbucket.clone()),
         git: settings.git.clone(),
         auth: crate::config::AuthConfig::default(),
+        cascade: settings.cascade.clone(),
     };
 
     let integration = crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
@@ -2885,6 +2899,7 @@ async fn land_stack(
                                     bitbucket: Some(settings.bitbucket.clone()),
                                     git: settings.git.clone(),
                                     auth: crate::config::AuthConfig::default(),
+                                    cascade: settings.cascade.clone(),
                                 };
                                 let mut retarget_integration = BitbucketIntegration::new(
                                     StackManager::new(&repo_root)?,
@@ -3131,6 +3146,25 @@ async fn land_status() -> Result<()> {
             println!("   Base branch: {}", active_stack.base_branch);
         }
     }
+
+    Ok(())
+}
+
+async fn repair_stack_data() -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut stack_manager = StackManager::new(&repo_root)?;
+
+    println!("🔧 Repairing stack data consistency...");
+
+    stack_manager.repair_all_stacks()?;
+
+    println!("✅ Stack data consistency repaired successfully!");
+    println!("💡 Run 'ca stack --mergeable' to see updated status");
 
     Ok(())
 }

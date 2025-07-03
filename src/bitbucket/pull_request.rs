@@ -3,7 +3,7 @@ use crate::errors::{CascadeError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tracing::info;
+use tracing::{debug, info};
 
 /// Pull request manager for Bitbucket operations
 pub struct PullRequestManager {
@@ -24,6 +24,12 @@ impl PullRequestManager {
         info!(
             "Creating pull request: {} -> {}",
             request.from_ref.id, request.to_ref.id
+        );
+
+        // Debug the request being sent
+        debug!(
+            "PR Request - Title: '{}', Description: {:?}, Draft: {}",
+            request.title, request.description, request.draft
         );
 
         let pr: PullRequest = self.client.post("pull-requests", &request).await?;
@@ -410,8 +416,8 @@ pub struct CreatePullRequestRequest {
     pub from_ref: PullRequestRef,
     #[serde(rename = "toRef")]
     pub to_ref: PullRequestRef,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub draft: Option<bool>,
+    #[serde(rename = "isDraft")]
+    pub draft: bool,
 }
 
 /// Pull request data structure

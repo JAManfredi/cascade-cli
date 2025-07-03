@@ -61,6 +61,8 @@ pub struct RebaseOptions {
     pub auto_resolve: bool,
     /// Maximum number of retries for conflict resolution
     pub max_retries: usize,
+    /// Skip pulling latest changes (when already done by caller)
+    pub skip_pull: Option<bool>,
 }
 
 /// Result of a rebase operation
@@ -96,6 +98,7 @@ impl Default for RebaseOptions {
             preserve_merges: true,
             auto_resolve: true,
             max_retries: 3,
+            skip_pull: None,
         }
     }
 }
@@ -159,9 +162,14 @@ impl RebaseManager {
             self.git_repo.checkout_branch(target_base)?;
         }
 
-        // Pull latest changes from remote
-        if let Err(e) = self.pull_latest_changes(target_base) {
-            warn!("Failed to pull latest changes: {}", e);
+        // Only pull if not already done by caller (like sync command)
+        // Note: This prevents redundant pulls when called from sync
+        if !self.options.skip_pull.unwrap_or(false) {
+            if let Err(e) = self.pull_latest_changes(target_base) {
+                warn!("Failed to pull latest changes: {}", e);
+            }
+        } else {
+            debug!("Skipping pull - already done by caller");
         }
 
         let mut current_base = target_base.clone();
@@ -451,7 +459,7 @@ impl RebaseManager {
             );
 
             // Stage all resolved files
-            self.git_repo.stage_all()?;
+            self.git_repo.stage_conflict_resolved_files()?;
         }
 
         // Return true only if ALL conflicts were resolved
@@ -901,7 +909,7 @@ impl RebaseManager {
         }
 
         // Stage resolved files
-        self.git_repo.stage_all()?;
+        self.git_repo.stage_conflict_resolved_files()?;
 
         info!("Rebase continued successfully");
         Ok(())

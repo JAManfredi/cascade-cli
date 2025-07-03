@@ -416,6 +416,15 @@ impl StackManager {
         Ok(())
     }
 
+    /// Repair data consistency issues in all stacks
+    pub fn repair_all_stacks(&mut self) -> Result<()> {
+        for stack in self.stacks.values_mut() {
+            stack.repair_data_consistency();
+        }
+        self.save_to_disk()?;
+        Ok(())
+    }
+
     /// Get all stacks
     pub fn get_all_stacks(&self) -> Vec<&Stack> {
         self.stacks.values().collect()

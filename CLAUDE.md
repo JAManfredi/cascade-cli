@@ -12,6 +12,24 @@ cargo build
 # Build release version
 cargo build --release
 
+# Enable debug logging for any command (shows detailed operation info)
+ca --verbose <command>
+ca -v <command>
+
+# Examples with debug logging
+ca --verbose submit --draft           # Shows PR creation details, API requests
+ca -v sync                           # Shows git operations, rebase details  
+ca --verbose stack --mergeable       # Shows stack analysis and PR status checks
+
+# Disable colored output (useful for logs/CI)
+ca --no-color <command>
+
+# Combine flags
+ca --verbose --no-color submit --draft
+```
+
+### Testing
+```bash
 # Run specific test
 cargo test test_name
 
@@ -204,6 +222,29 @@ The configuration is stored in `.cascade/config.json` with:
 - SSL/TLS certificate configuration
 
 Configuration loading includes validation and corruption recovery mechanisms.
+
+### PR Description Templates
+
+Cascade supports configuring a default PR description template that gets used for all pull requests:
+
+```bash
+# Set a PR description template (supports markdown)
+ca config set cascade.pr_description_template "## Summary\nBrief description of changes\n\n## Testing\n- [ ] Unit tests pass\n- [ ] Manual testing completed\n\n## Checklist\n- [ ] Code review completed\n- [ ] Documentation updated"
+
+# View current template
+ca config get cascade.pr_description_template
+
+# Remove template (fallback to --description or commit messages)
+ca config set cascade.pr_description_template ""
+```
+
+**Template Behavior:**
+- **With template configured**: Template is ALWAYS used for all PRs (overrides `--description`)
+- **Without template**: Uses `--description` argument or commit message body as fallback
+- **Automatic stack hierarchy**: All PRs automatically get a stack information footer showing the hierarchy and current position
+
+**Setup Integration:**
+The `ca setup` command includes an optional step to configure the PR template with an example template or custom content.
 
 ### SSL/TLS Configuration
 

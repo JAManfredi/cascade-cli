@@ -144,6 +144,23 @@ pub async fn run(force: bool) -> Result<()> {
         }
     }
 
+    // Step 10: Configure PR description template (optional)
+    println!("\n📝 Step 8: PR Description Template...");
+    let setup_template = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(
+            "Would you like to configure a PR description template? (will be used for ALL PRs)",
+        )
+        .default(false)
+        .interact()
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+    if setup_template {
+        configure_pr_template(&config_path).await?;
+    } else {
+        println!("   💡 You can configure a PR template later with:");
+        println!("      ca config set cascade.pr_description_template \"Your template\"");
+    }
+
     // Success summary
     println!("\n🎉 Setup Complete!");
     println!("━━━━━━━━━━━━━━━━━");
@@ -158,7 +175,11 @@ pub async fn run(force: bool) -> Result<()> {
     println!("📚 Learn more:");
     println!("   • Run 'ca --help' for all commands");
     println!("   • Run 'ca doctor' to verify your setup");
+    println!("   • Use 'ca --verbose <command>' for debug logging");
     println!("   • Run 'ca hooks status' to check hook installation");
+    println!(
+        "   • Configure PR templates: ca config set cascade.pr_description_template \"template\""
+    );
     println!("   • Visit docs/HOOKS.md for hook details");
     println!("   • Visit the documentation for advanced usage");
 
@@ -349,6 +370,61 @@ async fn test_bitbucket_connection(settings: &Settings) -> Result<()> {
             "Failed to connect to Bitbucket: {e}"
         ))),
     }
+}
+
+/// Configure PR description template interactively
+async fn configure_pr_template(config_path: &std::path::Path) -> Result<()> {
+    let theme = ColorfulTheme::default();
+
+    println!("   Configure a markdown template for PR descriptions.");
+    println!("   This template will be used for ALL PRs (overrides --description).");
+    println!("   You can use markdown formatting, variables, etc.");
+    println!("   ");
+    println!("   Example template:");
+    println!("   ## Summary");
+    println!("   Brief description of changes");
+    println!("   ");
+    println!("   ## Testing");
+    println!("   - [ ] Unit tests pass");
+    println!("   - [ ] Manual testing completed");
+
+    let use_example = Confirm::with_theme(&theme)
+        .with_prompt("Use the example template above?")
+        .default(true)
+        .interact()
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+    let template = if use_example {
+        Some("## Summary\nBrief description of changes\n\n## Testing\n- [ ] Unit tests pass\n- [ ] Manual testing completed\n\n## Checklist\n- [ ] Code review completed\n- [ ] Documentation updated".to_string())
+    } else {
+        let custom_template: String = Input::with_theme(&theme)
+            .with_prompt("Enter your PR description template (use \\n for line breaks)")
+            .allow_empty(true)
+            .interact_text()
+            .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+        if custom_template.trim().is_empty() {
+            None
+        } else {
+            // Replace literal \n with actual newlines
+            Some(custom_template.replace("\\n", "\n"))
+        }
+    };
+
+    // Load and update settings
+    let mut settings = Settings::load_from_file(config_path)?;
+    settings.cascade.pr_description_template = template;
+    settings.save_to_file(config_path)?;
+
+    if settings.cascade.pr_description_template.is_some() {
+        println!("   ✅ PR description template configured!");
+        println!("   💡 This template will be used for ALL future PRs");
+        println!("   💡 Edit later with: ca config set cascade.pr_description_template \"Your template\"");
+    } else {
+        println!("   ✅ No template configured (will use --description or commit messages)");
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

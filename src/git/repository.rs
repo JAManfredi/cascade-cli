@@ -474,6 +474,46 @@ impl GitRepository {
         Ok(())
     }
 
+    /// Stage only specific files (safer than stage_all during rebase)
+    pub fn stage_files(&self, file_paths: &[&str]) -> Result<()> {
+        if file_paths.is_empty() {
+            tracing::debug!("No files to stage");
+            return Ok(());
+        }
+
+        let mut index = self.repo.index().map_err(CascadeError::Git)?;
+
+        for file_path in file_paths {
+            index
+                .add_path(std::path::Path::new(file_path))
+                .map_err(CascadeError::Git)?;
+        }
+
+        index.write().map_err(CascadeError::Git)?;
+
+        tracing::debug!(
+            "Staged {} specific files: {:?}",
+            file_paths.len(),
+            file_paths
+        );
+        Ok(())
+    }
+
+    /// Stage only files that had conflicts (safer for rebase operations)
+    pub fn stage_conflict_resolved_files(&self) -> Result<()> {
+        let conflicted_files = self.get_conflicted_files()?;
+        if conflicted_files.is_empty() {
+            tracing::debug!("No conflicted files to stage");
+            return Ok(());
+        }
+
+        let file_paths: Vec<&str> = conflicted_files.iter().map(|s| s.as_str()).collect();
+        self.stage_files(&file_paths)?;
+
+        tracing::debug!("Staged {} conflict-resolved files", conflicted_files.len());
+        Ok(())
+    }
+
     /// Get repository path
     pub fn path(&self) -> &Path {
         &self.path
@@ -939,9 +979,14 @@ impl GitRepository {
             Err(e) => {
                 // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
                 let error_string = e.to_string();
-                if error_string.contains("TLS stream") || error_string.contains("SSL") {
-                    tracing::warn!(
-                        "git2 TLS error detected: {}, falling back to git CLI for push operation",
+                tracing::debug!("git2 push error: {} (class: {:?})", error_string, e.class());
+
+                if error_string.contains("TLS stream")
+                    || error_string.contains("SSL")
+                    || e.class() == git2::ErrorClass::Ssl
+                {
+                    tracing::info!(
+                        "git2 TLS/SSL error: {}, falling back to git CLI for push operation",
                         e
                     );
                     return self.push_with_git_cli(branch);

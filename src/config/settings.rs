@@ -9,6 +9,7 @@ pub struct CascadeConfig {
     pub bitbucket: Option<BitbucketConfig>,
     pub git: GitConfig,
     pub auth: AuthConfig,
+    pub cascade: CascadeSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -48,6 +49,8 @@ pub struct CascadeSettings {
     pub default_sync_strategy: String,
     pub max_stack_size: usize,
     pub enable_notifications: bool,
+    /// Default PR description template (markdown supported)
+    pub pr_description_template: Option<String>,
     /// Rebase-specific settings
     pub rebase: RebaseSettings,
 }
@@ -102,6 +105,7 @@ impl Default for CascadeSettings {
             default_sync_strategy: "branch-versioning".to_string(),
             max_stack_size: 20,
             enable_notifications: true,
+            pr_description_template: None,
             rebase: RebaseSettings::default(),
         }
     }
@@ -207,6 +211,13 @@ impl Settings {
                     .parse()
                     .map_err(|_| CascadeError::config(format!("Invalid boolean value: {value}")))?;
             }
+            ("cascade", "pr_description_template") => {
+                self.cascade.pr_description_template = if value.is_empty() {
+                    None
+                } else {
+                    Some(value.to_string())
+                };
+            }
             ("rebase", "auto_resolve_conflicts") => {
                 self.cascade.rebase.auto_resolve_conflicts = value
                     .parse()
@@ -272,6 +283,11 @@ impl Settings {
             ("cascade", "enable_notifications") => {
                 return Ok(self.cascade.enable_notifications.to_string())
             }
+            ("cascade", "pr_description_template") => self
+                .cascade
+                .pr_description_template
+                .as_deref()
+                .unwrap_or(""),
             ("rebase", "auto_resolve_conflicts") => {
                 return Ok(self.cascade.rebase.auto_resolve_conflicts.to_string())
             }

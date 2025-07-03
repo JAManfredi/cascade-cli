@@ -613,7 +613,7 @@ impl Cli {
                 if std::path::Path::new(cert_path).exists() {
                     tracing::debug!("Using macOS system certificates from: {}", cert_path);
                     if let Err(e) = unsafe { set_ssl_cert_file(cert_path) } {
-                        tracing::debug!(
+                        tracing::trace!(
                             "SSL cert file {} not supported by TLS backend: {}",
                             cert_path,
                             e
@@ -631,7 +631,7 @@ impl Cli {
                 if std::path::Path::new(cert_dir).exists() {
                     tracing::debug!("Using macOS system certificate directory: {}", cert_dir);
                     if let Err(e) = unsafe { set_ssl_cert_dir(cert_dir) } {
-                        tracing::debug!(
+                        tracing::trace!(
                             "SSL cert directory {} not supported by TLS backend: {}",
                             cert_dir,
                             e
@@ -657,7 +657,7 @@ impl Cli {
                 if std::path::Path::new(cert_path).exists() {
                     tracing::debug!("Using Linux system certificates from: {}", cert_path);
                     if let Err(e) = unsafe { set_ssl_cert_file(cert_path) } {
-                        tracing::debug!(
+                        tracing::trace!(
                             "SSL cert file {} not supported by TLS backend: {}",
                             cert_path,
                             e
@@ -675,7 +675,7 @@ impl Cli {
                 if std::path::Path::new(cert_dir).exists() {
                     tracing::debug!("Using Linux system certificate directory: {}", cert_dir);
                     if let Err(e) = unsafe { set_ssl_cert_dir(cert_dir) } {
-                        tracing::debug!(
+                        tracing::trace!(
                             "SSL cert directory {} not supported by TLS backend: {}",
                             cert_dir,
                             e
@@ -694,6 +694,9 @@ impl Cli {
         }
 
         tracing::debug!("System SSL certificate configuration complete");
+        tracing::info!(
+            "Note: SSL warnings from libgit2 are normal - git CLI fallback will be used if needed"
+        );
         Ok(())
     }
 

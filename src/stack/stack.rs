@@ -210,10 +210,27 @@ impl Stack {
             entry.pull_request_id = Some(pull_request_id);
             entry.updated_at = Utc::now();
             self.updated_at = Utc::now();
+
+            // Synchronize the entries vector with the updated entry_map
+            self.sync_entries_from_map();
             true
         } else {
             false
         }
+    }
+
+    /// Synchronize the entries vector with the entry_map (entry_map is source of truth)
+    fn sync_entries_from_map(&mut self) {
+        for entry in &mut self.entries {
+            if let Some(updated_entry) = self.entry_map.get(&entry.id) {
+                *entry = updated_entry.clone();
+            }
+        }
+    }
+
+    /// Force synchronization of entries from entry_map (public method for fixing corrupted data)
+    pub fn repair_data_consistency(&mut self) {
+        self.sync_entries_from_map();
     }
 
     /// Mark an entry as synced
@@ -222,6 +239,9 @@ impl Stack {
             entry.is_synced = true;
             entry.updated_at = Utc::now();
             self.updated_at = Utc::now();
+
+            // Synchronize the entries vector with the updated entry_map
+            self.sync_entries_from_map();
             true
         } else {
             false
