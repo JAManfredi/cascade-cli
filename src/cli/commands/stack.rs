@@ -580,7 +580,8 @@ async fn switch_stack(name: String) -> Result<()> {
     let repo = GitRepository::open(&repo_root)?;
 
     // Get stack information before switching
-    let stack = manager.get_stack_by_name(&name)
+    let stack = manager
+        .get_stack_by_name(&name)
         .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
 
     // Determine the target branch
@@ -599,7 +600,7 @@ async fn switch_stack(name: String) -> Result<()> {
     if let Some(target) = target_branch {
         if current_branch.as_ref() != Some(target) {
             println!("🔄 Switching to stack branch: {}", target);
-            
+
             // Check if target branch exists
             if repo.branch_exists(target) {
                 match repo.checkout_branch(target) {
