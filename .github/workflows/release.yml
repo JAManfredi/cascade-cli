@@ -110,8 +110,14 @@ jobs:
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        # OpenSSL is usually available on macOS, but make sure pkg-config can find it
-        brew install pkg-config
+        # Install OpenSSL and pkg-config
+        brew install openssl pkg-config
+        
+        # Set OpenSSL environment variables for the build
+        echo "OPENSSL_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
+        echo "OPENSSL_LIB_DIR=$(brew --prefix openssl)/lib" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl)/include" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$(brew --prefix openssl)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
     - name: Install dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
@@ -146,6 +152,9 @@ jobs:
         echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
         echo 'PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig' >> $GITHUB_ENV
         echo 'PKG_CONFIG_ALLOW_CROSS=1' >> $GITHUB_ENV
+        echo 'OPENSSL_DIR=/usr' >> $GITHUB_ENV
+        echo 'OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu' >> $GITHUB_ENV
+        echo 'OPENSSL_INCLUDE_DIR=/usr/include' >> $GITHUB_ENV
 
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
