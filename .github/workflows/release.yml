@@ -118,6 +118,10 @@ jobs:
         echo "OPENSSL_LIB_DIR=$(brew --prefix openssl)/lib" >> $GITHUB_ENV
         echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl)/include" >> $GITHUB_ENV
         echo "PKG_CONFIG_PATH=$(brew --prefix openssl)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        
+        # Force static linking to avoid dynamic library issues
+        echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+        echo "LIBSSH2_STATIC=1" >> $GITHUB_ENV
 
     - name: Install dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
@@ -154,9 +158,13 @@ jobs:
         echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
         echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
         
-        # Use vendored OpenSSL for cross-compilation to avoid system library issues
+        # Force all dependencies to use vendored/static libraries
         echo 'OPENSSL_STATIC=1' >> $GITHUB_ENV
         echo 'OPENSSL_VENDORED=1' >> $GITHUB_ENV
+        echo 'LIBSSH2_STATIC=1' >> $GITHUB_ENV
+        echo 'LIBSSH2_VENDORED=1' >> $GITHUB_ENV
+        echo 'LIBGIT2_STATIC=1' >> $GITHUB_ENV
+        echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
 
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
