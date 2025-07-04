@@ -291,6 +291,53 @@ impl StackManager {
             )));
         }
 
+        // 🎯 SMART BASE BRANCH UPDATE FOR FEATURE WORKFLOW
+        // If this is the first commit in an empty stack, and the user is on a feature branch
+        // that's different from the stack's base branch, update the base branch to match
+        // the current workflow.
+        if stack.entries.is_empty() {
+            let current_branch = self.repo.get_current_branch()?;
+
+            if current_branch != stack.base_branch && current_branch != "HEAD" {
+                // Check if current branch was created from the stack's base branch
+                let base_exists = self.repo.branch_exists(&stack.base_branch);
+                let current_is_feature = current_branch.starts_with("feature/")
+                    || current_branch.starts_with("fix/")
+                    || current_branch.starts_with("chore/")
+                    || current_branch.contains("feature")
+                    || current_branch.contains("fix");
+
+                if base_exists && current_is_feature {
+                    tracing::info!(
+                        "🎯 First commit detected: updating stack '{}' base branch from '{}' to '{}'",
+                        stack.name, stack.base_branch, current_branch
+                    );
+
+                    println!("🎯 Smart Base Branch Update:");
+                    println!(
+                        "   Stack '{}' was created with base '{}'",
+                        stack.name, stack.base_branch
+                    );
+                    println!("   You're now working on feature branch '{current_branch}'");
+                    println!("   Updating stack base branch to match your workflow");
+
+                    // Update the stack's base branch
+                    stack.base_branch = current_branch.clone();
+
+                    // Update metadata as well
+                    if let Some(stack_meta) = self.metadata.get_stack_mut(&stack_id) {
+                        stack_meta.base_branch = current_branch.clone();
+                        stack_meta.set_current_branch(Some(current_branch.clone()));
+                    }
+
+                    println!(
+                        "   ✅ Stack '{}' base branch updated to '{current_branch}'",
+                        stack.name
+                    );
+                }
+            }
+        }
+
         // 🆕 CREATE ACTUAL GIT BRANCH from the specific commit
         // Check if branch already exists
         if self.repo.branch_exists(&branch) {

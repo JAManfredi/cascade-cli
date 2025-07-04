@@ -258,8 +258,12 @@ pub enum Commands {
 /// Git hooks actions
 #[derive(Debug, Subcommand)]
 pub enum HooksAction {
-    /// Install all Cascade Git hooks
+    /// Install Cascade Git hooks
     Install {
+        /// Install all hooks including post-commit (default: essential hooks only)
+        #[arg(long)]
+        all: bool,
+
         /// Skip prerequisite checks (repository type, configuration validation)
         #[arg(long)]
         skip_checks: bool,
@@ -428,18 +432,26 @@ impl Cli {
 
             Commands::Hooks { action } => match action {
                 HooksAction::Install {
+                    all,
                     skip_checks,
                     allow_main_branch,
                     yes,
                     force,
                 } => {
-                    commands::hooks::install_with_options(
-                        skip_checks,
-                        allow_main_branch,
-                        yes,
-                        force,
-                    )
-                    .await
+                    if all {
+                        // Install all hooks including post-commit
+                        commands::hooks::install_with_options(
+                            skip_checks,
+                            allow_main_branch,
+                            yes,
+                            force,
+                        )
+                        .await
+                    } else {
+                        // Install essential hooks by default (excludes post-commit)
+                        // Users can install post-commit separately with 'ca hooks add post-commit'
+                        commands::hooks::install_essential().await
+                    }
                 }
                 HooksAction::Uninstall => commands::hooks::uninstall().await,
                 HooksAction::Status => commands::hooks::status().await,
@@ -699,7 +711,7 @@ impl Cli {
         }
 
         tracing::debug!("System SSL certificate configuration complete");
-        tracing::info!(
+        tracing::debug!(
             "Note: SSL warnings from libgit2 are normal - git CLI fallback will be used if needed"
         );
         Ok(())

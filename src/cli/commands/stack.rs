@@ -624,45 +624,35 @@ async fn switch_stack(name: String) -> Result<()> {
         .get_stack_by_name(&name)
         .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
 
-    // Determine the target branch
-    let target_branch = if stack.entries.is_empty() {
-        // Empty stack - stay on base branch or current branch
-        None
-    } else {
-        // Get the first (base) entry in the stack - this is the original feature branch
-        stack.entries.first().map(|entry| &entry.branch)
-    };
+    // Determine the target branch - should be the stack's base branch
+    let target_branch = &stack.base_branch;
 
     // Check current branch
     let current_branch = repo.get_current_branch().ok();
 
     // Smart branch switching logic
-    if let Some(target) = target_branch {
-        if current_branch.as_ref() != Some(target) {
-            println!("🔄 Switching to stack branch: {target}");
+    if current_branch.as_ref() != Some(target_branch) {
+        println!("🔄 Switching to stack base branch: {target_branch}");
 
-            // Check if target branch exists
-            if repo.branch_exists(target) {
-                match repo.checkout_branch(target) {
-                    Ok(_) => {
-                        println!("✅ Checked out branch: {target}");
-                    }
-                    Err(e) => {
-                        println!("⚠️  Failed to checkout '{target}': {e}");
-                        println!("   Stack activated but stayed on current branch");
-                        println!("   You can manually checkout with: git checkout {target}");
-                    }
+        // Check if target branch exists
+        if repo.branch_exists(target_branch) {
+            match repo.checkout_branch(target_branch) {
+                Ok(_) => {
+                    println!("✅ Checked out branch: {target_branch}");
                 }
-            } else {
-                println!("⚠️  Stack branch '{target}' doesn't exist locally");
-                println!("   Stack activated but stayed on current branch");
-                println!("   You may need to create the branch or fetch from remote");
+                Err(e) => {
+                    println!("⚠️  Failed to checkout '{target_branch}': {e}");
+                    println!("   Stack activated but stayed on current branch");
+                    println!("   You can manually checkout with: git checkout {target_branch}");
+                }
             }
         } else {
-            println!("✅ Already on stack branch: {target}");
+            println!("⚠️  Stack base branch '{target_branch}' doesn't exist locally");
+            println!("   Stack activated but stayed on current branch");
+            println!("   You may need to create the branch or fetch from remote");
         }
     } else {
-        println!("ℹ️  Empty stack - staying on current branch");
+        println!("✅ Already on stack base branch: {target_branch}");
     }
 
     // Activate the stack (this will record the correct current branch)
