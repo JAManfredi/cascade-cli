@@ -532,6 +532,22 @@ pub async fn run_cc_with_timeout(args: &[&str], timeout_ms: u64) -> std::process
     }
 }
 
+/// Run cascade CLI with timeout in a specific directory
+#[allow(dead_code)]
+pub async fn run_cc_with_timeout_in_dir(
+    args: &[&str],
+    timeout_ms: u64,
+    repo_path: &Path,
+) -> std::process::Output {
+    let binary_path = get_binary_path();
+    let timeout = Duration::from_millis(timeout_ms);
+
+    match run_cli_with_timeout(&binary_path, args, repo_path, timeout).await {
+        Ok(output) => output,
+        Err(e) => panic!("CLI command failed: {e}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

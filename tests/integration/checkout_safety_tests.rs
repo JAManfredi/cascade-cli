@@ -1,4 +1,4 @@
-use crate::integration::test_helpers::{create_test_repo_with_commits, run_cc_with_timeout};
+use crate::integration::test_helpers::{create_test_repo_with_commits, run_cc_with_timeout_in_dir};
 use serial_test::serial;
 use std::env;
 use std::fs;
@@ -376,25 +376,18 @@ async fn test_cli_checkout_safety_integration() {
     let (_repo, _commit_oids) =
         create_test_repo_with_commits(repo_path, 3).expect("Failed to create test repository");
 
-    // Save the original directory
-    let original_dir = env::current_dir().expect("Failed to get current directory");
-
-    // Change to the repository directory
-    env::set_current_dir(repo_path).expect("Failed to change directory");
-
-    // Initialize cascade in the repository
-    let init_result = run_cc_with_timeout(&["init", "--force"], 30000).await;
+    // Initialize cascade in the repository using the repo path directly
+    // This avoids changing the current directory which can cause issues in CI
+    let init_result = run_cc_with_timeout_in_dir(&["init", "--force"], 30000, repo_path).await;
     assert!(init_result.status.success(), "Cascade init should succeed");
 
     // Test CLI commands that might trigger checkout safety
     // This would test the end-to-end integration when CLI checkout commands are added
 
-    // Restore original directory BEFORE temp_dir is dropped
-    env::set_current_dir(&original_dir).expect("Failed to restore directory");
-
-    // Ensure we're back in the original directory
-    assert_eq!(
-        env::current_dir().expect("Failed to get current directory"),
-        original_dir
+    // Verify that cascade was initialized properly
+    let cascade_dir = repo_path.join(".cascade");
+    assert!(
+        cascade_dir.exists(),
+        "Cascade directory should exist after init"
     );
 }
