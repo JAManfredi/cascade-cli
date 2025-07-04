@@ -7,8 +7,6 @@ use commands::entry::EntryAction;
 use commands::stack::StackAction;
 use commands::{MergeStrategyArg, RebaseStrategyArg};
 
-use crate::cli::commands::{config, hooks, init, stack, status, diagnose};
-
 #[derive(Parser)]
 #[command(name = "ca")]
 #[command(about = "Cascade CLI - Stacked Diffs for Bitbucket")]
@@ -29,27 +27,232 @@ pub struct Cli {
 /// Commands available in the CLI
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Initialize cascade in current repository
+    /// Initialize repository for Cascade
     Init {
-        /// Bitbucket server URL (e.g., https://bitbucket.company.com)
+        /// Bitbucket Server URL
+        #[arg(long)]
         bitbucket_url: Option<String>,
+
         /// Force initialization even if already initialized
         #[arg(long)]
         force: bool,
     },
-    /// Stack management commands
-    #[command(subcommand)]
-    Stack(stack::StackCommands),
-    /// Install git hooks
-    #[command(subcommand)]
-    Hooks(hooks::HookCommands),
-    /// Display repository status
-    Status,
+
     /// Configuration management
-    #[command(subcommand)]
-    Config(config::ConfigCommands),
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+
+    /// Stack management
+    Stacks {
+        #[command(subcommand)]
+        action: StackAction,
+    },
+
+    /// Entry management and editing
+    Entry {
+        #[command(subcommand)]
+        action: EntryAction,
+    },
+
+    /// Show repository overview and all stacks
+    Repo,
+
+    /// Show version information  
+    Version,
+
+    /// Check repository health and configuration
+    Doctor,
+
     /// Diagnose git2 TLS/SSH support issues
     Diagnose,
+
+    /// Generate shell completions
+    Completions {
+        #[command(subcommand)]
+        action: CompletionsAction,
+    },
+
+    /// Interactive setup wizard
+    Setup {
+        /// Force reconfiguration if already initialized
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Launch interactive TUI for stack management
+    Tui,
+
+    /// Git hooks management
+    Hooks {
+        #[command(subcommand)]
+        action: HooksAction,
+    },
+
+    /// Visualize stacks and dependencies
+    Viz {
+        #[command(subcommand)]
+        action: VizAction,
+    },
+
+    // Stack command shortcuts for commonly used operations
+    /// Show current stack details
+    Stack {
+        /// Show detailed pull request information
+        #[arg(short, long)]
+        verbose: bool,
+        /// Show mergability status for all PRs
+        #[arg(short, long)]
+        mergeable: bool,
+    },
+
+    /// Push current commit to the top of the stack (shortcut for 'stack push')
+    Push {
+        /// Branch name for this commit
+        #[arg(long, short)]
+        branch: Option<String>,
+        /// Commit message (if creating a new commit)
+        #[arg(long, short)]
+        message: Option<String>,
+        /// Use specific commit hash instead of HEAD
+        #[arg(long)]
+        commit: Option<String>,
+        /// Push commits since this reference (e.g., HEAD~3)
+        #[arg(long)]
+        since: Option<String>,
+        /// Push multiple specific commits (comma-separated)
+        #[arg(long)]
+        commits: Option<String>,
+        /// Squash last N commits into one before pushing
+        #[arg(long)]
+        squash: Option<usize>,
+        /// Squash all commits since this reference (e.g., HEAD~5)
+        #[arg(long)]
+        squash_since: Option<String>,
+        /// Auto-create feature branch when pushing from base branch
+        #[arg(long)]
+        auto_branch: bool,
+        /// Allow pushing commits from base branch (not recommended)
+        #[arg(long)]
+        allow_base_branch: bool,
+    },
+
+    /// Pop the top commit from the stack (shortcut for 'stack pop')
+    Pop {
+        /// Keep the branch (don't delete it)
+        #[arg(long)]
+        keep_branch: bool,
+    },
+
+    /// Land (merge) approved stack entries (shortcut for 'stack land')
+    Land {
+        /// Stack entry number to land (1-based index, optional)
+        entry: Option<usize>,
+        /// Force land even with blocking issues (dangerous)
+        #[arg(short, long)]
+        force: bool,
+        /// Dry run - show what would be landed without doing it
+        #[arg(short, long)]
+        dry_run: bool,
+        /// Use server-side validation (safer, checks approvals/builds)
+        #[arg(long)]
+        auto: bool,
+        /// Wait for builds to complete before merging
+        #[arg(long)]
+        wait_for_builds: bool,
+        /// Merge strategy to use
+        #[arg(long, value_enum, default_value = "squash")]
+        strategy: Option<MergeStrategyArg>,
+        /// Maximum time to wait for builds (seconds)
+        #[arg(long, default_value = "1800")]
+        build_timeout: u64,
+    },
+
+    /// Auto-land all ready PRs (shortcut for 'stack autoland')
+    Autoland {
+        /// Force land even with blocking issues (dangerous)
+        #[arg(short, long)]
+        force: bool,
+        /// Dry run - show what would be landed without doing it
+        #[arg(short, long)]
+        dry_run: bool,
+        /// Wait for builds to complete before merging
+        #[arg(long)]
+        wait_for_builds: bool,
+        /// Merge strategy to use
+        #[arg(long, value_enum, default_value = "squash")]
+        strategy: Option<MergeStrategyArg>,
+        /// Maximum time to wait for builds (seconds)
+        #[arg(long, default_value = "1800")]
+        build_timeout: u64,
+    },
+
+    /// Sync stack with remote repository (shortcut for 'stack sync')
+    Sync {
+        /// Force sync even if there are conflicts
+        #[arg(long)]
+        force: bool,
+        /// Skip cleanup of merged branches
+        #[arg(long)]
+        skip_cleanup: bool,
+        /// Interactive mode for conflict resolution
+        #[arg(long, short)]
+        interactive: bool,
+    },
+
+    /// Rebase stack on updated base branch (shortcut for 'stack rebase')
+    Rebase {
+        /// Interactive rebase
+        #[arg(long, short)]
+        interactive: bool,
+        /// Target base branch (defaults to stack's base branch)
+        #[arg(long)]
+        onto: Option<String>,
+        /// Rebase strategy to use
+        #[arg(long, value_enum)]
+        strategy: Option<RebaseStrategyArg>,
+    },
+
+    /// Switch to a different stack (shortcut for 'stacks switch')
+    Switch {
+        /// Name of the stack to switch to
+        name: String,
+    },
+
+    /// Deactivate the current stack - turn off stack mode (shortcut for 'stacks deactivate')
+    Deactivate {
+        /// Force deactivation without confirmation
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Submit a stack entry for review (shortcut for 'stacks submit')
+    Submit {
+        /// Stack entry number (1-based, defaults to all unsubmitted)
+        entry: Option<usize>,
+        /// Pull request title
+        #[arg(long, short)]
+        title: Option<String>,
+        /// Pull request description
+        #[arg(long, short)]
+        description: Option<String>,
+        /// Submit range of entries (e.g., "1-3" or "2,4,6")
+        #[arg(long)]
+        range: Option<String>,
+        /// Create draft pull requests (can be edited later)
+        #[arg(long)]
+        draft: bool,
+    },
+
+    /// Validate stack integrity and handle branch modifications (shortcut for 'stacks validate')
+    Validate {
+        /// Name of the stack (defaults to active stack)
+        name: Option<String>,
+        /// Auto-fix mode: incorporate, split, or reset
+        #[arg(long)]
+        fix: Option<String>,
+    },
 }
 
 /// Git hooks actions
@@ -188,13 +391,201 @@ pub enum ConfigAction {
 
 impl Cli {
     pub async fn run(self) -> Result<()> {
+        // Set up logging based on verbosity
+        self.setup_logging();
+
+        // Initialize git2 to use system certificates by default
+        // This ensures we work out-of-the-box in corporate environments
+        // just like git CLI and other modern dev tools (Graphite, Sapling, Phabricator)
+        self.init_git2_ssl()?;
+
         match self.command {
-            Commands::Init { bitbucket_url, force } => init::run(bitbucket_url, force).await,
-            Commands::Stack(action) => stack::run(action).await,
-            Commands::Hooks(action) => hooks::run(action).await,
-            Commands::Status => status::run().await,
-            Commands::Config(action) => config::run(action).await,
-            Commands::Diagnose => diagnose::run().await,
+            Commands::Init {
+                bitbucket_url,
+                force,
+            } => commands::init::run(bitbucket_url, force).await,
+            Commands::Config { action } => commands::config::run(action).await,
+            Commands::Stacks { action } => commands::stack::run(action).await,
+            Commands::Entry { action } => commands::entry::run(action).await,
+            Commands::Repo => commands::status::run().await,
+            Commands::Version => commands::version::run().await,
+            Commands::Doctor => commands::doctor::run().await,
+            Commands::Diagnose => commands::diagnose::run().await,
+
+            Commands::Completions { action } => match action {
+                CompletionsAction::Generate { shell } => {
+                    commands::completions::generate_completions(shell)
+                }
+                CompletionsAction::Install { shell } => {
+                    commands::completions::install_completions(shell)
+                }
+                CompletionsAction::Status => commands::completions::show_completions_status(),
+            },
+
+            Commands::Setup { force } => commands::setup::run(force).await,
+
+            Commands::Tui => commands::tui::run().await,
+
+            Commands::Hooks { action } => match action {
+                HooksAction::Install {
+                    skip_checks,
+                    allow_main_branch,
+                    yes,
+                    force,
+                } => {
+                    commands::hooks::install_with_options(
+                        skip_checks,
+                        allow_main_branch,
+                        yes,
+                        force,
+                    )
+                    .await
+                }
+                HooksAction::Uninstall => commands::hooks::uninstall().await,
+                HooksAction::Status => commands::hooks::status().await,
+                HooksAction::Add {
+                    hook,
+                    skip_checks,
+                    force,
+                } => commands::hooks::install_hook_with_options(&hook, skip_checks, force).await,
+                HooksAction::Remove { hook } => commands::hooks::uninstall_hook(&hook).await,
+            },
+
+            Commands::Viz { action } => match action {
+                VizAction::Stack {
+                    name,
+                    format,
+                    output,
+                    compact,
+                    no_colors,
+                } => {
+                    commands::viz::show_stack(
+                        name.clone(),
+                        format.clone(),
+                        output.clone(),
+                        compact,
+                        no_colors,
+                    )
+                    .await
+                }
+                VizAction::Deps {
+                    format,
+                    output,
+                    compact,
+                    no_colors,
+                } => {
+                    commands::viz::show_dependencies(
+                        format.clone(),
+                        output.clone(),
+                        compact,
+                        no_colors,
+                    )
+                    .await
+                }
+            },
+
+            Commands::Stack { verbose, mergeable } => {
+                commands::stack::show(verbose, mergeable).await
+            }
+
+            Commands::Push {
+                branch,
+                message,
+                commit,
+                since,
+                commits,
+                squash,
+                squash_since,
+                auto_branch,
+                allow_base_branch,
+            } => {
+                commands::stack::push(
+                    branch,
+                    message,
+                    commit,
+                    since,
+                    commits,
+                    squash,
+                    squash_since,
+                    auto_branch,
+                    allow_base_branch,
+                )
+                .await
+            }
+
+            Commands::Pop { keep_branch } => commands::stack::pop(keep_branch).await,
+
+            Commands::Land {
+                entry,
+                force,
+                dry_run,
+                auto,
+                wait_for_builds,
+                strategy,
+                build_timeout,
+            } => {
+                commands::stack::land(
+                    entry,
+                    force,
+                    dry_run,
+                    auto,
+                    wait_for_builds,
+                    strategy,
+                    build_timeout,
+                )
+                .await
+            }
+
+            Commands::Autoland {
+                force,
+                dry_run,
+                wait_for_builds,
+                strategy,
+                build_timeout,
+            } => {
+                commands::stack::autoland(force, dry_run, wait_for_builds, strategy, build_timeout)
+                    .await
+            }
+
+            Commands::Sync {
+                force,
+                skip_cleanup,
+                interactive,
+            } => commands::stack::sync(force, skip_cleanup, interactive).await,
+
+            Commands::Rebase {
+                interactive,
+                onto,
+                strategy,
+            } => commands::stack::rebase(interactive, onto, strategy).await,
+
+            Commands::Switch { name } => commands::stack::switch(name).await,
+
+            Commands::Deactivate { force } => commands::stack::deactivate(force).await,
+
+            Commands::Submit {
+                entry,
+                title,
+                description,
+                range,
+                draft,
+            } => {
+                // Delegate to the stacks submit functionality
+                let submit_action = StackAction::Submit {
+                    entry,
+                    title,
+                    description,
+                    range,
+                    draft,
+                };
+                commands::stack::run(submit_action).await
+            }
+
+            Commands::Validate { name, fix } => {
+                // Delegate to the stacks validate functionality
+                let validate_action = StackAction::Validate { name, fix };
+                commands::stack::run(validate_action).await
+            }
         }
     }
 
