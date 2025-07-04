@@ -24,7 +24,8 @@ pub struct Cli {
     pub no_color: bool,
 }
 
-#[derive(Subcommand)]
+/// Commands available in the CLI
+#[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Initialize repository for Cascade
     Init {
@@ -63,6 +64,9 @@ pub enum Commands {
 
     /// Check repository health and configuration
     Doctor,
+
+    /// Diagnose git2 TLS/SSH support issues
+    Diagnose,
 
     /// Generate shell completions
     Completions {
@@ -359,7 +363,7 @@ pub enum CompletionsAction {
     Status,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum ConfigAction {
     /// Set a configuration value
     Set {
@@ -406,6 +410,7 @@ impl Cli {
             Commands::Repo => commands::status::run().await,
             Commands::Version => commands::version::run().await,
             Commands::Doctor => commands::doctor::run().await,
+            Commands::Diagnose => commands::diagnose::run().await,
 
             Commands::Completions { action } => match action {
                 CompletionsAction::Generate { shell } => {

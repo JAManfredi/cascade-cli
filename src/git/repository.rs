@@ -688,15 +688,56 @@ impl GitRepository {
     /// Get remote URL for a given remote name
     pub fn get_remote_url(&self, name: &str) -> Result<String> {
         let remote = self.repo.find_remote(name).map_err(CascadeError::Git)?;
-
-        let url = remote.url().ok_or_else(|| {
-            CascadeError::Git(git2::Error::from_str("Remote URL is not valid UTF-8"))
-        })?;
-
-        Ok(url.to_string())
+        Ok(remote.url().unwrap_or("unknown").to_string())
     }
 
-    /// Cherry-pick a commit onto the current branch
+    /// Diagnose git2 TLS and SSH support capabilities
+    /// This helps debug why TLS streams might not be found
+    pub fn diagnose_git2_support(&self) -> Result<()> {
+        let version = git2::Version::get();
+
+        println!("🔍 Git2 Feature Support Diagnosis:");
+        println!("  HTTPS/TLS support: {}", version.https());
+        println!("  SSH support: {}", version.ssh());
+
+        if !version.https() {
+            println!("❌ TLS streams NOT available - this explains TLS connection failures!");
+            println!("   Solution: Add 'https' feature to git2 dependency in Cargo.toml");
+            println!("   Current: git2 = {{ version = \"0.20.2\", default-features = false, features = [\"vendored-libgit2\"] }}");
+            println!("   Fixed:   git2 = {{ version = \"0.20.2\", features = [\"vendored-libgit2\", \"https\", \"ssh\"] }}");
+        } else {
+            println!("✅ TLS streams available");
+        }
+
+        if !version.ssh() {
+            println!("❌ SSH support NOT available");
+            println!("   Add 'ssh' feature to git2 dependency");
+        } else {
+            println!("✅ SSH support available");
+        }
+
+        // Additional git2 feature information
+        println!("\n📋 Additional git2 build information:");
+        let libgit2_version = version.libgit2_version();
+        println!(
+            "  libgit2 version: {}.{}.{}",
+            libgit2_version.0, libgit2_version.1, libgit2_version.2
+        );
+
+        println!("\n💡 Recommendation:");
+        if !version.https() || !version.ssh() {
+            println!("  Your git2 is built without TLS/SSH support, causing fallback to git CLI.");
+            println!("  Enable the missing features in Cargo.toml for better performance and reliability.");
+        } else {
+            println!(
+                "  git2 has full TLS/SSH support. Network issues may be configuration-related."
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Cherry-pick a specific commit to the current branch
     pub fn cherry_pick(&self, commit_hash: &str) -> Result<String> {
         tracing::debug!("Cherry-picking commit {}", commit_hash);
 
