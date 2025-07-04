@@ -363,7 +363,7 @@ pub enum CompletionsAction {
     Status,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum ConfigAction {
     /// Set a configuration value
     Set {

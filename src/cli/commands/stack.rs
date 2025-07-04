@@ -40,7 +40,7 @@ impl From<MergeStrategyArg> for crate::bitbucket::pull_request::MergeStrategy {
     }
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 pub enum StackAction {
     /// Create a new stack
     Create {

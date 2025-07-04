@@ -1,5 +1,6 @@
 pub mod completions;
 pub mod config;
+pub mod diagnose;
 pub mod doctor;
 pub mod entry;
 pub mod hooks;
@@ -10,7 +11,6 @@ pub mod status;
 pub mod tui;
 pub mod version;
 pub mod viz;
-pub mod diagnose;
 
 // Re-export commonly used types for CLI
 pub use stack::{MergeStrategyArg, RebaseStrategyArg};
