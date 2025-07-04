@@ -128,10 +128,13 @@ jobs:
     - name: Install cross-compilation tools (Ubuntu ARM64)
       if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
       run: |
-        sudo dpkg --add-architecture arm64
+        # Install cross-compilation toolchain without adding arm64 architecture
+        # This avoids package repository issues with multi-arch
         sudo apt-get update
         sudo apt-get install -y gcc-aarch64-linux-gnu
-        sudo apt-get install -y libssl-dev:arm64
+        
+        # For OpenSSL, we'll use the vendored version instead of system libraries
+        # This is more reliable for cross-compilation
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -150,11 +153,10 @@ jobs:
       run: |
         echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
         echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
-        echo 'PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig' >> $GITHUB_ENV
-        echo 'PKG_CONFIG_ALLOW_CROSS=1' >> $GITHUB_ENV
-        echo 'OPENSSL_DIR=/usr' >> $GITHUB_ENV
-        echo 'OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu' >> $GITHUB_ENV
-        echo 'OPENSSL_INCLUDE_DIR=/usr/include' >> $GITHUB_ENV
+        
+        # Use vendored OpenSSL for cross-compilation to avoid system library issues
+        echo 'OPENSSL_STATIC=1' >> $GITHUB_ENV
+        echo 'OPENSSL_VENDORED=1' >> $GITHUB_ENV
 
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
