@@ -10,6 +10,7 @@ pub mod status;
 pub mod tui;
 pub mod version;
 pub mod viz;
+pub mod diagnose;
 
 // Re-export commonly used types for CLI
 pub use stack::{MergeStrategyArg, RebaseStrategyArg};
