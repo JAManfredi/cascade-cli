@@ -389,6 +389,12 @@ async fn test_cli_checkout_safety_integration() {
     // Test CLI commands that might trigger checkout safety
     // This would test the end-to-end integration when CLI checkout commands are added
 
-    // Restore original directory
-    env::set_current_dir(original_dir).expect("Failed to restore directory");
+    // Restore original directory BEFORE temp_dir is dropped
+    env::set_current_dir(&original_dir).expect("Failed to restore directory");
+
+    // Ensure we're back in the original directory
+    assert_eq!(
+        env::current_dir().expect("Failed to get current directory"),
+        original_dir
+    );
 }
