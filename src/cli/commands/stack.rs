@@ -624,15 +624,15 @@ async fn switch_stack(name: String) -> Result<()> {
         .get_stack_by_name(&name)
         .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
 
-    // Determine the target branch - should be the stack's base branch
-    let target_branch = &stack.base_branch;
+    // Determine the target branch - should be the working branch if available, otherwise base branch
+    let target_branch = stack.working_branch.as_ref().unwrap_or(&stack.base_branch);
 
     // Check current branch
     let current_branch = repo.get_current_branch().ok();
 
     // Smart branch switching logic
     if current_branch.as_ref() != Some(target_branch) {
-        println!("🔄 Switching to stack base branch: {target_branch}");
+        println!("🔄 Switching to stack branch: {target_branch}");
 
         // Check if target branch exists
         if repo.branch_exists(target_branch) {
@@ -647,12 +647,12 @@ async fn switch_stack(name: String) -> Result<()> {
                 }
             }
         } else {
-            println!("⚠️  Stack base branch '{target_branch}' doesn't exist locally");
+            println!("⚠️  Stack branch '{target_branch}' doesn't exist locally");
             println!("   Stack activated but stayed on current branch");
             println!("   You may need to create the branch or fetch from remote");
         }
     } else {
-        println!("✅ Already on stack base branch: {target_branch}");
+        println!("✅ Already on stack branch: {target_branch}");
     }
 
     // Activate the stack (this will record the correct current branch)
@@ -717,7 +717,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
     let stack_manager = StackManager::new(&repo_root)?;
 
     // Get stack information first to avoid borrow conflicts
-    let (stack_id, stack_name, stack_base, stack_entries) = {
+    let (stack_id, stack_name, stack_base, stack_working, stack_entries) = {
         let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
             CascadeError::config(
                 "No active stack. Use 'ca stacks create' or 'ca stacks switch' to select a stack"
@@ -729,12 +729,16 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             active_stack.id,
             active_stack.name.clone(),
             active_stack.base_branch.clone(),
+            active_stack.working_branch.clone(),
             active_stack.entries.clone(),
         )
     };
 
     println!("📊 Stack: {stack_name}");
     println!("   Base branch: {stack_base}");
+    if let Some(working) = &stack_working {
+        println!("   Working branch: {working}");
+    }
     println!("   Total entries: {}", stack_entries.len());
 
     if stack_entries.is_empty() {

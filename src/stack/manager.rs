@@ -111,8 +111,19 @@ impl StackManager {
             )));
         }
 
+        // Get current branch as the working branch
+        let current_branch = self.repo.get_current_branch().ok();
+
         // Create the stack
-        let stack = Stack::new(name.clone(), base_branch.clone(), description.clone());
+        let mut stack = Stack::new(name.clone(), base_branch.clone(), description.clone());
+
+        // Set working branch if we're on a feature branch (not on base branch)
+        if let Some(ref branch) = current_branch {
+            if branch != &base_branch {
+                stack.working_branch = Some(branch.clone());
+            }
+        }
+
         let stack_id = stack.id;
 
         // Create metadata

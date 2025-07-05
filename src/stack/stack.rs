@@ -60,6 +60,8 @@ pub struct Stack {
     pub description: Option<String>,
     /// Base branch this stack is built on
     pub base_branch: String,
+    /// Working branch where commits are made (e.g., feature-1)
+    pub working_branch: Option<String>,
     /// All entries in this stack (ordered)
     pub entries: Vec<StackEntry>,
     /// Map of entry ID to entry for quick lookup
@@ -83,6 +85,7 @@ impl Stack {
             name,
             description,
             base_branch,
+            working_branch: None,
             entries: Vec::new(),
             entry_map: HashMap::new(),
             status: StackStatus::Clean,
