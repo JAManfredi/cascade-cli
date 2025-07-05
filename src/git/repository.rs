@@ -587,14 +587,32 @@ impl GitRepository {
         let mut callbacks = git2::RemoteCallbacks::new();
 
         // Configure authentication
-        callbacks.credentials(|_url, username_from_url, _allowed_types| {
-            if let Some(username) = username_from_url {
-                // Try SSH key first
-                git2::Cred::ssh_key_from_agent(username)
-            } else {
-                // Try default credential helper
-                git2::Cred::default()
+        callbacks.credentials(|url, username_from_url, allowed_types| {
+            tracing::debug!(
+                "Authentication requested for URL: {}, username: {:?}, allowed_types: {:?}",
+                url,
+                username_from_url,
+                allowed_types
+            );
+
+            // For SSH URLs with username
+            if allowed_types.contains(git2::CredentialType::SSH_KEY) {
+                if let Some(username) = username_from_url {
+                    tracing::debug!("Trying SSH key authentication for user: {}", username);
+                    return git2::Cred::ssh_key_from_agent(username);
+                }
             }
+
+            // For HTTPS URLs, use default credential helper which integrates with system
+            // This will use git credential helper (e.g., osxkeychain, wincred, etc.)
+            if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+                tracing::debug!("Trying default credential helper for HTTPS authentication");
+                return git2::Cred::default();
+            }
+
+            // Fallback to default for any other cases
+            tracing::debug!("Using default credential fallback");
+            git2::Cred::default()
         });
 
         // Configure SSL certificate checking with system certificates by default
