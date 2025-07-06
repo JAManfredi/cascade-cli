@@ -259,7 +259,12 @@ impl BitbucketIntegration {
             repository,
         };
 
-        let title = title.unwrap_or_else(|| entry.message.lines().next().unwrap_or("").to_string());
+        let mut title = title.unwrap_or_else(|| entry.message.lines().next().unwrap_or("").to_string());
+        
+        // Add [DRAFT] prefix for draft PRs
+        if draft && !title.starts_with("[DRAFT]") {
+            title = format!("[DRAFT] {}", title);
+        }
 
         let description = {
             // Priority order: 1) Template (if configured), 2) User description, 3) Commit message body, 4) None
