@@ -715,6 +715,38 @@ ca config set default_reviewers "reviewer1,reviewer2"
 ca config set stack.default_base "main"
 ```
 
+### **PR Description Templates**
+
+Cascade CLI supports configurable PR description templates that automatically apply to all pull requests:
+
+```bash
+# Set a PR description template (supports markdown)
+ca config set cascade.pr_description_template "## Summary
+Brief description of changes
+
+## Testing
+- [ ] Unit tests pass
+- [ ] Manual testing completed
+
+## Checklist
+- [ ] Code review completed
+- [ ] Documentation updated"
+
+# View current template
+ca config get cascade.pr_description_template
+
+# Remove template (fallback to --description or commit messages)
+ca config set cascade.pr_description_template ""
+```
+
+**Template Behavior:**
+- **With template configured**: Template is ALWAYS used for all PRs (overrides `--description`)
+- **Without template**: Uses `--description` argument or commit message body as fallback
+- **Automatic stack hierarchy**: All PRs automatically get a stack information footer showing the hierarchy and current position
+
+**Setup Integration:**
+The `ca setup` command includes an optional step to configure the PR template with an example template or custom content.
+
 ---
 
 ## 🎨 **Advanced Features**
