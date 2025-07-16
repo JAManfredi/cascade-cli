@@ -498,15 +498,35 @@ async fn create_stack(
     let mut manager = StackManager::new(&repo_root)?;
     let stack_id = manager.create_stack(name.clone(), base.clone(), description.clone())?;
 
+    // Get the created stack to check its working branch
+    let stack = manager
+        .get_stack(&stack_id)
+        .ok_or_else(|| CascadeError::config("Failed to get created stack"))?;
+
     info!("✅ Created stack '{}'", name);
-    if let Some(base_branch) = base {
-        info!("   Base branch: {}", base_branch);
+    info!("   Stack ID: {}", stack_id);
+    info!("   Stack is now active");
+
+    // Provide helpful guidance based on the working branch situation
+    if let Some(working_branch) = &stack.working_branch {
+        info!("   Working branch: {}", working_branch);
+        info!("   Base branch: {}", stack.base_branch);
+    } else {
+        // No working branch was set (user is on base branch)
+        info!("   Base branch: {}", stack.base_branch);
+        println!();
+        println!(
+            "⚠️  Note: You're currently on the base branch '{}'",
+            stack.base_branch
+        );
+        println!("   To start adding commits to this stack, create a feature branch:");
+        println!("   git checkout -b {name}");
+        println!("   Then use 'ca push' to add commits to the stack");
     }
+
     if let Some(desc) = description {
         info!("   Description: {}", desc);
     }
-    info!("   Stack ID: {}", stack_id);
-    info!("   Stack is now active");
 
     Ok(())
 }
@@ -624,35 +644,47 @@ async fn switch_stack(name: String) -> Result<()> {
         .get_stack_by_name(&name)
         .ok_or_else(|| CascadeError::config(format!("Stack '{name}' not found")))?;
 
-    // Determine the target branch - should be the working branch if available, otherwise base branch
-    let target_branch = stack.working_branch.as_ref().unwrap_or(&stack.base_branch);
+    // Determine the target branch and provide appropriate messaging
+    if let Some(working_branch) = &stack.working_branch {
+        // Stack has a working branch - try to switch to it
+        let current_branch = repo.get_current_branch().ok();
 
-    // Check current branch
-    let current_branch = repo.get_current_branch().ok();
+        if current_branch.as_ref() != Some(working_branch) {
+            println!("🔄 Switching to stack working branch: {working_branch}");
 
-    // Smart branch switching logic
-    if current_branch.as_ref() != Some(target_branch) {
-        println!("🔄 Switching to stack branch: {target_branch}");
-
-        // Check if target branch exists
-        if repo.branch_exists(target_branch) {
-            match repo.checkout_branch(target_branch) {
-                Ok(_) => {
-                    println!("✅ Checked out branch: {target_branch}");
+            // Check if target branch exists
+            if repo.branch_exists(working_branch) {
+                match repo.checkout_branch(working_branch) {
+                    Ok(_) => {
+                        println!("✅ Checked out branch: {working_branch}");
+                    }
+                    Err(e) => {
+                        println!("⚠️  Failed to checkout '{working_branch}': {e}");
+                        println!("   Stack activated but stayed on current branch");
+                        println!(
+                            "   You can manually checkout with: git checkout {working_branch}"
+                        );
+                    }
                 }
-                Err(e) => {
-                    println!("⚠️  Failed to checkout '{target_branch}': {e}");
-                    println!("   Stack activated but stayed on current branch");
-                    println!("   You can manually checkout with: git checkout {target_branch}");
-                }
+            } else {
+                println!("⚠️  Stack working branch '{working_branch}' doesn't exist locally");
+                println!("   Stack activated but stayed on current branch");
+                println!("   You may need to fetch from remote: git fetch origin {working_branch}");
             }
         } else {
-            println!("⚠️  Stack branch '{target_branch}' doesn't exist locally");
-            println!("   Stack activated but stayed on current branch");
-            println!("   You may need to create the branch or fetch from remote");
+            println!("✅ Already on stack working branch: {working_branch}");
         }
     } else {
-        println!("✅ Already on stack branch: {target_branch}");
+        // No working branch - provide guidance
+        println!("⚠️  Stack '{name}' has no working branch set");
+        println!("   This typically happens when a stack was created while on the base branch");
+        println!();
+        println!("   To start working on this stack:");
+        println!("   1. Create a feature branch: git checkout -b {name}");
+        println!("   2. The stack will automatically track this as its working branch");
+        println!("   3. Then use 'ca push' to add commits to the stack");
+        println!();
+        println!("   Base branch: {}", stack.base_branch);
     }
 
     // Activate the stack (this will record the correct current branch)

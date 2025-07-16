@@ -133,13 +133,8 @@ impl StackManager {
         self.stacks.insert(stack_id, stack);
         self.metadata.add_stack(stack_metadata);
 
-        // Set as active if it's the first stack
-        if self.metadata.stacks.len() == 1 {
-            self.set_active_stack(Some(stack_id))?;
-        } else {
-            // Just save to disk if not setting as active
-            self.save_to_disk()?;
-        }
+        // Always set newly created stack as active
+        self.set_active_stack(Some(stack_id))?;
 
         Ok(stack_id)
     }
@@ -160,6 +155,26 @@ impl StackManager {
             self.stacks.get(&metadata.stack_id)
         } else {
             None
+        }
+    }
+    
+    /// Get mutable stack by name
+    pub fn get_stack_by_name_mut(&mut self, name: &str) -> Option<&mut Stack> {
+        if let Some(metadata) = self.metadata.find_stack_by_name(name) {
+            self.stacks.get_mut(&metadata.stack_id)
+        } else {
+            None
+        }
+    }
+    
+    /// Update working branch for a stack
+    pub fn update_stack_working_branch(&mut self, name: &str, branch: String) -> Result<()> {
+        if let Some(stack) = self.get_stack_by_name_mut(name) {
+            stack.working_branch = Some(branch);
+            self.save_to_disk()?;
+            Ok(())
+        } else {
+            Err(CascadeError::config(format!("Stack '{}' not found", name)))
         }
     }
 
@@ -308,6 +323,16 @@ impl StackManager {
         // the current workflow.
         if stack.entries.is_empty() {
             let current_branch = self.repo.get_current_branch()?;
+
+            // Update working branch if not already set
+            if stack.working_branch.is_none() && current_branch != stack.base_branch {
+                stack.working_branch = Some(current_branch.clone());
+                tracing::info!(
+                    "Set working branch for stack '{}' to '{}'",
+                    stack.name,
+                    current_branch
+                );
+            }
 
             if current_branch != stack.base_branch && current_branch != "HEAD" {
                 // Check if current branch was created from the stack's base branch
