@@ -157,7 +157,7 @@ impl StackManager {
             None
         }
     }
-    
+
     /// Get mutable stack by name
     pub fn get_stack_by_name_mut(&mut self, name: &str) -> Option<&mut Stack> {
         if let Some(metadata) = self.metadata.find_stack_by_name(name) {
@@ -166,7 +166,7 @@ impl StackManager {
             None
         }
     }
-    
+
     /// Update working branch for a stack
     pub fn update_stack_working_branch(&mut self, name: &str, branch: String) -> Result<()> {
         if let Some(stack) = self.get_stack_by_name_mut(name) {
@@ -174,7 +174,7 @@ impl StackManager {
             self.save_to_disk()?;
             Ok(())
         } else {
-            Err(CascadeError::config(format!("Stack '{}' not found", name)))
+            Err(CascadeError::config(format!("Stack '{name}' not found")))
         }
     }
 
