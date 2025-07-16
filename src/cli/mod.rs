@@ -137,6 +137,9 @@ pub enum Commands {
         /// Allow pushing commits from base branch (not recommended)
         #[arg(long)]
         allow_base_branch: bool,
+        /// Show what would be pushed without actually pushing
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Pop the top commit from the stack (shortcut for 'stack pop')
@@ -526,6 +529,7 @@ impl Cli {
                 squash_since,
                 auto_branch,
                 allow_base_branch,
+                dry_run,
             } => {
                 commands::stack::push(
                     branch,
@@ -537,6 +541,7 @@ impl Cli {
                     squash_since,
                     auto_branch,
                     allow_base_branch,
+                    dry_run,
                 )
                 .await
             }
