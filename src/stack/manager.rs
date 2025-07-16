@@ -1428,9 +1428,9 @@ mod tests {
 
         assert_eq!(manager.stacks.len(), 2);
 
-        // First stack should still be active
-        assert!(manager.get_stack(&stack1_id).unwrap().is_active);
-        assert!(!manager.get_stack(&stack2_id).unwrap().is_active);
+        // Second stack should be active (newly created stacks become active)
+        assert!(!manager.get_stack(&stack1_id).unwrap().is_active);
+        assert!(manager.get_stack(&stack2_id).unwrap().is_active);
 
         // Change active stack
         manager.set_active_stack(Some(stack2_id)).unwrap();
