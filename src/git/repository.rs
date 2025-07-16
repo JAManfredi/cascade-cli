@@ -218,7 +218,7 @@ impl GitRepository {
             .branch(name, &target_commit, false)
             .map_err(|e| CascadeError::branch(format!("Could not create branch '{name}': {e}")))?;
 
-        tracing::info!("Created branch '{}'", name);
+        // Branch creation logging is handled by the caller for clean output
         Ok(())
     }
 
@@ -999,7 +999,7 @@ impl GitRepository {
 
     /// Push current branch to remote
     pub fn push(&self, branch: &str) -> Result<()> {
-        tracing::info!("Pushing branch: {}", branch);
+        // Pushing branch to remote
 
         let mut remote = self
             .repo
@@ -1051,21 +1051,14 @@ impl GitRepository {
                     return self.push_with_git_cli(branch);
                 }
 
-                // Enhanced error message with debugging hints
-                let error_msg = format!(
-                    "Failed to push branch '{}' to remote '{}': {}. \
-                    \nDebugging hints:\
-                    \n  - Check network connectivity: ping {}\
-                    \n  - Verify authentication: git remote -v\
-                    \n  - Test manual push: git push origin {}\
-                    \n  - Check SSL settings if using HTTPS\
-                    \n  - For corporate networks, consider SSL certificate configuration",
-                    branch,
-                    remote_url,
-                    e,
-                    remote_url.split("://").nth(1).unwrap_or("unknown"),
-                    branch
-                );
+                // Create concise error message
+                let error_msg = if e.to_string().contains("authentication") {
+                    format!(
+                        "Authentication failed for branch '{branch}'. Try: git push origin {branch}"
+                    )
+                } else {
+                    format!("Failed to push branch '{branch}': {e}")
+                };
 
                 tracing::error!("{}", error_msg);
                 Err(CascadeError::branch(error_msg))

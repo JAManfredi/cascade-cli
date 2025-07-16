@@ -53,7 +53,7 @@ impl BitbucketIntegration {
             .get_entry(entry_id)
             .ok_or_else(|| CascadeError::config(format!("Entry {entry_id} not found in stack")))?;
 
-        info!("Submitting stack entry {} as pull request", entry_id);
+        // Submitting stack entry as pull request
 
         // 🆕 VALIDATE GIT INTEGRITY BEFORE SUBMISSION
         if let Err(integrity_error) = stack.validate_git_integrity(self.stack_manager.git_repo()) {
@@ -65,18 +65,12 @@ impl BitbucketIntegration {
 
         // Push branch to remote if not already pushed
         let git_repo = self.stack_manager.git_repo();
-        info!("Ensuring branch '{}' is pushed to remote", entry.branch);
-
         // Push the entry branch - fail fast if this fails
-        git_repo.push(&entry.branch).map_err(|e| {
-            CascadeError::bitbucket(format!(
-                "Failed to push branch '{}': {}. Cannot create PR without remote branch. \
-                Try manually pushing with: git push origin {}",
-                entry.branch, e, entry.branch
-            ))
-        })?;
+        git_repo
+            .push(&entry.branch)
+            .map_err(|e| CascadeError::bitbucket(format!("Cannot create PR: {e}")))?;
 
-        info!("✅ Successfully pushed branch '{}' to remote", entry.branch);
+        // Branch pushed successfully
 
         // Mark as pushed in metadata
         if let Some(commit_meta) = self

@@ -396,7 +396,7 @@ impl StackManager {
         // 🆕 CREATE ACTUAL GIT BRANCH from the specific commit
         // Check if branch already exists
         if self.repo.branch_exists(&branch) {
-            tracing::info!("Branch '{}' already exists, skipping creation", branch);
+            // Branch already exists, skip creation
         } else {
             // Create the branch from the specific commit hash
             self.repo
@@ -410,11 +410,7 @@ impl StackManager {
                     ))
                 })?;
 
-            tracing::info!(
-                "✅ Created Git branch '{}' from commit {}",
-                branch,
-                &commit_hash[..8]
-            );
+            // Branch creation succeeded - logging handled by caller
         }
 
         // Add to stack
