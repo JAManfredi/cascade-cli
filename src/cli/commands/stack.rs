@@ -6,6 +6,7 @@ use crate::stack::{StackManager, StackStatus};
 use clap::{Subcommand, ValueEnum};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
+use std::io::{self, Write};
 use tracing::{info, warn};
 
 /// CLI argument version of RebaseStrategy
@@ -120,6 +121,9 @@ pub enum StackAction {
         /// Allow pushing commits from base branch (not recommended)
         #[arg(long)]
         allow_base_branch: bool,
+        /// Show what would be pushed without actually pushing
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Pop the top commit from the stack
@@ -324,6 +328,7 @@ pub async fn run(action: StackAction) -> Result<()> {
             squash_since,
             auto_branch,
             allow_base_branch,
+            dry_run,
         } => {
             push_to_stack(
                 branch,
@@ -335,6 +340,7 @@ pub async fn run(action: StackAction) -> Result<()> {
                 squash_since,
                 auto_branch,
                 allow_base_branch,
+                dry_run,
             )
             .await
         }
@@ -415,6 +421,7 @@ pub async fn push(
     squash_since: Option<String>,
     auto_branch: bool,
     allow_base_branch: bool,
+    dry_run: bool,
 ) -> Result<()> {
     push_to_stack(
         branch,
@@ -426,6 +433,7 @@ pub async fn push(
         squash_since,
         auto_branch,
         allow_base_branch,
+        dry_run,
     )
     .await
 }
@@ -1018,6 +1026,7 @@ async fn push_to_stack(
     squash_since: Option<String>,
     auto_branch: bool,
     allow_base_branch: bool,
+    dry_run: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
@@ -1323,6 +1332,14 @@ async fn push_to_stack(
 
     if commits_to_push.is_empty() {
         println!("ℹ️  No commits to push to stack");
+        return Ok(());
+    }
+
+    // 🛡️ SAFEGUARDS: Analyze commits before pushing
+    analyze_commits_for_safeguards(&commits_to_push, &repo, dry_run).await?;
+
+    // Early return for dry run mode
+    if dry_run {
         return Ok(());
     }
 
@@ -3234,6 +3251,112 @@ async fn repair_stack_data() -> Result<()> {
     Ok(())
 }
 
+/// Analyze commits for various safeguards before pushing
+async fn analyze_commits_for_safeguards(
+    commits_to_push: &[String],
+    repo: &GitRepository,
+    dry_run: bool,
+) -> Result<()> {
+    const LARGE_COMMIT_THRESHOLD: usize = 10;
+    const WEEK_IN_SECONDS: i64 = 7 * 24 * 3600;
+
+    // 🛡️ SAFEGUARD 1: Large commit count warning
+    if commits_to_push.len() > LARGE_COMMIT_THRESHOLD {
+        println!(
+            "⚠️  Warning: About to push {} commits to stack",
+            commits_to_push.len()
+        );
+        println!("   This may indicate a merge commit issue or unexpected commit range.");
+        println!("   Large commit counts often result from merging instead of rebasing.");
+
+        if !dry_run && !confirm_large_push(commits_to_push.len())? {
+            return Err(CascadeError::config("Push cancelled by user"));
+        }
+    }
+
+    // Get commit objects for further analysis
+    let commit_objects: Result<Vec<_>> = commits_to_push
+        .iter()
+        .map(|hash| repo.get_commit(hash))
+        .collect();
+    let commit_objects = commit_objects?;
+
+    // 🛡️ SAFEGUARD 2: Merge commit detection
+    let merge_commits: Vec<_> = commit_objects
+        .iter()
+        .filter(|c| c.parent_count() > 1)
+        .collect();
+
+    if !merge_commits.is_empty() {
+        println!(
+            "⚠️  Warning: {} merge commits detected in push",
+            merge_commits.len()
+        );
+        println!("   This often indicates you merged instead of rebased.");
+        println!("   Consider using 'ca sync' to rebase on the base branch.");
+        println!("   Merge commits in stacks can cause confusion and duplicate work.");
+    }
+
+    // 🛡️ SAFEGUARD 3: Commit age warning
+    if commit_objects.len() > 1 {
+        let oldest_commit_time = commit_objects.first().unwrap().time().seconds();
+        let newest_commit_time = commit_objects.last().unwrap().time().seconds();
+        let time_span = newest_commit_time - oldest_commit_time;
+
+        if time_span > WEEK_IN_SECONDS {
+            let days = time_span / (24 * 3600);
+            println!("⚠️  Warning: Commits span {days} days");
+            println!("   This may indicate merged history rather than new work.");
+            println!("   Recent work should typically span hours or days, not weeks.");
+        }
+    }
+
+    // 🛡️ SAFEGUARD 4: Better range detection suggestions
+    if commits_to_push.len() > 5 {
+        println!("💡 Tip: If you only want recent commits, use:");
+        println!(
+            "   ca push --since HEAD~{}  # pushes last {} commits",
+            std::cmp::min(commits_to_push.len(), 5),
+            std::cmp::min(commits_to_push.len(), 5)
+        );
+        println!("   ca push --commits <hash1>,<hash2>  # pushes specific commits");
+        println!("   ca push --dry-run  # preview what would be pushed");
+    }
+
+    // 🛡️ SAFEGUARD 5: Dry run mode
+    if dry_run {
+        println!("🔍 DRY RUN: Would push {} commits:", commits_to_push.len());
+        for (i, (commit_hash, commit_obj)) in commits_to_push
+            .iter()
+            .zip(commit_objects.iter())
+            .enumerate()
+        {
+            let summary = commit_obj.summary().unwrap_or("(no message)");
+            let short_hash = &commit_hash[..std::cmp::min(commit_hash.len(), 7)];
+            println!("  {}: {} ({})", i + 1, summary, short_hash);
+        }
+        println!("💡 Run without --dry-run to actually push these commits.");
+    }
+
+    Ok(())
+}
+
+/// Prompt user for confirmation when pushing large number of commits
+fn confirm_large_push(count: usize) -> Result<bool> {
+    print!("Do you want to continue pushing {count} commits? [y/N]: ");
+    io::stdout()
+        .flush()
+        .map_err(|e| CascadeError::config(format!("Failed to flush stdout: {e}")))?;
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
+
+    let input = input.trim().to_lowercase();
+    Ok(input == "y" || input == "yes")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3731,6 +3854,7 @@ mod tests {
                     None,  // squash_since
                     false, // auto_branch
                     false, // allow_base_branch
+                    false, // dry_run
                 )
                 .await;
 
@@ -3778,6 +3902,7 @@ mod tests {
             squash_since: None,
             auto_branch: false,
             allow_base_branch: false,
+            dry_run: false,
         };
 
         assert!(matches!(
@@ -3791,7 +3916,8 @@ mod tests {
                 squash: None,
                 squash_since: None,
                 auto_branch: false,
-                allow_base_branch: false
+                allow_base_branch: false,
+                dry_run: false
             }
         ));
     }
@@ -3923,7 +4049,8 @@ mod tests {
                 squash: None,
                 squash_since: None,
                 auto_branch: false,
-                allow_base_branch: false
+                allow_base_branch: false,
+                dry_run: false
             },
             StackAction::Push { .. }
         ));
