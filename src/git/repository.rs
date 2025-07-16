@@ -1675,7 +1675,7 @@ impl GitRepository {
     }
 
     /// Detect the main branch name (main, master, develop)
-    fn detect_main_branch(&self) -> Result<String> {
+    pub fn detect_main_branch(&self) -> Result<String> {
         let main_candidates = ["main", "master", "develop", "trunk"];
 
         for candidate in &main_candidates {
