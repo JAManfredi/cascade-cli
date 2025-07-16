@@ -5,6 +5,7 @@ pub use auth::{AuthConfig, AuthManager};
 pub use settings::{BitbucketConfig, CascadeConfig, CascadeSettings, GitConfig, Settings};
 
 use crate::errors::{CascadeError, Result};
+use crate::git::GitRepository;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -67,8 +68,27 @@ pub fn initialize_repo(repo_path: &Path, bitbucket_url: Option<String>) -> Resul
     let config_dir = get_repo_config_dir(repo_path)?;
     ensure_config_dir(&config_dir)?;
 
-    // Create default configuration
-    let settings = Settings::default_for_repo(bitbucket_url);
+    // Create default configuration with detected default branch
+    let mut settings = Settings::default_for_repo(bitbucket_url);
+
+    // Detect the actual default branch from the repository
+    if let Ok(git_repo) = GitRepository::open(repo_path) {
+        if let Ok(detected_branch) = git_repo.detect_main_branch() {
+            tracing::info!("Detected default branch: {}", detected_branch);
+            settings.git.default_branch = detected_branch;
+        } else {
+            tracing::warn!(
+                "Could not detect default branch, using fallback: {}",
+                settings.git.default_branch
+            );
+        }
+    } else {
+        tracing::warn!(
+            "Could not open git repository, using fallback default branch: {}",
+            settings.git.default_branch
+        );
+    }
+
     settings.save_to_file(&config_dir.join("config.json"))?;
 
     tracing::info!("Initialized Cascade repository at {}", repo_path.display());
