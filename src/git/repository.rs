@@ -1046,18 +1046,26 @@ impl GitRepository {
                 Ok(())
             }
             Err(e) => {
-                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
+                // Check if this is a TLS/SSL or auth error that might be resolved by falling back to git CLI
                 let error_string = e.to_string();
                 tracing::debug!("git2 push error: {} (class: {:?})", error_string, e.class());
 
                 if error_string.contains("TLS stream")
                     || error_string.contains("SSL")
                     || e.class() == git2::ErrorClass::Ssl
+                    || error_string.contains("authentication required")
+                    || error_string.contains("no callback set")
+                    || e.class() == git2::ErrorClass::Http
                 {
-                    tracing::info!(
-                        "git2 TLS/SSL error: {}, falling back to git CLI for push operation",
-                        e
-                    );
+                    Output::info(format!(
+                        "git2 push failed ({}), falling back to git CLI for push operation",
+                        if error_string.contains("authentication") || error_string.contains("Auth")
+                        {
+                            "authentication issue"
+                        } else {
+                            "TLS/SSL issue"
+                        }
+                    ));
                     return self.push_with_git_cli(branch);
                 }
 
@@ -1078,10 +1086,8 @@ impl GitRepository {
     }
 
     /// Fallback push method using git CLI instead of git2
-    /// This is used when git2 has TLS/SSL issues but git CLI works fine
+    /// This is used when git2 has TLS/SSL or auth issues but git CLI works fine
     fn push_with_git_cli(&self, branch: &str) -> Result<()> {
-        tracing::info!("Using git CLI fallback for push operation: {}", branch);
-
         let output = std::process::Command::new("git")
             .args(["push", "origin", branch])
             .current_dir(&self.path)
@@ -1089,7 +1095,7 @@ impl GitRepository {
             .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
-            tracing::info!("✅ Git CLI push succeeded for branch: {}", branch);
+            Output::success(format!("✅ Git CLI push succeeded for branch: {}", branch));
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
