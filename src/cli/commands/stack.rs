@@ -550,7 +550,7 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
     let stacks = manager.list_stacks();
 
     if stacks.is_empty() {
-        info!("No stacks found. Create one with: ca stack create <name>");
+        Output::info("No stacks found. Create one with: ca stack create <name>");
         return Ok(());
     }
 
@@ -658,46 +658,54 @@ async fn switch_stack(name: String) -> Result<()> {
         let current_branch = repo.get_current_branch().ok();
 
         if current_branch.as_ref() != Some(working_branch) {
-            println!("🔄 Switching to stack working branch: {working_branch}");
+            Output::progress(format!(
+                "Switching to stack working branch: {working_branch}"
+            ));
 
             // Check if target branch exists
             if repo.branch_exists(working_branch) {
                 match repo.checkout_branch(working_branch) {
                     Ok(_) => {
-                        println!("✅ Checked out branch: {working_branch}");
+                        Output::success(format!("Checked out branch: {working_branch}"));
                     }
                     Err(e) => {
-                        println!("⚠️  Failed to checkout '{working_branch}': {e}");
-                        println!("   Stack activated but stayed on current branch");
-                        println!(
-                            "   You can manually checkout with: git checkout {working_branch}"
-                        );
+                        Output::warning(format!("Failed to checkout '{working_branch}': {e}"));
+                        Output::sub_item("Stack activated but stayed on current branch");
+                        Output::sub_item(format!(
+                            "You can manually checkout with: git checkout {working_branch}"
+                        ));
                     }
                 }
             } else {
-                println!("⚠️  Stack working branch '{working_branch}' doesn't exist locally");
-                println!("   Stack activated but stayed on current branch");
-                println!("   You may need to fetch from remote: git fetch origin {working_branch}");
+                Output::warning(format!(
+                    "Stack working branch '{working_branch}' doesn't exist locally"
+                ));
+                Output::sub_item("Stack activated but stayed on current branch");
+                Output::sub_item(format!(
+                    "You may need to fetch from remote: git fetch origin {working_branch}"
+                ));
             }
         } else {
-            println!("✅ Already on stack working branch: {working_branch}");
+            Output::success(format!("Already on stack working branch: {working_branch}"));
         }
     } else {
         // No working branch - provide guidance
-        println!("⚠️  Stack '{name}' has no working branch set");
-        println!("   This typically happens when a stack was created while on the base branch");
-        println!();
-        println!("   To start working on this stack:");
-        println!("   1. Create a feature branch: git checkout -b {name}");
-        println!("   2. The stack will automatically track this as its working branch");
-        println!("   3. Then use 'ca push' to add commits to the stack");
-        println!();
-        println!("   Base branch: {}", stack.base_branch);
+        Output::warning(format!("Stack '{name}' has no working branch set"));
+        Output::sub_item(
+            "This typically happens when a stack was created while on the base branch",
+        );
+
+        Output::tip("To start working on this stack:");
+        Output::bullet(format!("Create a feature branch: git checkout -b {name}"));
+        Output::bullet("The stack will automatically track this as its working branch");
+        Output::bullet("Then use 'ca push' to add commits to the stack");
+
+        Output::sub_item(format!("Base branch: {}", stack.base_branch));
     }
 
     // Activate the stack (this will record the correct current branch)
     manager.set_active_stack_by_name(&name)?;
-    info!("✅ Switched to stack '{}'", name);
+    Output::success(format!("Switched to stack '{name}'"));
 
     Ok(())
 }
@@ -714,15 +722,19 @@ async fn deactivate_stack(force: bool) -> Result<()> {
     let active_stack = manager.get_active_stack();
 
     if active_stack.is_none() {
-        println!("ℹ️  No active stack to deactivate");
+        Output::info("No active stack to deactivate");
         return Ok(());
     }
 
     let stack_name = active_stack.unwrap().name.clone();
 
     if !force {
-        println!("⚠️  This will deactivate stack '{stack_name}' and return to normal Git workflow");
-        println!("   You can reactivate it later with 'ca stacks switch {stack_name}'");
+        Output::warning(format!(
+            "This will deactivate stack '{stack_name}' and return to normal Git workflow"
+        ));
+        Output::sub_item(format!(
+            "You can reactivate it later with 'ca stacks switch {stack_name}'"
+        ));
         print!("   Continue? (y/N): ");
 
         use std::io::{self, Write};
@@ -732,7 +744,7 @@ async fn deactivate_stack(force: bool) -> Result<()> {
         io::stdin().read_line(&mut input).unwrap();
 
         if !input.trim().to_lowercase().starts_with('y') {
-            println!("Cancelled deactivation");
+            Output::info("Cancelled deactivation");
             return Ok(());
         }
     }
@@ -740,9 +752,9 @@ async fn deactivate_stack(force: bool) -> Result<()> {
     // Deactivate the stack
     manager.set_active_stack(None)?;
 
-    println!("✅ Deactivated stack '{stack_name}'");
-    println!("   Stack management is now OFF - you can use normal Git workflow");
-    println!("   To reactivate: ca stacks switch {stack_name}");
+    Output::success(format!("Deactivated stack '{stack_name}'"));
+    Output::sub_item("Stack management is now OFF - you can use normal Git workflow");
+    Output::sub_item(format!("To reactivate: ca stacks switch {stack_name}"));
 
     Ok(())
 }
@@ -1781,7 +1793,7 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
     match integration.list_pull_requests(pr_state).await {
         Ok(pr_page) => {
             if pr_page.values.is_empty() {
-                info!("No pull requests found.");
+                Output::info("No pull requests found.");
                 return Ok(());
             }
 
@@ -1840,7 +1852,7 @@ async fn check_stack(_force: bool) -> Result<()> {
 
     manager.sync_stack(&stack_id)?;
 
-    info!("✅ Stack check completed successfully");
+    Output::success("Stack check completed successfully");
 
     Ok(())
 }
@@ -2396,9 +2408,9 @@ async fn delete_stack(name: String, force: bool) -> Result<()> {
 
     let deleted = manager.delete_stack(&stack_id)?;
 
-    info!("✅ Deleted stack '{}'", deleted.name);
+    Output::success(format!("Deleted stack '{}'", deleted.name));
     if !deleted.entries.is_empty() {
-        warn!("   {} entries were removed", deleted.entries.len());
+        Output::warning(format!("{} entries were removed", deleted.entries.len()));
     }
 
     Ok(())
