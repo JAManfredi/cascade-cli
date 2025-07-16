@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use chrono;
 use dialoguer::{theme::ColorfulTheme, Confirm};
@@ -268,7 +269,7 @@ impl GitRepository {
             .set_head(&format!("refs/heads/{name}"))
             .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{name}': {e}")))?;
 
-        tracing::info!("Switched to branch '{}'", name);
+        Output::success(format!("Switched to branch '{}'", name));
         Ok(())
     }
 
@@ -321,7 +322,10 @@ impl GitRepository {
             ))
         })?;
 
-        tracing::info!("Checked out commit '{}' (detached HEAD)", commit_hash);
+        Output::success(format!(
+            "Checked out commit '{}' (detached HEAD)",
+            commit_hash
+        ));
         Ok(())
     }
 
@@ -456,7 +460,7 @@ impl GitRepository {
             )
             .map_err(CascadeError::Git)?;
 
-        tracing::info!("Created commit: {} - {}", commit_id, message);
+        Output::success(format!("Created commit: {} - {}", commit_id, message));
         Ok(commit_id.to_string())
     }
 
@@ -624,8 +628,8 @@ impl GitRepository {
         // Check for manual SSL overrides first (only when user explicitly needs them)
         if let Some(ssl_config) = &self.ssl_config {
             if ssl_config.accept_invalid_certs {
-                tracing::warn!(
-                    "SSL certificate verification DISABLED via Cascade config - this is insecure!"
+                Output::warning(
+                    "SSL certificate verification DISABLED via Cascade config - this is insecure!",
                 );
                 callbacks.certificate_check(|_cert, _host| {
                     tracing::debug!("⚠️  Accepting invalid certificate for host: {}", _host);
@@ -633,7 +637,10 @@ impl GitRepository {
                 });
                 ssl_configured = true;
             } else if let Some(ca_path) = &ssl_config.ca_bundle_path {
-                tracing::info!("Using custom CA bundle from Cascade config: {}", ca_path);
+                Output::info(format!(
+                    "Using custom CA bundle from Cascade config: {}",
+                    ca_path
+                ));
                 callbacks.certificate_check(|_cert, host| {
                     tracing::debug!("Using custom CA bundle for host: {}", host);
                     Ok(git2::CertificateCheckStatus::CertificateOk)
@@ -648,8 +655,8 @@ impl GitRepository {
                 let ssl_verify = config.get_bool("http.sslVerify").unwrap_or(true);
 
                 if !ssl_verify {
-                    tracing::warn!(
-                        "SSL certificate verification DISABLED via git config - this is insecure!"
+                    Output::warning(
+                        "SSL certificate verification DISABLED via git config - this is insecure!",
                     );
                     callbacks.certificate_check(|_cert, host| {
                         tracing::debug!("⚠️  Bypassing SSL verification for host: {}", host);
@@ -657,7 +664,10 @@ impl GitRepository {
                     });
                     ssl_configured = true;
                 } else if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
-                    tracing::info!("Using custom CA bundle from git config: {}", ca_path);
+                    Output::info(format!(
+                        "Using custom CA bundle from git config: {}",
+                        ca_path
+                    ));
                     callbacks.certificate_check(|_cert, host| {
                         tracing::debug!("Using git config CA bundle for host: {}", host);
                         Ok(git2::CertificateCheckStatus::CertificateOk)
