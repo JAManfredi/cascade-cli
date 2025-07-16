@@ -218,6 +218,7 @@ pub enum Commands {
     /// Switch to a different stack (shortcut for 'stacks switch')
     Switch {
         /// Name of the stack to switch to
+        #[arg(value_hint = clap::ValueHint::Other)]
         name: String,
     },
 
@@ -253,6 +254,13 @@ pub enum Commands {
         /// Auto-fix mode: incorporate, split, or reset
         #[arg(long)]
         fix: Option<String>,
+    },
+
+    /// Internal command for shell completion (hidden)
+    #[command(hide = true)]
+    CompletionHelper {
+        #[command(subcommand)]
+        action: CompletionHelperAction,
     },
 }
 
@@ -366,6 +374,13 @@ pub enum CompletionsAction {
 
     /// Show completion installation status
     Status,
+}
+
+/// Hidden completion helper actions
+#[derive(Debug, Subcommand)]
+pub enum CompletionHelperAction {
+    /// List available stack names
+    StackNames,
 }
 
 #[derive(Debug, Subcommand)]
@@ -599,6 +614,10 @@ impl Cli {
                 let validate_action = StackAction::Validate { name, fix };
                 commands::stack::run(validate_action).await
             }
+
+            Commands::CompletionHelper { action } => {
+                handle_completion_helper(action).await
+            }
         }
     }
 
@@ -737,3 +756,27 @@ impl Cli {
         }
     }
 }
+
+/// Handle completion helper commands
+async fn handle_completion_helper(action: CompletionHelperAction) -> Result<()> {
+    match action {
+        CompletionHelperAction::StackNames => {
+            use crate::git::find_repository_root;
+            use crate::stack::StackManager;
+            use std::env;
+            
+            // Try to get stack names, but silently fail if not in a repository
+            if let Ok(current_dir) = env::current_dir() {
+                if let Ok(repo_root) = find_repository_root(&current_dir) {
+                    if let Ok(manager) = StackManager::new(&repo_root) {
+                        for (_, name, _, _, _) in manager.list_stacks() {
+                            println!("{}", name);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
