@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::config::{initialize_repo, is_repo_initialized};
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, is_git_repository};
@@ -5,7 +6,7 @@ use std::env;
 
 /// Initialize a repository for Cascade
 pub async fn run(bitbucket_url: Option<String>, force: bool) -> Result<()> {
-    tracing::info!("Initializing Cascade repository...");
+    Output::info("Initializing Cascade repository...");
 
     // Get current directory
     let current_dir = env::current_dir()
@@ -30,7 +31,7 @@ pub async fn run(bitbucket_url: Option<String>, force: bool) -> Result<()> {
     }
 
     if force && is_repo_initialized(&repo_root) {
-        tracing::warn!("Force reinitializing repository...");
+        Output::warning("Force reinitializing repository...");
     }
 
     // Initialize the repository

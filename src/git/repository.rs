@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use chrono;
 use dialoguer::{theme::ColorfulTheme, Confirm};
@@ -63,6 +64,13 @@ pub struct GitRepository {
     repo: Repository,
     path: PathBuf,
     ssl_config: Option<GitSslConfig>,
+    bitbucket_credentials: Option<BitbucketCredentials>,
+}
+
+#[derive(Debug, Clone)]
+struct BitbucketCredentials {
+    username: Option<String>,
+    token: Option<String>,
 }
 
 impl GitRepository {
@@ -79,11 +87,13 @@ impl GitRepository {
 
         // Try to load SSL configuration from cascade config
         let ssl_config = Self::load_ssl_config_from_cascade(&workdir);
+        let bitbucket_credentials = Self::load_bitbucket_credentials_from_cascade(&workdir);
 
         Ok(Self {
             repo,
             path: workdir,
             ssl_config,
+            bitbucket_credentials,
         })
     }
 
@@ -101,6 +111,24 @@ impl GitRepository {
             Some(GitSslConfig {
                 accept_invalid_certs: settings.bitbucket.accept_invalid_certs.unwrap_or(false),
                 ca_bundle_path: settings.bitbucket.ca_bundle_path,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Load Bitbucket credentials from cascade config file if it exists
+    fn load_bitbucket_credentials_from_cascade(repo_path: &Path) -> Option<BitbucketCredentials> {
+        // Try to load cascade configuration
+        let config_dir = crate::config::get_repo_config_dir(repo_path).ok()?;
+        let config_path = config_dir.join("config.json");
+        let settings = crate::config::Settings::load_from_file(&config_path).ok()?;
+
+        // Return credentials if any are configured
+        if settings.bitbucket.username.is_some() || settings.bitbucket.token.is_some() {
+            Some(BitbucketCredentials {
+                username: settings.bitbucket.username.clone(),
+                token: settings.bitbucket.token.clone(),
             })
         } else {
             None
@@ -268,7 +296,7 @@ impl GitRepository {
             .set_head(&format!("refs/heads/{name}"))
             .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{name}': {e}")))?;
 
-        tracing::info!("Switched to branch '{}'", name);
+        Output::success(format!("Switched to branch '{name}'"));
         Ok(())
     }
 
@@ -321,7 +349,9 @@ impl GitRepository {
             ))
         })?;
 
-        tracing::info!("Checked out commit '{}' (detached HEAD)", commit_hash);
+        Output::success(format!(
+            "Checked out commit '{commit_hash}' (detached HEAD)"
+        ));
         Ok(())
     }
 
@@ -456,7 +486,7 @@ impl GitRepository {
             )
             .map_err(CascadeError::Git)?;
 
-        tracing::info!("Created commit: {} - {}", commit_id, message);
+        Output::success(format!("Created commit: {commit_id} - {message}"));
         Ok(commit_id.to_string())
     }
 
@@ -586,8 +616,9 @@ impl GitRepository {
     fn configure_remote_callbacks(&self) -> Result<git2::RemoteCallbacks<'_>> {
         let mut callbacks = git2::RemoteCallbacks::new();
 
-        // Configure authentication
-        callbacks.credentials(|url, username_from_url, allowed_types| {
+        // Configure authentication with comprehensive credential support
+        let bitbucket_credentials = self.bitbucket_credentials.clone();
+        callbacks.credentials(move |url, username_from_url, allowed_types| {
             tracing::debug!(
                 "Authentication requested for URL: {}, username: {:?}, allowed_types: {:?}",
                 url,
@@ -603,9 +634,31 @@ impl GitRepository {
                 }
             }
 
-            // For HTTPS URLs, use default credential helper which integrates with system
-            // This will use git credential helper (e.g., osxkeychain, wincred, etc.)
+            // For HTTPS URLs, try multiple authentication methods in sequence
             if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+                if url.contains("bitbucket") {
+                    if let Some(creds) = &bitbucket_credentials {
+                        // Method 1: Username + Token (common for Bitbucket)
+                        if let (Some(username), Some(token)) = (&creds.username, &creds.token) {
+                            tracing::debug!("Trying Bitbucket username + token authentication");
+                            return git2::Cred::userpass_plaintext(username, token);
+                        }
+
+                        // Method 2: Token as username, empty password (alternate Bitbucket format)
+                        if let Some(token) = &creds.token {
+                            tracing::debug!("Trying Bitbucket token-as-username authentication");
+                            return git2::Cred::userpass_plaintext(token, "");
+                        }
+
+                        // Method 3: Just username (will prompt for password or use credential helper)
+                        if let Some(username) = &creds.username {
+                            tracing::debug!("Trying Bitbucket username authentication (will use credential helper)");
+                            return git2::Cred::username(username);
+                        }
+                    }
+                }
+
+                // Method 4: Default credential helper for all HTTPS URLs
                 tracing::debug!("Trying default credential helper for HTTPS authentication");
                 return git2::Cred::default();
             }
@@ -624,8 +677,8 @@ impl GitRepository {
         // Check for manual SSL overrides first (only when user explicitly needs them)
         if let Some(ssl_config) = &self.ssl_config {
             if ssl_config.accept_invalid_certs {
-                tracing::warn!(
-                    "SSL certificate verification DISABLED via Cascade config - this is insecure!"
+                Output::warning(
+                    "SSL certificate verification DISABLED via Cascade config - this is insecure!",
                 );
                 callbacks.certificate_check(|_cert, _host| {
                     tracing::debug!("⚠️  Accepting invalid certificate for host: {}", _host);
@@ -633,7 +686,9 @@ impl GitRepository {
                 });
                 ssl_configured = true;
             } else if let Some(ca_path) = &ssl_config.ca_bundle_path {
-                tracing::info!("Using custom CA bundle from Cascade config: {}", ca_path);
+                Output::info(format!(
+                    "Using custom CA bundle from Cascade config: {ca_path}"
+                ));
                 callbacks.certificate_check(|_cert, host| {
                     tracing::debug!("Using custom CA bundle for host: {}", host);
                     Ok(git2::CertificateCheckStatus::CertificateOk)
@@ -648,8 +703,8 @@ impl GitRepository {
                 let ssl_verify = config.get_bool("http.sslVerify").unwrap_or(true);
 
                 if !ssl_verify {
-                    tracing::warn!(
-                        "SSL certificate verification DISABLED via git config - this is insecure!"
+                    Output::warning(
+                        "SSL certificate verification DISABLED via git config - this is insecure!",
                     );
                     callbacks.certificate_check(|_cert, host| {
                         tracing::debug!("⚠️  Bypassing SSL verification for host: {}", host);
@@ -657,7 +712,7 @@ impl GitRepository {
                     });
                     ssl_configured = true;
                 } else if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
-                    tracing::info!("Using custom CA bundle from git config: {}", ca_path);
+                    Output::info(format!("Using custom CA bundle from git config: {ca_path}"));
                     callbacks.certificate_check(|_cert, host| {
                         tracing::debug!("Using git config CA bundle for host: {}", host);
                         Ok(git2::CertificateCheckStatus::CertificateOk)
@@ -1036,18 +1091,26 @@ impl GitRepository {
                 Ok(())
             }
             Err(e) => {
-                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
+                // Check if this is a TLS/SSL or auth error that might be resolved by falling back to git CLI
                 let error_string = e.to_string();
                 tracing::debug!("git2 push error: {} (class: {:?})", error_string, e.class());
 
                 if error_string.contains("TLS stream")
                     || error_string.contains("SSL")
                     || e.class() == git2::ErrorClass::Ssl
+                    || error_string.contains("authentication required")
+                    || error_string.contains("no callback set")
+                    || e.class() == git2::ErrorClass::Http
                 {
-                    tracing::info!(
-                        "git2 TLS/SSL error: {}, falling back to git CLI for push operation",
-                        e
-                    );
+                    Output::info(format!(
+                        "git2 push failed ({}), falling back to git CLI for push operation",
+                        if error_string.contains("authentication") || error_string.contains("Auth")
+                        {
+                            "authentication issue"
+                        } else {
+                            "TLS/SSL issue"
+                        }
+                    ));
                     return self.push_with_git_cli(branch);
                 }
 
@@ -1067,10 +1130,8 @@ impl GitRepository {
     }
 
     /// Fallback push method using git CLI instead of git2
-    /// This is used when git2 has TLS/SSL issues but git CLI works fine
+    /// This is used when git2 has TLS/SSL or auth issues but git CLI works fine
     fn push_with_git_cli(&self, branch: &str) -> Result<()> {
-        tracing::info!("Using git CLI fallback for push operation: {}", branch);
-
         let output = std::process::Command::new("git")
             .args(["push", "origin", branch])
             .current_dir(&self.path)
@@ -1078,7 +1139,7 @@ impl GitRepository {
             .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
-            tracing::info!("✅ Git CLI push succeeded for branch: {}", branch);
+            Output::success(format!("✅ Git CLI push succeeded for branch: {branch}"));
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);

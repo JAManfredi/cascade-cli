@@ -166,6 +166,7 @@ impl Settings {
             ("bitbucket", "url") => self.bitbucket.url = value.to_string(),
             ("bitbucket", "project") => self.bitbucket.project = value.to_string(),
             ("bitbucket", "repo") => self.bitbucket.repo = value.to_string(),
+            ("bitbucket", "username") => self.bitbucket.username = Some(value.to_string()),
             ("bitbucket", "token") => self.bitbucket.token = Some(value.to_string()),
             ("bitbucket", "accept_invalid_certs") => {
                 self.bitbucket.accept_invalid_certs = Some(value.parse().map_err(|_| {
@@ -260,6 +261,7 @@ impl Settings {
             ("bitbucket", "url") => &self.bitbucket.url,
             ("bitbucket", "project") => &self.bitbucket.project,
             ("bitbucket", "repo") => &self.bitbucket.repo,
+            ("bitbucket", "username") => self.bitbucket.username.as_deref().unwrap_or(""),
             ("bitbucket", "token") => self.bitbucket.token.as_deref().unwrap_or(""),
             ("bitbucket", "accept_invalid_certs") => {
                 return Ok(self

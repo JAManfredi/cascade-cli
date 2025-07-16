@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::config::BitbucketConfig;
 use crate::errors::{CascadeError, Result};
 use base64::Engine;
@@ -54,7 +55,9 @@ impl BitbucketClient {
         // Add TLS configuration for corporate environments
         if let Some(accept_invalid_certs) = config.accept_invalid_certs {
             if accept_invalid_certs {
-                tracing::warn!("⚠️  Accepting invalid TLS certificates - use only in development!");
+                Output::warning(
+                    "⚠️  Accepting invalid TLS certificates - use only in development!",
+                );
                 client_builder = client_builder.danger_accept_invalid_certs(true);
             }
         }
@@ -72,7 +75,7 @@ impl BitbucketClient {
             })?;
 
             client_builder = client_builder.add_root_certificate(cert);
-            tracing::info!("Using custom CA bundle: {ca_bundle_path}");
+            Output::info(format!("Using custom CA bundle: {ca_bundle_path}"));
         }
 
         let client = client_builder
