@@ -218,7 +218,7 @@ impl GitRepository {
             .branch(name, &target_commit, false)
             .map_err(|e| CascadeError::branch(format!("Could not create branch '{name}': {e}")))?;
 
-        tracing::info!("Created branch '{}'", name);
+        // Branch creation logging is handled by the caller for clean output
         Ok(())
     }
 

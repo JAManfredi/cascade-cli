@@ -615,9 +615,7 @@ impl Cli {
                 commands::stack::run(validate_action).await
             }
 
-            Commands::CompletionHelper { action } => {
-                handle_completion_helper(action).await
-            }
+            Commands::CompletionHelper { action } => handle_completion_helper(action).await,
         }
     }
 
@@ -764,7 +762,7 @@ async fn handle_completion_helper(action: CompletionHelperAction) -> Result<()> 
             use crate::git::find_repository_root;
             use crate::stack::StackManager;
             use std::env;
-            
+
             // Try to get stack names, but silently fail if not in a repository
             if let Ok(current_dir) = env::current_dir() {
                 if let Ok(repo_root) = find_repository_root(&current_dir) {
@@ -779,4 +777,3 @@ async fn handle_completion_helper(action: CompletionHelperAction) -> Result<()> 
         }
     }
 }
-
