@@ -1054,11 +1054,10 @@ impl GitRepository {
                 // Create concise error message
                 let error_msg = if e.to_string().contains("authentication") {
                     format!(
-                        "Authentication failed for branch '{}'. Try: git push origin {}",
-                        branch, branch
+                        "Authentication failed for branch '{branch}'. Try: git push origin {branch}"
                     )
                 } else {
-                    format!("Failed to push branch '{}': {}", branch, e)
+                    format!("Failed to push branch '{branch}': {e}")
                 };
 
                 tracing::error!("{}", error_msg);
