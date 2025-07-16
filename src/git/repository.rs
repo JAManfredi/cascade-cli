@@ -64,6 +64,7 @@ pub struct GitRepository {
     repo: Repository,
     path: PathBuf,
     ssl_config: Option<GitSslConfig>,
+    bitbucket_token: Option<String>,
 }
 
 impl GitRepository {
@@ -80,11 +81,13 @@ impl GitRepository {
 
         // Try to load SSL configuration from cascade config
         let ssl_config = Self::load_ssl_config_from_cascade(&workdir);
+        let bitbucket_token = Self::load_bitbucket_token_from_cascade(&workdir);
 
         Ok(Self {
             repo,
             path: workdir,
             ssl_config,
+            bitbucket_token,
         })
     }
 
@@ -106,6 +109,17 @@ impl GitRepository {
         } else {
             None
         }
+    }
+
+    /// Load Bitbucket token from cascade config file if it exists
+    fn load_bitbucket_token_from_cascade(repo_path: &Path) -> Option<String> {
+        // Try to load cascade configuration
+        let config_dir = crate::config::get_repo_config_dir(repo_path).ok()?;
+        let config_path = config_dir.join("config.json");
+        let settings = crate::config::Settings::load_from_file(&config_path).ok()?;
+
+        // Return the Bitbucket token if configured
+        settings.bitbucket.token.clone()
     }
 
     /// Get repository information
@@ -590,8 +604,9 @@ impl GitRepository {
     fn configure_remote_callbacks(&self) -> Result<git2::RemoteCallbacks<'_>> {
         let mut callbacks = git2::RemoteCallbacks::new();
 
-        // Configure authentication
-        callbacks.credentials(|url, username_from_url, allowed_types| {
+        // Configure authentication with Bitbucket token support
+        let bitbucket_token = self.bitbucket_token.clone();
+        callbacks.credentials(move |url, username_from_url, allowed_types| {
             tracing::debug!(
                 "Authentication requested for URL: {}, username: {:?}, allowed_types: {:?}",
                 url,
@@ -599,19 +614,27 @@ impl GitRepository {
                 allowed_types
             );
 
+            // For HTTPS URLs, try Bitbucket token first if available
+            if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+                if let Some(token) = &bitbucket_token {
+                    if url.contains("bitbucket") {
+                        tracing::debug!("Trying Bitbucket token authentication for HTTPS URL");
+                        // Use token as username and empty password (standard for Bitbucket tokens)
+                        return git2::Cred::userpass_plaintext(token, "");
+                    }
+                }
+
+                // Fallback to default credential helper for other HTTPS URLs
+                tracing::debug!("Trying default credential helper for HTTPS authentication");
+                return git2::Cred::default();
+            }
+
             // For SSH URLs with username
             if allowed_types.contains(git2::CredentialType::SSH_KEY) {
                 if let Some(username) = username_from_url {
                     tracing::debug!("Trying SSH key authentication for user: {}", username);
                     return git2::Cred::ssh_key_from_agent(username);
                 }
-            }
-
-            // For HTTPS URLs, use default credential helper which integrates with system
-            // This will use git credential helper (e.g., osxkeychain, wincred, etc.)
-            if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
-                tracing::debug!("Trying default credential helper for HTTPS authentication");
-                return git2::Cred::default();
             }
 
             // Fallback to default for any other cases
