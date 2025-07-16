@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::config::{get_repo_config_dir, initialize_repo, Settings};
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, GitRepository};
@@ -7,22 +8,23 @@ use tracing::{info, warn};
 
 /// Run the interactive setup wizard
 pub async fn run(force: bool) -> Result<()> {
-    println!("🌊 Welcome to Cascade CLI Setup!");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("This wizard will help you configure Cascade for your repository.\n");
+    Output::section("Welcome to Cascade CLI Setup!");
+    Output::divider();
+    Output::info("This wizard will help you configure Cascade for your repository.");
+    println!();
 
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     // Step 1: Find Git repository root
-    println!("🔍 Step 1: Finding Git repository...");
+    Output::progress("Step 1: Finding Git repository...");
     let repo_root = find_repository_root(&current_dir).map_err(|_| {
         CascadeError::config(
             "No Git repository found. Please run this command from within a Git repository.",
         )
     })?;
 
-    println!("   ✅ Git repository found at: {}", repo_root.display());
+    Output::success(format!("Git repository found at: {}", repo_root.display()));
 
     let git_repo = GitRepository::open(&repo_root)?;
 
@@ -36,22 +38,22 @@ pub async fn run(force: bool) -> Result<()> {
             .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
 
         if !reinitialize {
-            println!("✅ Setup cancelled. Run with --force to reconfigure.");
+            Output::success("Setup cancelled. Run with --force to reconfigure.");
             return Ok(());
         }
     }
 
     // Step 3: Detect Bitbucket from remotes
-    println!("\n🔍 Step 2: Detecting Bitbucket configuration...");
+    Output::progress("Step 2: Detecting Bitbucket configuration...");
     let auto_config = detect_bitbucket_config(&git_repo)?;
 
     if let Some((url, project, repo)) = &auto_config {
-        println!("   ✅ Detected Bitbucket configuration:");
-        println!("      Server: {url}");
-        println!("      Project: {project}");
-        println!("      Repository: {repo}");
+        Output::success("Detected Bitbucket configuration:");
+        Output::sub_item(format!("Server: {url}"));
+        Output::sub_item(format!("Project: {project}"));
+        Output::sub_item(format!("Repository: {repo}"));
     } else {
-        println!("   ⚠️  Could not auto-detect Bitbucket configuration");
+        Output::warning("Could not auto-detect Bitbucket configuration");
     }
 
     // Step 4: Interactive configuration

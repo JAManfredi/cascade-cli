@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::cli::ConfigAction;
 use crate::config::{get_repo_config_dir, is_repo_initialized, Settings};
 use crate::errors::{CascadeError, Result};
@@ -36,34 +37,34 @@ async fn set_config_value(config_file: &std::path::Path, key: &str, value: &str)
     settings.validate()?;
     settings.save_to_file(config_file)?;
 
-    println!("✅ Configuration updated: {key} = {value}");
+    Output::success(format!("Configuration updated: {key} = {value}"));
 
     // Provide contextual hints
     match key {
         "bitbucket.token" => {
-            println!("💡 Tip: You can create a personal access token in Bitbucket Server under:");
-            println!("   Settings → Personal access tokens → Create token");
+            Output::tip("You can create a personal access token in Bitbucket Server under:");
+            Output::sub_item("Settings → Personal access tokens → Create token");
         }
         "bitbucket.url" => {
-            println!("💡 Next: Set your project and repository:");
-            println!("   ca config set bitbucket.project YOUR_PROJECT_KEY");
-            println!("   ca config set bitbucket.repo your-repo-name");
+            Output::tip("Next: Set your project and repository:");
+            Output::command_example("ca config set bitbucket.project YOUR_PROJECT_KEY");
+            Output::command_example("ca config set bitbucket.repo your-repo-name");
         }
         "bitbucket.accept_invalid_certs" => {
-            println!("💡 SSL Configuration:");
+            Output::tip("SSL Configuration:");
             if value == "true" {
-                println!("   ⚠️  SSL certificate verification is disabled (development only)");
-                println!("   This setting affects both API calls and git operations");
+                Output::warning("SSL certificate verification is disabled (development only)");
+                Output::sub_item("This setting affects both API calls and git operations");
             } else {
-                println!("   ✅ SSL certificate verification is enabled (recommended)");
-                println!("   For custom CA certificates, use: ca config set bitbucket.ca_bundle_path /path/to/ca-bundle.crt");
+                Output::success("SSL certificate verification is enabled (recommended)");
+                Output::sub_item("For custom CA certificates, use: ca config set bitbucket.ca_bundle_path /path/to/ca-bundle.crt");
             }
         }
         "bitbucket.ca_bundle_path" => {
-            println!("💡 SSL Configuration:");
-            println!("   📁 Custom CA bundle path set for SSL certificate verification");
-            println!("   This affects both API calls and git operations");
-            println!("   Make sure the file exists and contains valid PEM certificates");
+            Output::tip("SSL Configuration:");
+            Output::sub_item("Custom CA bundle path set for SSL certificate verification");
+            Output::sub_item("This affects both API calls and git operations");
+            Output::sub_item("Make sure the file exists and contains valid PEM certificates");
         }
         _ => {}
     }
@@ -88,18 +89,18 @@ async fn get_config_value(config_file: &std::path::Path, key: &str) -> Result<()
         value
     };
 
-    println!("{key} = {display_value}");
+    Output::info(format!("{key} = {display_value}"));
     Ok(())
 }
 
 async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     let settings = Settings::load_from_file(config_file)?;
 
-    println!("📋 Cascade Configuration:");
+    Output::section("Cascade Configuration");
     println!();
 
     // Bitbucket configuration
-    println!("🔗 Bitbucket Server:");
+    Output::section("Bitbucket Server");
     print_config_value(&settings, "  bitbucket.url")?;
     print_config_value(&settings, "  bitbucket.project")?;
     print_config_value(&settings, "  bitbucket.repo")?;
@@ -107,7 +108,7 @@ async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     println!();
 
     // Git configuration
-    println!("📦 Git:");
+    Output::section("Git");
     print_config_value(&settings, "  git.default_branch")?;
     print_config_value(&settings, "  git.author_name")?;
     print_config_value(&settings, "  git.author_email")?;
@@ -116,7 +117,7 @@ async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     println!();
 
     // Cascade configuration
-    println!("⚙️  Cascade:");
+    Output::section("Cascade");
     print_config_value(&settings, "  cascade.api_port")?;
     print_config_value(&settings, "  cascade.auto_cleanup")?;
     print_config_value(&settings, "  cascade.default_sync_strategy")?;
@@ -144,7 +145,7 @@ fn print_config_value(settings: &Settings, key: &str) -> Result<()> {
             value
         };
 
-    println!("{key} = {display_value}");
+    Output::sub_item(format!("{key} = {display_value}"));
     Ok(())
 }
 
@@ -155,7 +156,7 @@ async fn unset_config_value(config_file: &std::path::Path, key: &str) -> Result<
     settings.set_value(key, "")?;
     settings.save_to_file(config_file)?;
 
-    println!("✅ Configuration value unset: {key}");
+    Output::success(format!("Configuration value unset: {key}"));
     Ok(())
 }
 

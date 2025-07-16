@@ -1,4 +1,5 @@
 use crate::bitbucket::BitbucketIntegration;
+use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, GitRepository};
 use crate::stack::{StackManager, StackStatus};
@@ -503,29 +504,36 @@ async fn create_stack(
         .get_stack(&stack_id)
         .ok_or_else(|| CascadeError::config("Failed to get created stack"))?;
 
-    info!("✅ Created stack '{}'", name);
-    info!("   Stack ID: {}", stack_id);
-    info!("   Stack is now active");
-
-    // Provide helpful guidance based on the working branch situation
-    if let Some(working_branch) = &stack.working_branch {
-        info!("   Working branch: {}", working_branch);
-        info!("   Base branch: {}", stack.base_branch);
-    } else {
-        // No working branch was set (user is on base branch)
-        info!("   Base branch: {}", stack.base_branch);
-        println!();
-        println!(
-            "⚠️  Note: You're currently on the base branch '{}'",
-            stack.base_branch
-        );
-        println!("   To start adding commits to this stack, create a feature branch:");
-        println!("   git checkout -b {name}");
-        println!("   Then use 'ca push' to add commits to the stack");
-    }
+    // Use the new output format
+    Output::stack_info(
+        &name,
+        &stack_id.to_string(),
+        &stack.base_branch,
+        stack.working_branch.as_deref(),
+        true, // is_active
+    );
 
     if let Some(desc) = description {
-        info!("   Description: {}", desc);
+        Output::sub_item(format!("Description: {desc}"));
+    }
+
+    // Provide helpful guidance based on the working branch situation
+    if stack.working_branch.is_none() {
+        Output::warning(format!(
+            "You're currently on the base branch '{}'",
+            stack.base_branch
+        ));
+        Output::next_steps(&[
+            &format!("Create a feature branch: git checkout -b {name}"),
+            "Make changes and commit them",
+            "Run 'ca push' to add commits to this stack",
+        ]);
+    } else {
+        Output::next_steps(&[
+            "Make changes and commit them",
+            "Run 'ca push' to add commits to this stack",
+            "Use 'ca submit' when ready to create pull requests",
+        ]);
     }
 
     Ok(())
@@ -1023,13 +1031,15 @@ async fn push_to_stack(
     let base_branch = &active_stack.base_branch;
 
     if current_branch == *base_branch {
-        println!("🚨 WARNING: You're currently on the base branch '{base_branch}'");
-        println!("   Making commits directly on the base branch is not recommended.");
-        println!("   This can pollute the base branch with work-in-progress commits.");
+        Output::error(format!(
+            "You're currently on the base branch '{base_branch}'"
+        ));
+        Output::sub_item("Making commits directly on the base branch is not recommended.");
+        Output::sub_item("This can pollute the base branch with work-in-progress commits.");
 
         // Check if user explicitly allowed base branch work
         if allow_base_branch {
-            println!("   ⚠️  Proceeding anyway due to --allow-base-branch flag");
+            Output::warning("Proceeding anyway due to --allow-base-branch flag");
         } else {
             // Check if we have uncommitted changes
             let has_changes = repo.is_dirty()?;
@@ -1038,7 +1048,9 @@ async fn push_to_stack(
                 if auto_branch {
                     // Auto-create branch and commit changes
                     let feature_branch = format!("feature/{}-work", active_stack.name);
-                    println!("🚀 Auto-creating feature branch '{feature_branch}'...");
+                    Output::progress(format!(
+                        "Auto-creating feature branch '{feature_branch}'..."
+                    ));
 
                     repo.create_branch(&feature_branch, None)?;
                     repo.checkout_branch(&feature_branch)?;
@@ -1112,7 +1124,9 @@ async fn push_to_stack(
                     if auto_branch {
                         // Auto-create feature branch and cherry-pick commits
                         let feature_branch = format!("feature/{}-work", active_stack.name);
-                        println!("🚀 Auto-creating feature branch '{feature_branch}'...");
+                        Output::progress(format!(
+                            "Auto-creating feature branch '{feature_branch}'..."
+                        ));
 
                         repo.create_branch(&feature_branch, Some(base_branch))?;
                         repo.checkout_branch(&feature_branch)?;
@@ -1339,52 +1353,52 @@ async fn push_to_stack(
         )?;
         pushed_count += 1;
 
-        println!(
-            "✅ Pushed commit {}/{} to stack",
+        Output::success(format!(
+            "Pushed commit {}/{} to stack",
             i + 1,
             commits_to_push.len()
-        );
-        println!(
-            "   Commit: {} ({})",
+        ));
+        Output::sub_item(format!(
+            "Commit: {} ({})",
             &commit_hash[..8],
             commit_msg.split('\n').next().unwrap_or("")
-        );
-        println!("   Branch: {branch_name}");
-        println!("   Source: {commit_source_branch}");
-        println!("   Entry ID: {entry_id}");
+        ));
+        Output::sub_item(format!("Branch: {branch_name}"));
+        Output::sub_item(format!("Source: {commit_source_branch}"));
+        Output::sub_item(format!("Entry ID: {entry_id}"));
         println!();
     }
 
     // 🚨 SCATTERED COMMIT WARNING
     if source_branches.len() > 1 {
-        println!("⚠️  WARNING: Scattered Commit Detection");
-        println!(
-            "   You've pushed commits from {} different Git branches:",
+        Output::warning("Scattered Commit Detection");
+        Output::sub_item(format!(
+            "You've pushed commits from {} different Git branches:",
             source_branches.len()
-        );
+        ));
         for branch in &source_branches {
-            println!("   • {branch}");
+            Output::bullet(branch.to_string());
         }
-        println!();
-        println!("   This can lead to confusion because:");
-        println!("   • Stack appears sequential but commits are scattered across branches");
-        println!("   • Team members won't know which branch contains which work");
-        println!("   • Branch cleanup becomes unclear after merge");
-        println!("   • Rebase operations become more complex");
-        println!();
-        println!("   💡 Consider consolidating work to a single feature branch:");
-        println!("   1. Create a new feature branch: git checkout -b feature/consolidated-work");
-        println!("   2. Cherry-pick commits in order: git cherry-pick <commit1> <commit2> ...");
-        println!("   3. Delete old scattered branches");
-        println!("   4. Push the consolidated branch to your stack");
+
+        Output::section("This can lead to confusion because:");
+        Output::bullet("Stack appears sequential but commits are scattered across branches");
+        Output::bullet("Team members won't know which branch contains which work");
+        Output::bullet("Branch cleanup becomes unclear after merge");
+        Output::bullet("Rebase operations become more complex");
+
+        Output::tip("Consider consolidating work to a single feature branch:");
+        Output::bullet("Create a new feature branch: git checkout -b feature/consolidated-work");
+        Output::bullet("Cherry-pick commits in order: git cherry-pick <commit1> <commit2> ...");
+        Output::bullet("Delete old scattered branches");
+        Output::bullet("Push the consolidated branch to your stack");
         println!();
     }
 
-    println!(
-        "🎉 Successfully pushed {} commit{} to stack",
+    Output::success(format!(
+        "Successfully pushed {} commit{} to stack",
         pushed_count,
         if pushed_count == 1 { "" } else { "s" }
-    );
+    ));
 
     Ok(())
 }
@@ -1401,19 +1415,19 @@ async fn pop_from_stack(keep_branch: bool) -> Result<()> {
 
     let entry = manager.pop_from_stack()?;
 
-    info!("✅ Popped commit from stack");
-    info!(
-        "   Commit: {} ({})",
+    Output::success("Popped commit from stack");
+    Output::sub_item(format!(
+        "Commit: {} ({})",
         entry.short_hash(),
         entry.short_message(50)
-    );
-    info!("   Branch: {}", entry.branch);
+    ));
+    Output::sub_item(format!("Branch: {}", entry.branch));
 
     // Delete branch if requested and it's not the current branch
     if !keep_branch && entry.branch != repo.get_current_branch()? {
         match repo.delete_branch(&entry.branch) {
-            Ok(_) => info!("   Deleted branch: {}", entry.branch),
-            Err(e) => warn!("   Could not delete branch {}: {}", entry.branch, e),
+            Ok(_) => Output::sub_item(format!("Deleted branch: {}", entry.branch)),
+            Err(e) => Output::warning(format!("Could not delete branch {}: {}", entry.branch, e)),
         }
     }
 
@@ -1536,7 +1550,7 @@ async fn submit_entry(
     };
 
     if entries_to_submit.is_empty() {
-        println!("ℹ️  No entries to submit");
+        Output::info("No entries to submit");
         return Ok(());
     }
 
@@ -1592,19 +1606,19 @@ async fn submit_entry(
         {
             Ok(pr) => {
                 submitted_count += 1;
-                println!("✅ Entry {} - PR #{}: {}", entry_num, pr.id, pr.title);
+                Output::success(format!("Entry {} - PR #{}: {}", entry_num, pr.id, pr.title));
                 if let Some(url) = pr.web_url() {
-                    println!("   URL: {url}");
+                    Output::sub_item(format!("URL: {url}"));
                 }
-                println!(
-                    "   From: {} -> {}",
+                Output::sub_item(format!(
+                    "From: {} -> {}",
                     pr.from_ref.display_id, pr.to_ref.display_id
-                );
+                ));
                 println!();
             }
             Err(e) => {
                 failed_entries.push((*entry_num, e.to_string()));
-                println!("❌ Entry {entry_num} failed: {e}");
+                Output::error(format!("Entry {entry_num} failed: {e}"));
             }
         }
 
@@ -1613,24 +1627,24 @@ async fn submit_entry(
 
     if failed_entries.is_empty() {
         pb.finish_with_message("✅ All pull requests created successfully");
-        println!(
-            "🎉 Successfully submitted {} entr{}",
+        Output::success(format!(
+            "Successfully submitted {} entr{}",
             submitted_count,
             if submitted_count == 1 { "y" } else { "ies" }
-        );
+        ));
     } else {
         pb.abandon_with_message("⚠️  Some submissions failed");
-        println!("📊 Submission Summary:");
-        println!("   ✅ Successful: {submitted_count}");
-        println!("   ❌ Failed: {}", failed_entries.len());
-        println!();
-        println!("💡 Failed entries:");
+        Output::section("Submission Summary");
+        Output::bullet(format!("Successful: {submitted_count}"));
+        Output::bullet(format!("Failed: {}", failed_entries.len()));
+
+        Output::section("Failed entries:");
         for (entry_num, error) in failed_entries {
-            println!("   - Entry {entry_num}: {error}");
+            Output::bullet(format!("Entry {entry_num}: {error}"));
         }
-        println!();
-        println!("💡 You can retry failed entries individually:");
-        println!("   ca stack submit <ENTRY_NUMBER>");
+
+        Output::tip("You can retry failed entries individually:");
+        Output::command_example("ca stack submit <ENTRY_NUMBER>");
     }
 
     Ok(())
@@ -1670,12 +1684,12 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     };
     let stack_id = stack.id;
 
-    println!("📋 Stack: {}", stack.name);
-    println!("   ID: {}", stack.id);
-    println!("   Base: {}", stack.base_branch);
+    Output::section(format!("Stack: {}", stack.name));
+    Output::sub_item(format!("ID: {}", stack.id));
+    Output::sub_item(format!("Base: {}", stack.base_branch));
 
     if let Some(description) = &stack.description {
-        println!("   Description: {description}");
+        Output::sub_item(format!("Description: {description}"));
     }
 
     // Create Bitbucket integration (this takes ownership of stack_manager)
@@ -1684,28 +1698,31 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
     // Check stack status
     match integration.check_stack_status(&stack_id).await {
         Ok(status) => {
-            println!("\n📊 Pull Request Status:");
-            println!("   Total entries: {}", status.total_entries);
-            println!("   Submitted: {}", status.submitted_entries);
-            println!("   Open PRs: {}", status.open_prs);
-            println!("   Merged PRs: {}", status.merged_prs);
-            println!("   Declined PRs: {}", status.declined_prs);
-            println!("   Completion: {:.1}%", status.completion_percentage());
+            Output::section("Pull Request Status");
+            Output::sub_item(format!("Total entries: {}", status.total_entries));
+            Output::sub_item(format!("Submitted: {}", status.submitted_entries));
+            Output::sub_item(format!("Open PRs: {}", status.open_prs));
+            Output::sub_item(format!("Merged PRs: {}", status.merged_prs));
+            Output::sub_item(format!("Declined PRs: {}", status.declined_prs));
+            Output::sub_item(format!(
+                "Completion: {:.1}%",
+                status.completion_percentage()
+            ));
 
             if !status.pull_requests.is_empty() {
-                println!("\n📋 Pull Requests:");
+                Output::section("Pull Requests");
                 for pr in &status.pull_requests {
                     let state_icon = match pr.state {
                         crate::bitbucket::PullRequestState::Open => "🔄",
                         crate::bitbucket::PullRequestState::Merged => "✅",
                         crate::bitbucket::PullRequestState::Declined => "❌",
                     };
-                    println!(
-                        "   {} PR #{}: {} ({} -> {})",
+                    Output::bullet(format!(
+                        "{} PR #{}: {} ({} -> {})",
                         state_icon, pr.id, pr.title, pr.from_ref.display_id, pr.to_ref.display_id
-                    );
+                    ));
                     if let Some(url) = pr.web_url() {
-                        println!("      URL: {url}");
+                        Output::sub_item(format!("URL: {url}"));
                     }
                 }
             }
@@ -1846,24 +1863,24 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     let base_branch = active_stack.base_branch.clone();
     let stack_name = active_stack.name.clone();
 
-    println!("🔄 Syncing stack '{stack_name}' with remote...");
+    Output::progress(format!("Syncing stack '{stack_name}' with remote..."));
 
     // Step 1: Pull latest changes from base branch
-    println!("📥 Pulling latest changes from '{base_branch}'...");
+    Output::section(format!("Pulling latest changes from '{base_branch}'"));
 
     // Checkout base branch first
     match git_repo.checkout_branch(&base_branch) {
         Ok(_) => {
-            println!("   ✅ Switched to '{base_branch}'");
+            Output::sub_item(format!("Switched to '{base_branch}'"));
 
             // Pull latest changes
             match git_repo.pull(&base_branch) {
                 Ok(_) => {
-                    println!("   ✅ Successfully pulled latest changes");
+                    Output::sub_item("Successfully pulled latest changes");
                 }
                 Err(e) => {
                     if force {
-                        println!("   ⚠️  Failed to pull: {e} (continuing due to --force)");
+                        Output::warning(format!("Failed to pull: {e} (continuing due to --force)"));
                     } else {
                         return Err(CascadeError::branch(format!(
                             "Failed to pull latest changes from '{base_branch}': {e}. Use --force to continue anyway."
@@ -1874,9 +1891,9 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         }
         Err(e) => {
             if force {
-                println!(
-                    "   ⚠️  Failed to checkout '{base_branch}': {e} (continuing due to --force)"
-                );
+                Output::warning(format!(
+                    "Failed to checkout '{base_branch}': {e} (continuing due to --force)"
+                ));
             } else {
                 return Err(CascadeError::branch(format!(
                     "Failed to checkout base branch '{base_branch}': {e}. Use --force to continue anyway."
@@ -1886,7 +1903,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     }
 
     // Step 2: Check if stack needs rebase
-    println!("🔍 Checking if stack needs rebase...");
+    Output::section("Checking if stack needs rebase");
 
     let mut updated_stack_manager = StackManager::new(&repo_root)?;
     let stack_id = active_stack.id;
@@ -1897,10 +1914,12 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
             if let Some(updated_stack) = updated_stack_manager.get_stack(&stack_id) {
                 match &updated_stack.status {
                     crate::stack::StackStatus::NeedsSync => {
-                        println!("   🔄 Stack needs rebase due to new commits on '{base_branch}'");
+                        Output::sub_item(format!(
+                            "Stack needs rebase due to new commits on '{base_branch}'"
+                        ));
 
                         // Step 3: Rebase the stack
-                        println!("🔀 Rebasing stack onto updated '{base_branch}'...");
+                        Output::section(format!("Rebasing stack onto updated '{base_branch}'"));
 
                         // Load configuration for Bitbucket integration
                         let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
@@ -1933,17 +1952,17 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
                         match rebase_manager.rebase_stack(&stack_id) {
                             Ok(result) => {
-                                println!("   ✅ Rebase completed successfully!");
+                                Output::success("Rebase completed successfully!");
 
                                 if !result.branch_mapping.is_empty() {
-                                    println!("   📋 Updated branches:");
+                                    Output::section("Updated branches:");
                                     for (old, new) in &result.branch_mapping {
-                                        println!("      {old} → {new}");
+                                        Output::bullet(format!("{old} → {new}"));
                                     }
 
                                     // Update PRs if enabled
                                     if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
-                                        println!("   🔄 Updating pull requests...");
+                                        Output::sub_item("Updating pull requests...");
 
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
@@ -1962,43 +1981,45 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                                         {
                                             Ok(updated_prs) => {
                                                 if !updated_prs.is_empty() {
-                                                    println!(
-                                                        "      ✅ Updated {} pull requests",
+                                                    Output::sub_item(format!(
+                                                        "Updated {} pull requests",
                                                         updated_prs.len()
-                                                    );
+                                                    ));
                                                 }
                                             }
                                             Err(e) => {
-                                                println!(
-                                                    "      ⚠️  Failed to update pull requests: {e}"
-                                                );
+                                                Output::warning(format!(
+                                                    "Failed to update pull requests: {e}"
+                                                ));
                                             }
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                println!("   ❌ Rebase failed: {e}");
-                                println!("   💡 To resolve conflicts:");
-                                println!("      1. Fix conflicts in the affected files");
-                                println!("      2. Stage resolved files: git add <files>");
-                                println!("      3. Continue: ca stack continue-rebase");
+                                Output::error(format!("Rebase failed: {e}"));
+                                Output::tip("To resolve conflicts:");
+                                Output::bullet("Fix conflicts in the affected files");
+                                Output::bullet("Stage resolved files: git add <files>");
+                                Output::bullet("Continue: ca stack continue-rebase");
                                 return Err(e);
                             }
                         }
                     }
                     crate::stack::StackStatus::Clean => {
-                        println!("   ✅ Stack is already up to date");
+                        Output::success("Stack is already up to date");
                     }
                     other => {
-                        println!("   ℹ️  Stack status: {other:?}");
+                        Output::info(format!("Stack status: {other:?}"));
                     }
                 }
             }
         }
         Err(e) => {
             if force {
-                println!("   ⚠️  Failed to check stack status: {e} (continuing due to --force)");
+                Output::warning(format!(
+                    "Failed to check stack status: {e} (continuing due to --force)"
+                ));
             } else {
                 return Err(e);
             }
@@ -2007,22 +2028,23 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
     // Step 4: Cleanup merged branches (optional)
     if !skip_cleanup {
-        println!("🧹 Checking for merged branches to clean up...");
+        Output::section("Checking for merged branches to clean up");
         // TODO: Implement merged branch cleanup
         // This would:
         // 1. Find branches that have been merged into base
         // 2. Ask user if they want to delete them
         // 3. Remove them from the stack metadata
-        println!("   ℹ️  Branch cleanup not yet implemented");
+        Output::info("Branch cleanup not yet implemented");
     } else {
-        println!("⏭️  Skipping branch cleanup");
+        Output::info("Skipping branch cleanup");
     }
 
-    println!("🎉 Sync completed successfully!");
-    println!("   Base branch: {base_branch}");
-    println!("   💡 Next steps:");
-    println!("      • Review your updated stack: ca stack show");
-    println!("      • Check PR status: ca stack status");
+    Output::success("Sync completed successfully!");
+    Output::sub_item(format!("Base branch: {base_branch}"));
+    Output::next_steps(&[
+        "Review your updated stack: ca stack show",
+        "Check PR status: ca stack status",
+    ]);
 
     Ok(())
 }
@@ -2066,12 +2088,12 @@ async fn rebase_stack(
         .clone();
 
     if active_stack.entries.is_empty() {
-        println!("ℹ️  Stack is empty. Nothing to rebase.");
+        Output::info("Stack is empty. Nothing to rebase.");
         return Ok(());
     }
 
-    println!("🔄 Rebasing stack: {}", active_stack.name);
-    println!("   Base: {}", active_stack.base_branch);
+    Output::progress(format!("Rebasing stack: {}", active_stack.name));
+    Output::sub_item(format!("Base: {}", active_stack.base_branch));
 
     // Determine rebase strategy
     let rebase_strategy = if let Some(cli_strategy) = strategy {
@@ -2112,30 +2134,35 @@ async fn rebase_stack(
     let mut rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
     if rebase_manager.is_rebase_in_progress() {
-        println!("⚠️  Rebase already in progress!");
-        println!("   Use 'git status' to check the current state");
-        println!("   Use 'ca stack continue-rebase' to continue");
-        println!("   Use 'ca stack abort-rebase' to abort");
+        Output::warning("Rebase already in progress!");
+        Output::tip("Use 'git status' to check the current state");
+        Output::next_steps(&[
+            "Run 'ca stack continue-rebase' to continue",
+            "Run 'ca stack abort-rebase' to abort",
+        ]);
         return Ok(());
     }
 
     // Perform the rebase
     match rebase_manager.rebase_stack(&stack_id) {
         Ok(result) => {
-            println!("🎉 Rebase completed!");
-            println!("   {}", result.get_summary());
+            Output::success("Rebase completed!");
+            Output::sub_item(result.get_summary());
 
             if result.has_conflicts() {
-                println!("   ⚠️  {} conflicts were resolved", result.conflicts.len());
+                Output::warning(format!(
+                    "{} conflicts were resolved",
+                    result.conflicts.len()
+                ));
                 for conflict in &result.conflicts {
-                    println!("      - {}", &conflict[..8.min(conflict.len())]);
+                    Output::bullet(&conflict[..8.min(conflict.len())]);
                 }
             }
 
             if !result.branch_mapping.is_empty() {
-                println!("   📋 Branch mapping:");
+                Output::section("Branch mapping");
                 for (old, new) in &result.branch_mapping {
-                    println!("      {old} -> {new}");
+                    Output::bullet(format!("{old} -> {new}"));
                 }
 
                 // Handle PR updates if enabled

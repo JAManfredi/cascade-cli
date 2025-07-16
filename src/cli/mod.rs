@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod output;
 
 use crate::errors::Result;
 use clap::{Parser, Subcommand};
