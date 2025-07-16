@@ -63,22 +63,34 @@ impl StackManager {
                 let config_file = config_dir.join("config.json");
                 let settings = Settings::load_from_file(&config_file).unwrap_or_default();
                 let configured_default = &settings.git.default_branch;
-                
+
                 info!("Using configured default branch: {}", configured_default);
-                
+
                 // Try configured default branch first
                 if repo.branch_exists(configured_default) {
-                    info!("Found configured default branch locally: {}", configured_default);
+                    info!(
+                        "Found configured default branch locally: {}",
+                        configured_default
+                    );
                     configured_default.clone()
                 } else if repo.branch_exists("main") {
-                    info!("Configured default branch '{}' not found, falling back to 'main'", configured_default);
+                    info!(
+                        "Configured default branch '{}' not found, falling back to 'main'",
+                        configured_default
+                    );
                     "main".to_string()
                 } else if repo.branch_exists("master") {
-                    info!("Configured default branch '{}' not found, falling back to 'master'", configured_default);
+                    info!(
+                        "Configured default branch '{}' not found, falling back to 'master'",
+                        configured_default
+                    );
                     "master".to_string()
                 } else {
                     // Use configured default even if it doesn't exist yet (might be created later)
-                    info!("Using configured default branch '{}' even though it doesn't exist locally", configured_default);
+                    info!(
+                        "Using configured default branch '{}' even though it doesn't exist locally",
+                        configured_default
+                    );
                     configured_default.clone()
                 }
             }
