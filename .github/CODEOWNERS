@@ -1,0 +1,9 @@
+# Global code owner - all files require review from JAManfredi
+* @JAManfredi
+
+# Specific areas that definitely need owner review
+/src/             @JAManfredi
+/Cargo.toml       @JAManfredi
+/Cargo.lock       @JAManfredi
+/.github/         @JAManfredi
+/scripts/         @JAManfredi
