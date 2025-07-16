@@ -712,9 +712,7 @@ impl GitRepository {
                     });
                     ssl_configured = true;
                 } else if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
-                    Output::info(format!(
-                        "Using custom CA bundle from git config: {ca_path}"
-                    ));
+                    Output::info(format!("Using custom CA bundle from git config: {ca_path}"));
                     callbacks.certificate_check(|_cert, host| {
                         tracing::debug!("Using git config CA bundle for host: {}", host);
                         Ok(git2::CertificateCheckStatus::CertificateOk)
