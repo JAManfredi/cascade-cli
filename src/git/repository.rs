@@ -296,7 +296,7 @@ impl GitRepository {
             .set_head(&format!("refs/heads/{name}"))
             .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{name}': {e}")))?;
 
-        Output::success(format!("Switched to branch '{}'", name));
+        Output::success(format!("Switched to branch '{name}'"));
         Ok(())
     }
 
@@ -350,8 +350,7 @@ impl GitRepository {
         })?;
 
         Output::success(format!(
-            "Checked out commit '{}' (detached HEAD)",
-            commit_hash
+            "Checked out commit '{commit_hash}' (detached HEAD)"
         ));
         Ok(())
     }
@@ -487,7 +486,7 @@ impl GitRepository {
             )
             .map_err(CascadeError::Git)?;
 
-        Output::success(format!("Created commit: {} - {}", commit_id, message));
+        Output::success(format!("Created commit: {commit_id} - {message}"));
         Ok(commit_id.to_string())
     }
 
@@ -688,8 +687,7 @@ impl GitRepository {
                 ssl_configured = true;
             } else if let Some(ca_path) = &ssl_config.ca_bundle_path {
                 Output::info(format!(
-                    "Using custom CA bundle from Cascade config: {}",
-                    ca_path
+                    "Using custom CA bundle from Cascade config: {ca_path}"
                 ));
                 callbacks.certificate_check(|_cert, host| {
                     tracing::debug!("Using custom CA bundle for host: {}", host);
@@ -715,8 +713,7 @@ impl GitRepository {
                     ssl_configured = true;
                 } else if let Ok(ca_path) = config.get_string("http.sslCAInfo") {
                     Output::info(format!(
-                        "Using custom CA bundle from git config: {}",
-                        ca_path
+                        "Using custom CA bundle from git config: {ca_path}"
                     ));
                     callbacks.certificate_check(|_cert, host| {
                         tracing::debug!("Using git config CA bundle for host: {}", host);
@@ -1122,11 +1119,10 @@ impl GitRepository {
                 // Create concise error message
                 let error_msg = if e.to_string().contains("authentication") {
                     format!(
-                        "Authentication failed for branch '{}'. Try: git push origin {}",
-                        branch, branch
+                        "Authentication failed for branch '{branch}'. Try: git push origin {branch}"
                     )
                 } else {
-                    format!("Failed to push branch '{}': {}", branch, e)
+                    format!("Failed to push branch '{branch}': {e}")
                 };
 
                 tracing::error!("{}", error_msg);
@@ -1145,7 +1141,7 @@ impl GitRepository {
             .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
-            Output::success(format!("✅ Git CLI push succeeded for branch: {}", branch));
+            Output::success(format!("✅ Git CLI push succeeded for branch: {branch}"));
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);

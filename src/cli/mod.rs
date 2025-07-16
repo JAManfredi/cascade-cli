@@ -768,7 +768,7 @@ async fn handle_completion_helper(action: CompletionHelperAction) -> Result<()> 
                 if let Ok(repo_root) = find_repository_root(&current_dir) {
                     if let Ok(manager) = StackManager::new(&repo_root) {
                         for (_, name, _, _, _) in manager.list_stacks() {
-                            println!("{}", name);
+                            println!("{name}");
                         }
                     }
                 }

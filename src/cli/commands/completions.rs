@@ -360,6 +360,44 @@ fn check_completion_installed(shell: Shell) -> bool {
     possible_paths.iter().any(|path| path.exists())
 }
 
+/// Generate custom completion logic for dynamic values
+fn generate_custom_completion(shell: Shell) -> String {
+    match shell {
+        Shell::Bash => {
+            r#"
+# Custom completion for ca switch command
+_ca_switch_completion() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local stacks=$(ca completion-helper stack-names 2>/dev/null)
+    COMPREPLY=($(compgen -W "$stacks" -- "$cur"))
+}
+
+# Replace the default completion for 'ca switch' with our custom function
+complete -F _ca_switch_completion ca
+"#.to_string()
+        }
+        Shell::Zsh => {
+            r#"
+# Custom completion for ca switch command
+_ca_switch_completion() {
+    local stacks=($(ca completion-helper stack-names 2>/dev/null))
+    _describe 'stacks' stacks
+}
+
+# Override the switch completion
+compdef _ca_switch_completion ca switch
+"#.to_string()
+        }
+        Shell::Fish => {
+            r#"
+# Custom completion for ca switch command
+complete -c ca -f -n '__fish_seen_subcommand_from switch' -a '(ca completion-helper stack-names 2>/dev/null)'
+"#.to_string()
+        }
+        _ => String::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -397,43 +435,5 @@ mod tests {
 
         // Clean up
         std::env::remove_var("SHELL");
-    }
-}
-
-/// Generate custom completion logic for dynamic values
-fn generate_custom_completion(shell: Shell) -> String {
-    match shell {
-        Shell::Bash => {
-            r#"
-# Custom completion for ca switch command
-_ca_switch_completion() {
-    local cur="${COMP_WORDS[COMP_CWORD]}"
-    local stacks=$(ca completion-helper stack-names 2>/dev/null)
-    COMPREPLY=($(compgen -W "$stacks" -- "$cur"))
-}
-
-# Replace the default completion for 'ca switch' with our custom function
-complete -F _ca_switch_completion ca
-"#.to_string()
-        }
-        Shell::Zsh => {
-            r#"
-# Custom completion for ca switch command
-_ca_switch_completion() {
-    local stacks=($(ca completion-helper stack-names 2>/dev/null))
-    _describe 'stacks' stacks
-}
-
-# Override the switch completion
-compdef _ca_switch_completion ca switch
-"#.to_string()
-        }
-        Shell::Fish => {
-            r#"
-# Custom completion for ca switch command
-complete -c ca -f -n '__fish_seen_subcommand_from switch' -a '(ca completion-helper stack-names 2>/dev/null)'
-"#.to_string()
-        }
-        _ => String::new(),
     }
 }

@@ -75,7 +75,7 @@ impl BitbucketClient {
             })?;
 
             client_builder = client_builder.add_root_certificate(cert);
-            Output::info(format!("Using custom CA bundle: {}", ca_bundle_path));
+            Output::info(format!("Using custom CA bundle: {ca_bundle_path}"));
         }
 
         let client = client_builder
