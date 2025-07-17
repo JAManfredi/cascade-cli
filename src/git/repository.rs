@@ -846,8 +846,6 @@ impl GitRepository {
         Ok(remote.url().unwrap_or("unknown").to_string())
     }
 
-
-
     /// Cherry-pick a specific commit to the current branch
     pub fn cherry_pick(&self, commit_hash: &str) -> Result<String> {
         tracing::debug!("Cherry-picking commit {}", commit_hash);
