@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::config::Settings;
 use crate::errors::{CascadeError, Result};
 use crate::git::find_repository_root;
@@ -115,7 +116,7 @@ impl HooksManager {
 
     /// Install only essential hooks (for setup) - excludes post-commit
     pub fn install_essential(&self) -> Result<()> {
-        println!("🪝 Installing essential Cascade Git hooks...");
+        Output::progress("Installing essential Cascade Git hooks");
 
         let essential_hooks = vec![HookType::PrePush, HookType::CommitMsg, HookType::PreCommit];
 
@@ -123,11 +124,11 @@ impl HooksManager {
             self.install_hook(&hook)?;
         }
 
-        println!("✅ Essential Cascade hooks installed successfully!");
-        println!(
-            "💡 Note: Post-commit hook available separately with 'ca hooks install post-commit'"
+        Output::success("Essential Cascade hooks installed successfully!");
+        Output::tip(
+            "Note: Post-commit hook available separately with 'ca hooks install post-commit'",
         );
-        println!("\n💡 Hooks installed:");
+        Output::section("Hooks installed");
         self.list_installed_hooks()?;
 
         Ok(())
@@ -147,7 +148,7 @@ impl HooksManager {
             self.confirm_installation()?;
         }
 
-        println!("🪝 Installing Cascade Git hooks...");
+        Output::progress("Installing Cascade Git hooks");
 
         let hooks = vec![
             HookType::PostCommit,
@@ -160,8 +161,8 @@ impl HooksManager {
             self.install_hook(&hook)?;
         }
 
-        println!("✅ All Cascade hooks installed successfully!");
-        println!("\n💡 Hooks installed:");
+        Output::success("All Cascade hooks installed successfully!");
+        Output::section("Hooks installed");
         self.list_installed_hooks()?;
 
         Ok(())
@@ -178,7 +179,7 @@ impl HooksManager {
             fs::copy(&hook_path, &backup_path).map_err(|e| {
                 CascadeError::config(format!("Failed to backup existing hook: {e}"))
             })?;
-            println!("📦 Backed up existing {} hook", hook_type.filename());
+            Output::info(format!("Backed up existing {} hook", hook_type.filename()));
         }
 
         // Write new hook
@@ -189,13 +190,13 @@ impl HooksManager {
         crate::utils::platform::make_executable(&hook_path)
             .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {e}")))?;
 
-        println!("✅ Installed {} hook", hook_type.filename());
+        Output::success(format!("Installed {} hook", hook_type.filename()));
         Ok(())
     }
 
     /// Remove all Cascade hooks
     pub fn uninstall_all(&self) -> Result<()> {
-        println!("🗑️ Removing Cascade Git hooks...");
+        Output::progress("Removing Cascade Git hooks");
 
         let hooks = vec![
             HookType::PostCommit,
@@ -208,7 +209,7 @@ impl HooksManager {
             self.uninstall_hook(&hook)?;
         }
 
-        println!("✅ All Cascade hooks removed!");
+        Output::success("All Cascade hooks removed!");
         Ok(())
     }
 
@@ -239,18 +240,18 @@ impl HooksManager {
                     fs::rename(&backup_path, &hook_path).map_err(|e| {
                         CascadeError::config(format!("Failed to restore backup: {e}"))
                     })?;
-                    println!("📦 Restored original {} hook", hook_type.filename());
+                    Output::info(format!("Restored original {} hook", hook_type.filename()));
                 } else {
-                    println!("🗑️ Removed {} hook", hook_type.filename());
+                    Output::info(format!("Removed {} hook", hook_type.filename()));
                 }
             } else {
-                println!(
-                    "⚠️ {} hook exists but is not a Cascade hook, skipping",
+                Output::warning(format!(
+                    "{} hook exists but is not a Cascade hook, skipping",
                     hook_type.filename()
-                );
+                ));
             }
         } else {
-            println!("ℹ️ {} hook not found", hook_type.filename());
+            Output::info(format!("{} hook not found", hook_type.filename()));
         }
 
         Ok(())
@@ -265,14 +266,11 @@ impl HooksManager {
             HookType::PrepareCommitMsg,
         ];
 
-        println!("\n📋 Git Hooks Status:");
-        println!("┌─────────────────────┬──────────┬─────────────────────────────────┐");
-        println!("│ Hook                │ Status   │ Description                     │");
-        println!("├─────────────────────┼──────────┼─────────────────────────────────┤");
+        Output::section("Git Hooks Status");
 
         for hook in hooks {
             let hook_path = self.hooks_dir.join(hook.filename());
-            let status = if hook_path.exists() {
+            if hook_path.exists() {
                 let content = fs::read_to_string(&hook_path).unwrap_or_default();
                 // Check for platform-appropriate hook marker
                 let is_cascade_hook = if cfg!(windows) {
@@ -282,22 +280,22 @@ impl HooksManager {
                 };
 
                 if is_cascade_hook {
-                    "✅ Cascade"
+                    Output::success(format!("{}: {}", hook.filename(), hook.description()));
                 } else {
-                    "⚠️ Custom "
+                    Output::warning(format!(
+                        "{}: {} (Custom)",
+                        hook.filename(),
+                        hook.description()
+                    ));
                 }
             } else {
-                "❌ Missing"
-            };
-
-            println!(
-                "│ {:19} │ {:8} │ {:31} │",
-                hook.filename(),
-                status,
-                hook.description()
-            );
+                Output::error(format!(
+                    "{}: {} (Missing)",
+                    hook.filename(),
+                    hook.description()
+                ));
+            }
         }
-        println!("└─────────────────────┴──────────┴─────────────────────────────────┘");
 
         Ok(())
     }
@@ -880,30 +878,30 @@ echo "✅ Commit message validation passed"
 
     /// Validate prerequisites for hook installation
     pub fn validate_prerequisites(&self) -> Result<()> {
-        println!("🔍 Checking prerequisites for Cascade hooks...");
+        Output::check_start("Checking prerequisites for Cascade hooks");
 
         // 1. Check repository type
         let repo_type = self.detect_repository_type()?;
         match repo_type {
             RepositoryType::Bitbucket => {
-                println!("✅ Bitbucket repository detected");
-                println!("💡 Hooks will work great with 'ca submit' and 'ca autoland' for Bitbucket integration");
+                Output::success("Bitbucket repository detected");
+                Output::tip("Hooks will work great with 'ca submit' and 'ca autoland' for Bitbucket integration");
             }
             RepositoryType::GitHub => {
-                println!("✅ GitHub repository detected");
-                println!("💡 Consider setting up GitHub Actions for CI/CD integration");
+                Output::success("GitHub repository detected");
+                Output::tip("Consider setting up GitHub Actions for CI/CD integration");
             }
             RepositoryType::GitLab => {
-                println!("✅ GitLab repository detected");
-                println!("💡 GitLab CI integration works well with Cascade stacks");
+                Output::success("GitLab repository detected");
+                Output::tip("GitLab CI integration works well with Cascade stacks");
             }
             RepositoryType::AzureDevOps => {
-                println!("✅ Azure DevOps repository detected");
-                println!("💡 Azure Pipelines can be configured to work with Cascade workflows");
+                Output::success("Azure DevOps repository detected");
+                Output::tip("Azure Pipelines can be configured to work with Cascade workflows");
             }
             RepositoryType::Unknown => {
-                println!(
-                    "ℹ️ Unknown repository type - hooks will still work for local Git operations"
+                Output::info(
+                    "Unknown repository type - hooks will still work for local Git operations",
                 );
             }
         }
@@ -946,7 +944,7 @@ echo "✅ Commit message validation passed"
             ));
         }
 
-        println!("✅ Prerequisites validation passed");
+        Output::success("Prerequisites validation passed");
         Ok(())
     }
 
@@ -974,10 +972,10 @@ echo "✅ Commit message validation passed"
                 ));
             }
             BranchType::Feature => {
-                println!("✅ Feature branch detected - suitable for stacked development");
+                Output::success("Feature branch detected - suitable for stacked development");
             }
             BranchType::Unknown => {
-                println!("⚠️ Unknown branch type - proceeding with caution");
+                Output::warning("Unknown branch type - proceeding with caution");
             }
         }
 
@@ -986,10 +984,7 @@ echo "✅ Commit message validation passed"
 
     /// Confirm installation with user
     pub fn confirm_installation(&self) -> Result<()> {
-        println!("\n📋 Hook Installation Summary:");
-        println!("┌─────────────────────┬─────────────────────────────────┐");
-        println!("│ Hook                │ Description                     │");
-        println!("├─────────────────────┼─────────────────────────────────┤");
+        Output::section("Hook Installation Summary");
 
         let hooks = vec![
             HookType::PostCommit,
@@ -999,24 +994,25 @@ echo "✅ Commit message validation passed"
         ];
 
         for hook in &hooks {
-            println!("│ {:19} │ {:31} │", hook.filename(), hook.description());
+            Output::sub_item(format!("{}: {}", hook.filename(), hook.description()));
         }
-        println!("└─────────────────────┴─────────────────────────────────┘");
 
-        println!("\n🔄 These hooks will automatically:");
-        println!("• Add commits to your active stack");
-        println!("• Validate commit messages");
-        println!("• Prevent force pushes that break stack integrity");
-        println!("• Add stack context to commit messages");
+        println!();
+        Output::section("These hooks will automatically");
+        Output::bullet("Add commits to your active stack");
+        Output::bullet("Validate commit messages");
+        Output::bullet("Prevent force pushes that break stack integrity");
+        Output::bullet("Add stack context to commit messages");
 
-        println!("\n✨ With hooks + new defaults, your workflow becomes:");
-        println!("  git commit       → Auto-added to stack");
-        println!("  ca push          → Pushes all by default");
-        println!("  ca submit        → Submits all by default");
-        println!("  ca autoland      → Auto-merges when ready");
+        println!();
+        Output::section("With hooks + new defaults, your workflow becomes");
+        Output::sub_item("git commit       → Auto-added to stack");
+        Output::sub_item("ca push          → Pushes all by default");
+        Output::sub_item("ca submit        → Submits all by default");
+        Output::sub_item("ca autoland      → Auto-merges when ready");
 
         use std::io::{self, Write};
-        print!("\n❓ Install Cascade hooks? [Y/n]: ");
+        print!("\nInstall Cascade hooks? [Y/n]: ");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
@@ -1024,7 +1020,7 @@ echo "✅ Commit message validation passed"
         let input = input.trim().to_lowercase();
 
         if input.is_empty() || input == "y" || input == "yes" {
-            println!("✅ Proceeding with installation");
+            Output::success("Proceeding with installation");
             Ok(())
         } else {
             Err(CascadeError::config(

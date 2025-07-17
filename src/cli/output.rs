@@ -89,6 +89,21 @@ impl Output {
     pub fn command_example<T: Display>(command: T) {
         println!("  {}", style(command).yellow());
     }
+
+    /// Print a check start message
+    pub fn check_start<T: Display>(message: T) {
+        println!("\n{} {}", style("🔍").bright(), style(message).bold());
+    }
+
+    /// Print a solution message
+    pub fn solution<T: Display>(message: T) {
+        println!("     {}: {}", style("Solution").yellow(), message);
+    }
+
+    /// Print a numbered item
+    pub fn numbered_item<T: Display>(number: usize, message: T) {
+        println!("  {}. {}", style(number).cyan(), message);
+    }
 }
 
 /// Emojis for different contexts

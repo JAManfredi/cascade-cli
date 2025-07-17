@@ -1135,14 +1135,14 @@ impl GitRepository {
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
+            let _stdout = String::from_utf8_lossy(&output.stdout);
             // Extract the most relevant error message
             let error_msg = if stderr.contains("SSL_connect") || stderr.contains("SSL_ERROR") {
-                format!("Network error: Unable to connect to repository (VPN may be required)")
+                "Network error: Unable to connect to repository (VPN may be required)".to_string()
             } else if stderr.contains("repository") && stderr.contains("not found") {
-                format!("Repository not found - check your Bitbucket configuration")
+                "Repository not found - check your Bitbucket configuration".to_string()
             } else if stderr.contains("authentication") || stderr.contains("403") {
-                format!("Authentication failed - check your credentials")
+                "Authentication failed - check your credentials".to_string()
             } else {
                 // For other errors, just show the stderr without the verbose prefix
                 stderr.trim().to_string()

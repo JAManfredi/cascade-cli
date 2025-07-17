@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use crate::git::find_repository_root;
 use crate::stack::{Stack, StackManager};
@@ -664,7 +665,7 @@ pub async fn show_stack(
         fs::write(&file_path, diagram).map_err(|e| {
             CascadeError::config(format!("Failed to write to file '{file_path}': {e}"))
         })?;
-        println!("✅ Stack diagram saved to: {file_path}");
+        Output::success(format!("Stack diagram saved to: {file_path}"));
     } else {
         println!("{diagram}");
     }
@@ -712,7 +713,7 @@ pub async fn show_dependencies(
         fs::write(&file_path, diagram).map_err(|e| {
             CascadeError::config(format!("Failed to write to file '{file_path}': {e}"))
         })?;
-        println!("✅ Dependency graph saved to: {file_path}");
+        Output::success(format!("Dependency graph saved to: {file_path}"));
     } else {
         println!("{diagram}");
     }

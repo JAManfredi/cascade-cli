@@ -59,17 +59,21 @@ impl BitbucketIntegration {
                                         .next()
                                         .map(|s| s.trim().to_string())
                                 }),
-                                &stack,
+                                stack,
                                 entry,
                             )?;
 
                             // Update the PR description
-                            match self.pr_manager.update_pull_request(
-                                pr_id,
-                                None, // Don't change title
-                                updated_description,
-                                pr.version,
-                            ).await {
+                            match self
+                                .pr_manager
+                                .update_pull_request(
+                                    pr_id,
+                                    None, // Don't change title
+                                    updated_description,
+                                    pr.version,
+                                )
+                                .await
+                            {
                                 Ok(_) => {
                                     updated_prs.push(pr_id);
                                 }
@@ -353,11 +357,7 @@ impl BitbucketIntegration {
     ) -> Result<Option<String>> {
         let hierarchy = self.generate_stack_hierarchy(stack, current_entry)?;
 
-        let footer = format!(
-            "\n\n---\n\n## 📚 Stack: {}\n\n{}",
-            stack.name,
-            hierarchy
-        );
+        let footer = format!("\n\n---\n\n## 📚 Stack: {}\n\n{}", stack.name, hierarchy);
 
         match description {
             Some(desc) => Ok(Some(format!("{desc}{footer}"))),
@@ -406,10 +406,7 @@ impl BitbucketIntegration {
 
             hierarchy.push_str(&format!(
                 "{}{}{} {}\n",
-                connector,
-                entry.branch,
-                pr_info,
-                indicator
+                connector, entry.branch, pr_info, indicator
             ));
         }
 
@@ -419,7 +416,7 @@ impl BitbucketIntegration {
         if let Some(current_index) = stack.entries.iter().position(|e| e.id == current_entry.id) {
             let position = current_index + 1;
             let total = stack.entries.len();
-            hierarchy.push_str(&format!("**Position:** {} of {} in stack", position, total));
+            hierarchy.push_str(&format!("**Position:** {position} of {total} in stack"));
         }
 
         Ok(hierarchy)

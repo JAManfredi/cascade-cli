@@ -38,24 +38,25 @@ pub async fn run(bitbucket_url: Option<String>, force: bool) -> Result<()> {
     initialize_repo(&repo_root, bitbucket_url.clone())?;
 
     // Print success message
-    println!("✅ Cascade repository initialized successfully!");
+    Output::success("Cascade repository initialized successfully!");
 
     if let Some(url) = &bitbucket_url {
-        println!("📊 Bitbucket Server URL: {url}");
+        Output::sub_item(format!("Bitbucket Server URL: {url}"));
     }
 
-    println!("\n📋 Next steps:");
-    println!("  1. Configure Bitbucket Server settings:");
+    println!();
+    Output::section("Next steps");
+    Output::bullet("Configure Bitbucket Server settings:");
     if bitbucket_url.is_none() {
-        println!("     ca config set bitbucket.url https://your-bitbucket-server.com");
+        Output::command_example("ca config set bitbucket.url https://your-bitbucket-server.com");
     }
-    println!("     ca config set bitbucket.project YOUR_PROJECT_KEY");
-    println!("     ca config set bitbucket.repo your-repo-name");
-    println!("     ca config set bitbucket.token your-personal-access-token");
-    println!("  2. Verify configuration:");
-    println!("     ca doctor");
-    println!("  3. Create your first stack:");
-    println!("     ca create \"Add new feature\"");
+    Output::command_example("ca config set bitbucket.project YOUR_PROJECT_KEY");
+    Output::command_example("ca config set bitbucket.repo your-repo-name");
+    Output::command_example("ca config set bitbucket.token your-personal-access-token");
+    Output::bullet("Verify configuration:");
+    Output::command_example("ca doctor");
+    Output::bullet("Create your first stack:");
+    Output::command_example("ca create \"Add new feature\"");
 
     Ok(())
 }
@@ -112,7 +113,7 @@ mod tests {
         // Verify it was initialized successfully
         assert!(is_repo_initialized(&repo_path));
 
-        println!("✅ Cascade initialization in Git repository tested successfully");
+        Output::success("Cascade initialization in Git repository tested successfully");
     }
 
     #[tokio::test]
@@ -127,7 +128,7 @@ mod tests {
         let result = find_repository_root(non_git_path);
         assert!(result.is_err());
 
-        println!("✅ Non-Git directory correctly detected - initialization would be rejected");
+        Output::success("Non-Git directory correctly detected - initialization would be rejected");
     }
 
     #[tokio::test]
@@ -149,6 +150,6 @@ mod tests {
 
         // The logic in run() should detect this is already initialized
         // and return an error unless force is used
-        println!("✅ Repository correctly detected as already initialized");
+        Output::success("Repository correctly detected as already initialized");
     }
 }

@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use crate::git::find_repository_root;
 use crate::stack::StackManager;
@@ -385,16 +386,19 @@ async fn list_entries(verbose: bool) -> Result<()> {
     })?;
 
     if active_stack.entries.is_empty() {
-        println!("📭 Active stack '{}' has no entries yet", active_stack.name);
-        println!("   Add some commits to the stack with 'ca stack push'");
+        Output::info(format!(
+            "Active stack '{}' has no entries yet",
+            active_stack.name
+        ));
+        Output::sub_item("Add some commits to the stack with 'ca stack push'");
         return Ok(());
     }
 
-    println!(
-        "📚 Stack: {} ({} entries)",
+    Output::section(format!(
+        "Stack: {} ({} entries)",
         active_stack.name,
         active_stack.entries.len()
-    );
+    ));
 
     let edit_mode_info = manager.get_edit_mode_info();
 
@@ -455,9 +459,11 @@ async fn list_entries(verbose: bool) -> Result<()> {
     }
 
     if let Some(_edit_info) = edit_mode_info {
-        println!("\n🎯 Edit mode active - use 'ca entry status' for details");
+        println!();
+        Output::info("Edit mode active - use 'ca entry status' for details");
     } else {
-        println!("\n💡 Use 'ca entry checkout' to start editing an entry");
+        println!();
+        Output::tip("Use 'ca entry checkout' to start editing an entry");
     }
 
     Ok(())

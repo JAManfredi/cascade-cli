@@ -57,11 +57,11 @@ pub async fn run(force: bool) -> Result<()> {
     }
 
     // Step 4: Interactive configuration
-    println!("\n⚙️  Step 3: Configure Bitbucket settings...");
+    Output::progress("Step 3: Configure Bitbucket settings");
     let bitbucket_config = configure_bitbucket_interactive(auto_config).await?;
 
     // Step 5: Initialize repository (using repo root, not current dir)
-    println!("\n🚀 Step 4: Initializing Cascade...");
+    Output::progress("Step 4: Initializing Cascade");
     initialize_repo(&repo_root, Some(bitbucket_config.url.clone()))?;
 
     // Step 6: Save configuration
@@ -76,27 +76,27 @@ pub async fn run(force: bool) -> Result<()> {
     settings.save_to_file(&config_path)?;
 
     // Step 7: Test connection (optional)
-    println!("\n🔌 Step 5: Testing connection...");
+    Output::progress("Step 5: Testing connection");
     if let Some(ref token) = settings.bitbucket.token {
         if !token.is_empty() {
             match test_bitbucket_connection(&settings).await {
                 Ok(_) => {
-                    println!("   ✅ Connection successful!");
+                    Output::success("Connection successful!");
                 }
                 Err(e) => {
                     warn!("   ⚠️  Connection test failed: {}", e);
-                    println!("   💡 You can test the connection later with: ca doctor");
+                    Output::tip("You can test the connection later with: ca doctor");
                 }
             }
         } else {
-            println!("   ⚠️  No token provided - skipping connection test");
+            Output::warning("No token provided - skipping connection test");
         }
     } else {
-        println!("   ⚠️  No token provided - skipping connection test");
+        Output::warning("No token provided - skipping connection test");
     }
 
     // Step 8: Setup completions (optional)
-    println!("\n🚀 Step 6: Shell completions...");
+    Output::progress("Step 6: Shell completions");
     let install_completions = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to install shell completions?")
         .default(true)
@@ -106,17 +106,17 @@ pub async fn run(force: bool) -> Result<()> {
     if install_completions {
         match crate::cli::commands::completions::install_completions(None) {
             Ok(_) => {
-                println!("   ✅ Shell completions installed");
+                Output::success("Shell completions installed");
             }
             Err(e) => {
                 warn!("   ⚠️  Failed to install completions: {}", e);
-                println!("   💡 You can install them later with: ca completions install");
+                Output::tip("You can install them later with: ca completions install");
             }
         }
     }
 
     // Step 9: Install Git hooks (recommended)
-    println!("\n🪝 Step 7: Git hooks...");
+    Output::progress("Step 7: Git hooks");
     let install_hooks = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to install Git hooks for enhanced workflow?")
         .default(true)
@@ -126,28 +126,28 @@ pub async fn run(force: bool) -> Result<()> {
     if install_hooks {
         match crate::cli::commands::hooks::install_essential().await {
             Ok(_) => {
-                println!("   ✅ Essential Git hooks installed");
-                println!("   💡 Hooks installed: pre-push, commit-msg, prepare-commit-msg");
-                println!(
-                    "   💡 Optional: Install post-commit hook with 'ca hooks install post-commit'"
+                Output::success("Essential Git hooks installed");
+                Output::tip("Hooks installed: pre-push, commit-msg, prepare-commit-msg");
+                Output::tip(
+                    "Optional: Install post-commit hook with 'ca hooks install post-commit'",
                 );
-                println!("   📚 See docs/HOOKS.md for details");
+                Output::tip("See docs/HOOKS.md for details");
             }
             Err(e) => {
                 warn!("   ⚠️  Failed to install hooks: {}", e);
                 if e.to_string().contains("Git hooks directory not found") {
-                    println!("   💡 This doesn't appear to be a Git repository.");
+                    Output::tip("This doesn't appear to be a Git repository.");
                     println!("      Please ensure you're running this command from within a Git repository.");
                     println!("      You can initialize git with: git init");
                 } else {
-                    println!("   💡 You can install them later with: ca hooks install");
+                    Output::tip("You can install them later with: ca hooks install");
                 }
             }
         }
     }
 
     // Step 10: Configure PR description template (optional)
-    println!("\n📝 Step 8: PR Description Template...");
+    Output::progress("Step 8: PR Description Template");
     let setup_template = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(
             "Would you like to configure a PR description template? (will be used for ALL PRs)",
@@ -159,31 +159,30 @@ pub async fn run(force: bool) -> Result<()> {
     if setup_template {
         configure_pr_template(&config_path).await?;
     } else {
-        println!("   💡 You can configure a PR template later with:");
-        println!("      ca config set cascade.pr_description_template \"Your template\"");
+        Output::tip("You can configure a PR template later with:");
+        Output::command_example("ca config set cascade.pr_description_template \"Your template\"");
     }
 
     // Success summary
-    println!("\n🎉 Setup Complete!");
-    println!("━━━━━━━━━━━━━━━━━");
-    println!("Cascade CLI is now configured for your repository.");
+    Output::section("Setup Complete!");
+    Output::success("Cascade CLI is now configured for your repository.");
     println!();
-    println!("💡 Next steps:");
-    println!("   1. Create your first stack: ca stack create \"My Feature\"");
-    println!("   2. Push commits to the stack: ca push");
-    println!("   3. Submit for review: ca submit");
-    println!("   4. Check status: ca status");
+    Output::tip("Next steps:");
+    Output::bullet("Create your first stack: ca stack create \"My Feature\"");
+    Output::bullet("Push commits to the stack: ca push");
+    Output::bullet("Submit for review: ca submit");
+    Output::bullet("Check status: ca status");
     println!();
-    println!("📚 Learn more:");
-    println!("   • Run 'ca --help' for all commands");
-    println!("   • Run 'ca doctor' to verify your setup");
-    println!("   • Use 'ca --verbose <command>' for debug logging");
-    println!("   • Run 'ca hooks status' to check hook installation");
-    println!(
-        "   • Configure PR templates: ca config set cascade.pr_description_template \"template\""
+    Output::tip("Learn more:");
+    Output::bullet("Run 'ca --help' for all commands");
+    Output::bullet("Run 'ca doctor' to verify your setup");
+    Output::bullet("Use 'ca --verbose <command>' for debug logging");
+    Output::bullet("Run 'ca hooks status' to check hook installation");
+    Output::bullet(
+        "Configure PR templates: ca config set cascade.pr_description_template \"template\"",
     );
-    println!("   • Visit docs/HOOKS.md for hook details");
-    println!("   • Visit the documentation for advanced usage");
+    Output::bullet("Visit docs/HOOKS.md for hook details");
+    Output::bullet("Visit the documentation for advanced usage");
 
     Ok(())
 }
@@ -343,8 +342,8 @@ async fn configure_bitbucket_interactive(
             Some(token.trim().to_string())
         }
     } else {
-        println!("   💡 You can configure the token later with:");
-        println!("      ca config set bitbucket.token YOUR_TOKEN");
+        Output::tip("You can configure the token later with:");
+        Output::command_example("ca config set bitbucket.token YOUR_TOKEN");
         None
     };
 
@@ -419,11 +418,13 @@ async fn configure_pr_template(config_path: &std::path::Path) -> Result<()> {
     settings.save_to_file(config_path)?;
 
     if settings.cascade.pr_description_template.is_some() {
-        println!("   ✅ PR description template configured!");
-        println!("   💡 This template will be used for ALL future PRs");
-        println!("   💡 Edit later with: ca config set cascade.pr_description_template \"Your template\"");
+        Output::success("PR description template configured!");
+        Output::tip("This template will be used for ALL future PRs");
+        Output::tip(
+            "Edit later with: ca config set cascade.pr_description_template \"Your template\"",
+        );
     } else {
-        println!("   ✅ No template configured (will use --description or commit messages)");
+        Output::success("No template configured (will use --description or commit messages)");
     }
 
     Ok(())

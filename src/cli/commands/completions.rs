@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::cli::Cli;
 use crate::errors::{CascadeError, Result};
 use clap::CommandFactory;
@@ -40,20 +41,22 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
 
     // Report results
     if !installed.is_empty() {
-        println!("✅ Shell completions installed:");
+        Output::success("Shell completions installed:");
         for (shell, path) in installed {
-            println!("   {:?}: {}", shell, path.display());
+            Output::sub_item(format!("{:?}: {}", shell, path.display()));
         }
 
-        println!("\n💡 Next steps:");
-        println!("   1. Restart your shell or run: source ~/.bashrc (or equivalent)");
-        println!("   2. Try: ca <TAB><TAB>");
+        println!();
+        Output::tip("Next steps:");
+        Output::bullet("Restart your shell or run: source ~/.bashrc (or equivalent)");
+        Output::bullet("Try: ca <TAB><TAB>");
     }
 
     if !errors.is_empty() {
-        println!("\n⚠️  Some installations failed:");
+        println!();
+        Output::warning("Some installations failed:");
         for (shell, error) in errors {
-            println!("   {shell:?}: {error}");
+            Output::sub_item(format!("{shell:?}: {error}"));
         }
     }
 
@@ -67,12 +70,12 @@ fn detect_current_and_available_shells() -> Vec<Shell> {
     // First, try to detect the current shell from SHELL environment variable
     if let Some(current_shell) = detect_current_shell() {
         shells.push(current_shell);
-        println!("🔍 Detected current shell: {current_shell:?}");
+        Output::info(format!("Detected current shell: {current_shell:?}"));
         return shells; // Only install for current shell
     }
 
     // Fall back to detecting all available shells
-    println!("🔍 Could not detect current shell, checking available shells...");
+    Output::info("Could not detect current shell, checking available shells...");
     detect_available_shells()
 }
 
@@ -304,33 +307,38 @@ fn install_completion_for_shell(shell: Shell) -> Result<PathBuf> {
 
 /// Show installation status and guidance
 pub fn show_completions_status() -> Result<()> {
-    println!("🚀 Shell Completions Status");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    Output::section("Shell Completions Status");
 
     let available_shells = detect_available_shells();
 
-    println!("\n📊 Available shells:");
+    Output::section("Available shells");
     for shell in &available_shells {
         let status = check_completion_installed(*shell);
-        let status_icon = if status { "✅" } else { "❌" };
-        println!("   {status_icon} {shell:?}");
+        if status {
+            Output::success(format!("{shell:?}"));
+        } else {
+            Output::error(format!("{shell:?}"));
+        }
     }
 
     if available_shells
         .iter()
         .any(|s| !check_completion_installed(*s))
     {
-        println!("\n💡 To install completions:");
-        println!("   ca completions install");
-        println!("   ca completions install --shell bash  # for specific shell");
+        println!();
+        Output::tip("To install completions:");
+        Output::command_example("ca completions install");
+        Output::command_example("ca completions install --shell bash  # for specific shell");
     } else {
-        println!("\n🎉 All available shells have completions installed!");
+        println!();
+        Output::success("All available shells have completions installed!");
     }
 
-    println!("\n🔧 Manual installation:");
-    println!("   ca completions generate bash > ~/.bash_completion.d/ca");
-    println!("   ca completions generate zsh > ~/.zsh/completions/_ca");
-    println!("   ca completions generate fish > ~/.config/fish/completions/ca.fish");
+    println!();
+    Output::section("Manual installation");
+    Output::command_example("ca completions generate bash > ~/.bash_completion.d/ca");
+    Output::command_example("ca completions generate zsh > ~/.zsh/completions/_ca");
+    Output::command_example("ca completions generate fish > ~/.config/fish/completions/ca.fish");
 
     Ok(())
 }

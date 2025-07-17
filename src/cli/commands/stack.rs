@@ -832,10 +832,14 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             String::new()
         };
 
-        let status_icon = if entry.is_submitted { "[submitted]" } else { "[pending]" };
+        let status_icon = if entry.is_submitted {
+            "[submitted]"
+        } else {
+            "[pending]"
+        };
         Output::numbered_item(
             entry_num,
-            format!("{} {} {}{}", short_hash, status_icon, short_msg, source_branch_info)
+            format!("{short_hash} {status_icon} {short_msg}{source_branch_info}"),
         );
 
         if verbose {
@@ -876,7 +880,10 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                 Output::bullet(format!("Open PRs: {}", status.open_prs));
                 Output::bullet(format!("Merged PRs: {}", status.merged_prs));
                 Output::bullet(format!("Declined PRs: {}", status.declined_prs));
-                Output::bullet(format!("Completion: {:.1}%", status.completion_percentage()));
+                Output::bullet(format!(
+                    "Completion: {:.1}%",
+                    status.completion_percentage()
+                ));
 
                 if !status.enhanced_statuses.is_empty() {
                     Output::section("Pull Request Status");
@@ -1656,13 +1663,19 @@ async fn submit_entry(
     }
 
     // Update all PR descriptions in the stack if any PRs were created/exist
-    let has_any_prs = active_stack.entries.iter().any(|e| e.pull_request_id.is_some());
+    let has_any_prs = active_stack
+        .entries
+        .iter()
+        .any(|e| e.pull_request_id.is_some());
     if has_any_prs && submitted_count > 0 {
         pb.set_message("Updating PR descriptions...");
         match integration.update_all_pr_descriptions(&stack_id).await {
             Ok(updated_prs) => {
                 if !updated_prs.is_empty() {
-                    Output::sub_item(format!("Updated {} PR descriptions with current stack hierarchy", updated_prs.len()));
+                    Output::sub_item(format!(
+                        "Updated {} PR descriptions with current stack hierarchy",
+                        updated_prs.len()
+                    ));
                 }
             }
             Err(e) => {

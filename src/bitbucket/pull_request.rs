@@ -63,7 +63,9 @@ impl PullRequestManager {
             version,
         };
 
-        self.client.put(&format!("pull-requests/{pr_id}"), &request).await
+        self.client
+            .put(&format!("pull-requests/{pr_id}"), &request)
+            .await
     }
 
     /// List pull requests with optional filters

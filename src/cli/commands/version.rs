@@ -1,40 +1,40 @@
+use crate::cli::output::Output;
 use crate::errors::Result;
 
 /// Show version information
 pub async fn run() -> Result<()> {
-    println!("🌊 Cascade CLI");
-    println!("━━━━━━━━━━━━━━━");
-    println!("Version: {}", env!("CARGO_PKG_VERSION"));
-    println!("Authors: {}", env!("CARGO_PKG_AUTHORS"));
-    println!("Homepage: {}", env!("CARGO_PKG_HOMEPAGE"));
-    println!("Description: {}", env!("CARGO_PKG_DESCRIPTION"));
+    Output::section("Cascade CLI");
+    Output::sub_item(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+    Output::sub_item(format!("Authors: {}", env!("CARGO_PKG_AUTHORS")));
+    Output::sub_item(format!("Homepage: {}", env!("CARGO_PKG_HOMEPAGE")));
+    Output::sub_item(format!("Description: {}", env!("CARGO_PKG_DESCRIPTION")));
 
-    println!("\n📋 Build Information:");
-    println!("  Rust version: {}", env!("CARGO_PKG_RUST_VERSION"));
-    println!("  Target: {}", std::env::consts::ARCH);
-    println!("  OS: {}", std::env::consts::OS);
+    Output::section("Build Information");
+    Output::sub_item(format!("Rust version: {}", env!("CARGO_PKG_RUST_VERSION")));
+    Output::sub_item(format!("Target: {}", std::env::consts::ARCH));
+    Output::sub_item(format!("OS: {}", std::env::consts::OS));
 
     #[cfg(debug_assertions)]
-    println!("  Build type: Debug");
+    Output::sub_item("Build type: Debug");
     #[cfg(not(debug_assertions))]
-    println!("  Build type: Release");
+    Output::sub_item("Build type: Release");
 
-    println!("\n📦 Key Dependencies:");
-    println!("  clap: 4.0+");
-    println!("  git2: 0.18+");
-    println!("  reqwest: 0.11+");
-    println!("  tokio: 1.0+");
-    println!("  serde: 1.0+");
+    Output::section("Key Dependencies");
+    Output::sub_item("clap: 4.0+");
+    Output::sub_item("git2: 0.18+");
+    Output::sub_item("reqwest: 0.11+");
+    Output::sub_item("tokio: 1.0+");
+    Output::sub_item("serde: 1.0+");
 
-    println!("\n🔗 Links:");
-    println!("  Repository: https://github.com/your-org/cascade-cli");
-    println!("  Issues: https://github.com/your-org/cascade-cli/issues");
-    println!("  Documentation: https://github.com/your-org/cascade-cli/wiki");
+    Output::section("Links");
+    Output::sub_item("Repository: https://github.com/your-org/cascade-cli");
+    Output::sub_item("Issues: https://github.com/your-org/cascade-cli/issues");
+    Output::sub_item("Documentation: https://github.com/your-org/cascade-cli/wiki");
 
-    println!("\n💡 Quick Start:");
-    println!("  Initialize repository: ca init");
-    println!("  Show help: ca --help");
-    println!("  Check status: ca status");
+    Output::section("Quick Start");
+    Output::sub_item("Initialize repository: ca init");
+    Output::sub_item("Show help: ca --help");
+    Output::sub_item("Check status: ca status");
 
     Ok(())
 }

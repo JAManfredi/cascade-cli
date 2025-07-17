@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::config::{get_repo_config_dir, is_repo_initialized, Settings};
 use crate::errors::{CascadeError, Result};
 use crate::git::{get_current_repository, is_git_repository};
@@ -5,9 +6,9 @@ use std::env;
 
 /// Check repository health and configuration
 pub async fn run() -> Result<()> {
-    println!("🩺 Cascade Doctor");
-    println!("━━━━━━━━━━━━━━━━━");
-    println!("Diagnosing repository health and configuration...\n");
+    Output::section("Cascade Doctor");
+    Output::info("Diagnosing repository health and configuration...");
+    println!();
 
     let mut issues_found = 0;
     let mut warnings_found = 0;
@@ -36,30 +37,33 @@ pub async fn run() -> Result<()> {
 }
 
 async fn check_git_repository() -> Result<u32> {
-    println!("🔍 Checking Git repository...");
+    Output::check_start("Checking Git repository");
 
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     if !is_git_repository(&current_dir) {
-        println!("  ❌ Not in a Git repository");
-        println!("     Solution: Navigate to a Git repository or run 'git init'");
+        Output::error("Not in a Git repository");
+        Output::solution("Navigate to a Git repository or run 'git init'");
         return Ok(1);
     }
 
     match get_current_repository() {
         Ok(git_repo) => {
             let repo_info = git_repo.get_info()?;
-            println!("  ✅ Git repository found at: {}", repo_info.path.display());
+            Output::success(format!(
+                "Git repository found at: {}",
+                repo_info.path.display()
+            ));
 
             if let Some(branch) = &repo_info.head_branch {
-                println!("  ✅ Current branch: {branch}");
+                Output::success(format!("Current branch: {branch}"));
             } else {
-                println!("  ⚠️  Detached HEAD state");
+                Output::warning("Detached HEAD state");
             }
         }
         Err(e) => {
-            println!("  ❌ Git repository error: {e}");
+            Output::error(format!("Git repository error: {e}"));
             return Ok(1);
         }
     }
@@ -68,29 +72,29 @@ async fn check_git_repository() -> Result<u32> {
 }
 
 async fn check_cascade_initialization() -> Result<(u32, u32)> {
-    println!("\n🌊 Checking Cascade initialization...");
+    Output::check_start("Checking Cascade initialization");
 
     let git_repo = get_current_repository()?;
     let repo_path = git_repo.path();
 
     if !is_repo_initialized(repo_path) {
-        println!("  ❌ Repository not initialized for Cascade");
-        println!("     Solution: Run 'ca init' to initialize");
+        Output::error("Repository not initialized for Cascade");
+        Output::solution("Run 'ca init' to initialize");
         return Ok((1, 0));
     }
 
-    println!("  ✅ Repository initialized for Cascade");
+    Output::success("Repository initialized for Cascade");
 
     // Check for configuration directory structure
     let config_dir = get_repo_config_dir(repo_path)?;
 
     if !config_dir.exists() {
-        println!("  ❌ Configuration directory missing");
-        println!("     Solution: Run 'ca init --force' to recreate");
+        Output::error("Configuration directory missing");
+        Output::solution("Run 'ca init --force' to recreate");
         return Ok((1, 0));
     }
 
-    println!("  ✅ Configuration directory exists");
+    Output::success("Configuration directory exists");
 
     // Check for required subdirectories
     let stacks_dir = config_dir.join("stacks");
@@ -99,24 +103,24 @@ async fn check_cascade_initialization() -> Result<(u32, u32)> {
     let mut warnings = 0;
 
     if !stacks_dir.exists() {
-        println!("  ⚠️  Stacks directory missing");
+        Output::warning("Stacks directory missing");
         warnings += 1;
     } else {
-        println!("  ✅ Stacks directory exists");
+        Output::success("Stacks directory exists");
     }
 
     if !cache_dir.exists() {
-        println!("  ⚠️  Cache directory missing");
+        Output::warning("Cache directory missing");
         warnings += 1;
     } else {
-        println!("  ✅ Cache directory exists");
+        Output::success("Cache directory exists");
     }
 
     Ok((0, warnings))
 }
 
 async fn check_configuration() -> Result<u32> {
-    println!("\n⚙️  Checking configuration...");
+    Output::check_start("Checking configuration");
 
     let git_repo = get_current_repository()?;
     let config_dir = get_repo_config_dir(git_repo.path())?;
@@ -128,39 +132,39 @@ async fn check_configuration() -> Result<u32> {
     // Validate configuration
     match settings.validate() {
         Ok(()) => {
-            println!("  ✅ Configuration is valid");
+            Output::success("Configuration is valid");
         }
         Err(e) => {
-            println!("  ⚠️  Configuration validation failed: {e}");
+            Output::warning(format!("Configuration validation failed: {e}"));
             warnings += 1;
         }
     }
 
     // Check Bitbucket configuration completeness
-    println!("\n📡 Bitbucket configuration:");
+    Output::check_start("Bitbucket configuration");
 
     if settings.bitbucket.url.is_empty() {
-        println!("  ⚠️  Bitbucket server URL not configured");
-        println!("     Solution: ca config set bitbucket.url https://your-bitbucket-server.com");
+        Output::warning("Bitbucket server URL not configured");
+        Output::solution("ca config set bitbucket.url https://your-bitbucket-server.com");
         warnings += 1;
     } else {
-        println!("  ✅ Bitbucket server URL configured");
+        Output::success("Bitbucket server URL configured");
     }
 
     if settings.bitbucket.project.is_empty() {
-        println!("  ⚠️  Bitbucket project key not configured");
-        println!("     Solution: ca config set bitbucket.project YOUR_PROJECT_KEY");
+        Output::warning("Bitbucket project key not configured");
+        Output::solution("ca config set bitbucket.project YOUR_PROJECT_KEY");
         warnings += 1;
     } else {
-        println!("  ✅ Bitbucket project key configured");
+        Output::success("Bitbucket project key configured");
     }
 
     if settings.bitbucket.repo.is_empty() {
-        println!("  ⚠️  Bitbucket repository slug not configured");
-        println!("     Solution: ca config set bitbucket.repo your-repo-name");
+        Output::warning("Bitbucket repository slug not configured");
+        Output::solution("ca config set bitbucket.repo your-repo-name");
         warnings += 1;
     } else {
-        println!("  ✅ Bitbucket repository slug configured");
+        Output::success("Bitbucket repository slug configured");
     }
 
     if settings
@@ -169,18 +173,18 @@ async fn check_configuration() -> Result<u32> {
         .as_ref()
         .is_none_or(|s| s.is_empty())
     {
-        println!("  ⚠️  Bitbucket authentication token not configured");
-        println!("     Solution: ca config set bitbucket.token your-personal-access-token");
+        Output::warning("Bitbucket authentication token not configured");
+        Output::solution("ca config set bitbucket.token your-personal-access-token");
         warnings += 1;
     } else {
-        println!("  ✅ Bitbucket authentication token configured");
+        Output::success("Bitbucket authentication token configured");
     }
 
     Ok(warnings)
 }
 
 async fn check_git_configuration() -> Result<u32> {
-    println!("\n📦 Checking Git configuration...");
+    Output::check_start("Checking Git configuration");
 
     let git_repo = get_current_repository()?;
     let repo_path = git_repo.path();
@@ -193,28 +197,28 @@ async fn check_git_configuration() -> Result<u32> {
         Ok(config) => {
             match config.get_string("user.name") {
                 Ok(name) => {
-                    println!("  ✅ Git user.name: {name}");
+                    Output::success(format!("Git user.name: {name}"));
                 }
                 Err(_) => {
-                    println!("  ⚠️  Git user.name not configured");
-                    println!("     Solution: git config user.name \"Your Name\"");
+                    Output::warning("Git user.name not configured");
+                    Output::solution("git config user.name \"Your Name\"");
                     warnings += 1;
                 }
             }
 
             match config.get_string("user.email") {
                 Ok(email) => {
-                    println!("  ✅ Git user.email: {email}");
+                    Output::success(format!("Git user.email: {email}"));
                 }
                 Err(_) => {
-                    println!("  ⚠️  Git user.email not configured");
-                    println!("     Solution: git config user.email \"your.email@example.com\"");
+                    Output::warning("Git user.email not configured");
+                    Output::solution("git config user.email \"your.email@example.com\"");
                     warnings += 1;
                 }
             }
         }
         Err(_) => {
-            println!("  ⚠️  Could not read Git configuration");
+            Output::warning("Could not read Git configuration");
             warnings += 1;
         }
     }
@@ -223,15 +227,15 @@ async fn check_git_configuration() -> Result<u32> {
     match git_repo_inner.remotes() {
         Ok(remotes) => {
             if remotes.is_empty() {
-                println!("  ⚠️  No remote repositories configured");
-                println!("     Tip: Add a remote with 'git remote add origin <url>'");
+                Output::warning("No remote repositories configured");
+                Output::tip("Add a remote with 'git remote add origin <url>'");
                 warnings += 1;
             } else {
-                println!("  ✅ Remote repositories configured: {}", remotes.len());
+                Output::success(format!("Remote repositories configured: {}", remotes.len()));
             }
         }
         Err(_) => {
-            println!("  ⚠️  Could not read remote repositories");
+            Output::warning("Could not read remote repositories");
             warnings += 1;
         }
     }
@@ -240,36 +244,38 @@ async fn check_git_configuration() -> Result<u32> {
 }
 
 fn print_summary(issues: u32, warnings: u32) {
-    println!("\n📊 Summary:");
-    println!("━━━━━━━━━━");
+    Output::section("Summary");
 
     if issues == 0 && warnings == 0 {
-        println!("🎉 All checks passed! Your repository is ready for Cascade.");
-        println!("\n💡 Next steps:");
-        println!("  1. Create your first stack: ca create \"Add new feature\"");
-        println!("  2. Submit for review: ca submit");
-        println!("  3. View help: ca --help");
+        Output::success("All checks passed! Your repository is ready for Cascade.");
+        println!();
+        Output::tip("Next steps:");
+        Output::bullet("Create your first stack: ca create \"Add new feature\"");
+        Output::bullet("Submit for review: ca submit");
+        Output::bullet("View help: ca --help");
     } else if issues == 0 {
-        println!(
-            "⚠️  {} warning{} found, but no critical issues.",
+        Output::warning(format!(
+            "{} warning{} found, but no critical issues.",
             warnings,
             if warnings == 1 { "" } else { "s" }
+        ));
+        Output::sub_item(
+            "Your repository should work, but consider addressing the warnings above.",
         );
-        println!("   Your repository should work, but consider addressing the warnings above.");
     } else {
-        println!(
-            "❌ {} critical issue{} found that need to be resolved.",
+        Output::error(format!(
+            "{} critical issue{} found that need to be resolved.",
             issues,
             if issues == 1 { "" } else { "s" }
-        );
+        ));
         if warnings > 0 {
-            println!(
-                "   Additionally, {} warning{} found.",
+            Output::sub_item(format!(
+                "Additionally, {} warning{} found.",
                 warnings,
                 if warnings == 1 { "" } else { "s" }
-            );
+            ));
         }
-        println!("   Please address the issues above before using Cascade.");
+        Output::sub_item("Please address the issues above before using Cascade.");
     }
 }
 

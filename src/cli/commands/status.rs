@@ -1,3 +1,4 @@
+use crate::cli::output::Output;
 use crate::config::{get_repo_config_dir, is_repo_initialized, Settings};
 use crate::errors::{CascadeError, Result};
 use crate::git::{get_current_repository, GitRepository};
@@ -5,8 +6,7 @@ use std::env;
 
 /// Show repository overview and all stacks status
 pub async fn run() -> Result<()> {
-    println!("📊 Repository Overview");
-    println!("━━━━━━━━━━━━━━━━━━━━━━");
+    Output::section("Repository Overview");
 
     // Get current directory and repository
     let _current_dir = env::current_dir()
@@ -15,7 +15,7 @@ pub async fn run() -> Result<()> {
     let git_repo = match get_current_repository() {
         Ok(repo) => repo,
         Err(_) => {
-            println!("❌ Not in a Git repository");
+            Output::error("Not in a Git repository");
             return Ok(());
         }
     };
@@ -30,38 +30,38 @@ pub async fn run() -> Result<()> {
 }
 
 fn show_git_status(git_repo: &GitRepository) -> Result<()> {
-    println!("\n🔧 Git Repository:");
+    Output::section("Git Repository");
 
     let repo_info = git_repo.get_info()?;
 
     // Repository path
-    println!("  Path: {}", repo_info.path.display());
+    Output::sub_item(format!("Path: {}", repo_info.path.display()));
 
     // Current branch
     if let Some(branch) = &repo_info.head_branch {
-        println!("  Current branch: {branch}");
+        Output::sub_item(format!("Current branch: {branch}"));
     } else {
-        println!("  Current branch: (detached HEAD)");
+        Output::sub_item("Current branch: (detached HEAD)");
     }
 
     // Current commit
     if let Some(commit) = &repo_info.head_commit {
-        println!("  HEAD commit: {}", &commit[..12]);
+        Output::sub_item(format!("HEAD commit: {}", &commit[..12]));
     }
 
     // Working directory status
     if repo_info.is_dirty {
-        println!("  Working directory: ⚠️  Has uncommitted changes");
+        Output::warning("Working directory: Has uncommitted changes");
     } else {
-        println!("  Working directory: ✅ Clean");
+        Output::success("Working directory: Clean");
     }
 
     // Untracked files
     if !repo_info.untracked_files.is_empty() {
-        println!(
-            "  Untracked files: {} files",
+        Output::sub_item(format!(
+            "Untracked files: {} files",
             repo_info.untracked_files.len()
-        );
+        ));
         if repo_info.untracked_files.len() <= 5 {
             for file in &repo_info.untracked_files {
                 println!("    - {file}");
@@ -73,28 +73,28 @@ fn show_git_status(git_repo: &GitRepository) -> Result<()> {
             println!("    ... and {} more", repo_info.untracked_files.len() - 3);
         }
     } else {
-        println!("  Untracked files: None");
+        Output::sub_item("Untracked files: None");
     }
 
     // Branches
     let branches = git_repo.list_branches()?;
-    println!("  Local branches: {} total", branches.len());
+    Output::sub_item(format!("Local branches: {} total", branches.len()));
 
     Ok(())
 }
 
 fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
-    println!("\n🌊 Cascade Status:");
+    Output::section("Cascade Status");
 
     let repo_path = git_repo.path();
 
     if !is_repo_initialized(repo_path) {
-        println!("  Status: ❌ Not initialized");
-        println!("  Run 'ca init' to initialize this repository for Cascade");
+        Output::error("Status: Not initialized");
+        Output::sub_item("Run 'ca init' to initialize this repository for Cascade");
         return Ok(());
     }
 
-    println!("  Status: ✅ Initialized");
+    Output::success("Status: Initialized");
 
     // Load and show configuration
     let config_dir = get_repo_config_dir(repo_path)?;
@@ -102,55 +102,55 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
     let settings = Settings::load_from_file(&config_file)?;
 
     // Check Bitbucket configuration
-    println!("\n📡 Bitbucket Configuration:");
+    Output::section("Bitbucket Configuration");
 
     let mut config_complete = true;
 
     if !settings.bitbucket.url.is_empty() {
-        println!("  Server URL: ✅ {}", settings.bitbucket.url);
+        Output::success(format!("Server URL: {}", settings.bitbucket.url));
     } else {
-        println!("  Server URL: ❌ Not configured");
+        Output::error("Server URL: Not configured");
         config_complete = false;
     }
 
     if !settings.bitbucket.project.is_empty() {
-        println!("  Project Key: ✅ {}", settings.bitbucket.project);
+        Output::success(format!("Project Key: {}", settings.bitbucket.project));
     } else {
-        println!("  Project Key: ❌ Not configured");
+        Output::error("Project Key: Not configured");
         config_complete = false;
     }
 
     if !settings.bitbucket.repo.is_empty() {
-        println!("  Repository: ✅ {}", settings.bitbucket.repo);
+        Output::success(format!("Repository: {}", settings.bitbucket.repo));
     } else {
-        println!("  Repository: ❌ Not configured");
+        Output::error("Repository: Not configured");
         config_complete = false;
     }
 
     if let Some(token) = &settings.bitbucket.token {
         if !token.is_empty() {
-            println!("  Auth Token: ✅ Configured");
+            Output::success("Auth Token: Configured");
         } else {
-            println!("  Auth Token: ❌ Not configured");
+            Output::error("Auth Token: Not configured");
             config_complete = false;
         }
     } else {
-        println!("  Auth Token: ❌ Not configured");
+        Output::error("Auth Token: Not configured");
         config_complete = false;
     }
 
     // Configuration status summary
-    println!("\n⚙️  Configuration:");
+    Output::section("Configuration");
     if config_complete {
-        println!("  Status: ✅ Ready for use");
+        Output::success("Status: Ready for use");
     } else {
-        println!("  Status: ⚠️  Incomplete configuration");
-        println!("  Run 'ca config list' to see all settings");
-        println!("  Run 'ca doctor' for configuration recommendations");
+        Output::warning("Status: Incomplete configuration");
+        Output::sub_item("Run 'ca config list' to see all settings");
+        Output::sub_item("Run 'ca doctor' for configuration recommendations");
     }
 
     // Show stack information
-    println!("\n📚 Stacks:");
+    Output::section("Stacks");
 
     match crate::stack::StackManager::new(repo_path) {
         Ok(manager) => {
@@ -158,10 +158,12 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
             let active_stack = manager.get_active_stack();
 
             if stacks.is_empty() {
-                println!("  No stacks created yet");
-                println!("  Run 'ca stacks create \"Stack Name\"' to create your first stack");
+                Output::sub_item("No stacks created yet");
+                Output::sub_item(
+                    "Run 'ca stacks create \"Stack Name\"' to create your first stack",
+                );
             } else {
-                println!("  Total stacks: {}", stacks.len());
+                Output::sub_item(format!("Total stacks: {}", stacks.len()));
 
                 // Show each stack with detailed status
                 for stack in &stacks {
@@ -181,7 +183,10 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
                         "empty".to_string()
                     };
 
-                    println!("  {} {} - {}", active_marker, stack.name, status_info);
+                    Output::sub_item(format!(
+                        "{} {} - {}",
+                        active_marker, stack.name, status_info
+                    ));
 
                     // Show additional details for active stack
                     if is_active && !stack.entries.is_empty() {
@@ -195,14 +200,12 @@ fn show_cascade_status(git_repo: &GitRepository) -> Result<()> {
                 }
 
                 if active_stack.is_none() && !stacks.is_empty() {
-                    println!(
-                        "\n  💡 No active stack. Use 'ca stacks switch <name>' to activate one"
-                    );
+                    Output::tip("No active stack. Use 'ca stacks switch <name>' to activate one");
                 }
             }
         }
         Err(_) => {
-            println!("  Unable to load stack information");
+            Output::sub_item("Unable to load stack information");
         }
     }
 
