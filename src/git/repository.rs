@@ -1,7 +1,7 @@
 use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use chrono;
-use dialoguer::{theme::ColorfulTheme, Confirm};
+use dialoguer::{theme::ColorfulTheme, Confirm, Select};
 use git2::{Oid, Repository, Signature};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
@@ -466,6 +466,9 @@ impl GitRepository {
 
     /// Create a commit with all staged changes
     pub fn commit(&self, message: &str) -> Result<String> {
+        // Validate git user configuration before attempting commit operations
+        self.validate_git_user_config()?;
+
         let signature = self.get_signature()?;
         let tree_id = self.get_index_tree()?;
         let tree = self.repo.find_tree(tree_id).map_err(CascadeError::Git)?;
@@ -488,6 +491,20 @@ impl GitRepository {
 
         Output::success(format!("Created commit: {commit_id} - {message}"));
         Ok(commit_id.to_string())
+    }
+
+    /// Commit any staged changes with a default message
+    pub fn commit_staged_changes(&self, default_message: &str) -> Result<Option<String>> {
+        // Check if there are staged changes
+        let staged_files = self.get_staged_files()?;
+        if staged_files.is_empty() {
+            tracing::debug!("No staged changes to commit");
+            return Ok(None);
+        }
+
+        tracing::info!("Committing {} staged files", staged_files.len());
+        let commit_hash = self.commit(default_message)?;
+        Ok(Some(commit_hash))
     }
 
     /// Stage all changes
@@ -595,20 +612,85 @@ impl GitRepository {
         Ok(commit.id().to_string())
     }
 
-    /// Get a signature for commits
-    fn get_signature(&self) -> Result<Signature<'_>> {
-        // Try to get signature from Git config
+    /// Validate git user configuration is properly set
+    pub fn validate_git_user_config(&self) -> Result<()> {
         if let Ok(config) = self.repo.config() {
-            if let (Ok(name), Ok(email)) = (
-                config.get_string("user.name"),
-                config.get_string("user.email"),
-            ) {
-                return Signature::now(&name, &email).map_err(CascadeError::Git);
+            let name_result = config.get_string("user.name");
+            let email_result = config.get_string("user.email");
+
+            if let (Ok(name), Ok(email)) = (name_result, email_result) {
+                if !name.trim().is_empty() && !email.trim().is_empty() {
+                    tracing::debug!("Git user config validated: {} <{}>", name, email);
+                    return Ok(());
+                }
             }
         }
 
-        // Fallback to default signature
-        Signature::now("Cascade CLI", "cascade@example.com").map_err(CascadeError::Git)
+        // Check if this is a CI environment where validation can be skipped
+        let is_ci = std::env::var("CI").is_ok();
+
+        if is_ci {
+            tracing::debug!("CI environment - skipping git user config validation");
+            return Ok(());
+        }
+
+        Output::warning("Git user configuration missing or incomplete");
+        Output::info("This can cause cherry-pick and commit operations to fail");
+        Output::info("Please configure git user information:");
+        Output::bullet("git config user.name \"Your Name\"".to_string());
+        Output::bullet("git config user.email \"your.email@example.com\"".to_string());
+        Output::info("Or set globally with the --global flag");
+
+        // Don't fail - let operations continue with fallback signature
+        // This preserves backward compatibility while providing guidance
+        Ok(())
+    }
+
+    /// Get a signature for commits with comprehensive fallback and validation
+    fn get_signature(&self) -> Result<Signature<'_>> {
+        // Try to get signature from Git config first
+        if let Ok(config) = self.repo.config() {
+            // Try global/system config first
+            let name_result = config.get_string("user.name");
+            let email_result = config.get_string("user.email");
+
+            if let (Ok(name), Ok(email)) = (name_result, email_result) {
+                if !name.trim().is_empty() && !email.trim().is_empty() {
+                    tracing::debug!("Using git config: {} <{}>", name, email);
+                    return Signature::now(&name, &email).map_err(CascadeError::Git);
+                }
+            } else {
+                tracing::debug!("Git user config incomplete or missing");
+            }
+        }
+
+        // Check if this is a CI environment where fallback is acceptable
+        let is_ci = std::env::var("CI").is_ok();
+
+        if is_ci {
+            tracing::debug!("CI environment detected, using fallback signature");
+            return Signature::now("Cascade CLI", "cascade@example.com").map_err(CascadeError::Git);
+        }
+
+        // Interactive environment - provide helpful guidance
+        tracing::warn!("Git user configuration missing - this can cause commit operations to fail");
+
+        // Try fallback signature, but warn about the issue
+        match Signature::now("Cascade CLI", "cascade@example.com") {
+            Ok(sig) => {
+                Output::warning("Git user not configured - using fallback signature");
+                Output::info("For better git history, run:");
+                Output::bullet("git config user.name \"Your Name\"".to_string());
+                Output::bullet("git config user.email \"your.email@example.com\"".to_string());
+                Output::info("Or set it globally with --global flag");
+                Ok(sig)
+            }
+            Err(e) => {
+                Err(CascadeError::branch(format!(
+                    "Cannot create git signature: {e}. Please configure git user with:\n  git config user.name \"Your Name\"\n  git config user.email \"your.email@example.com\""
+                )))
+            }
+        }
     }
 
     /// Configure remote callbacks with SSL settings
@@ -764,55 +846,14 @@ impl GitRepository {
         Ok(remote.url().unwrap_or("unknown").to_string())
     }
 
-    /// Diagnose git2 TLS and SSH support capabilities
-    /// This helps debug why TLS streams might not be found
-    pub fn diagnose_git2_support(&self) -> Result<()> {
-        let version = git2::Version::get();
 
-        println!("🔍 Git2 Feature Support Diagnosis:");
-        println!("  HTTPS/TLS support: {}", version.https());
-        println!("  SSH support: {}", version.ssh());
-
-        if !version.https() {
-            println!("❌ TLS streams NOT available - this explains TLS connection failures!");
-            println!("   Solution: Add 'https' feature to git2 dependency in Cargo.toml");
-            println!("   Current: git2 = {{ version = \"0.20.2\", default-features = false, features = [\"vendored-libgit2\"] }}");
-            println!("   Fixed:   git2 = {{ version = \"0.20.2\", features = [\"vendored-libgit2\", \"https\", \"ssh\"] }}");
-        } else {
-            println!("✅ TLS streams available");
-        }
-
-        if !version.ssh() {
-            println!("❌ SSH support NOT available");
-            println!("   Add 'ssh' feature to git2 dependency");
-        } else {
-            println!("✅ SSH support available");
-        }
-
-        // Additional git2 feature information
-        println!("\n📋 Additional git2 build information:");
-        let libgit2_version = version.libgit2_version();
-        println!(
-            "  libgit2 version: {}.{}.{}",
-            libgit2_version.0, libgit2_version.1, libgit2_version.2
-        );
-
-        println!("\n💡 Recommendation:");
-        if !version.https() || !version.ssh() {
-            println!("  Your git2 is built without TLS/SSH support, causing fallback to git CLI.");
-            println!("  Enable the missing features in Cargo.toml for better performance and reliability.");
-        } else {
-            println!(
-                "  git2 has full TLS/SSH support. Network issues may be configuration-related."
-            );
-        }
-
-        Ok(())
-    }
 
     /// Cherry-pick a specific commit to the current branch
     pub fn cherry_pick(&self, commit_hash: &str) -> Result<String> {
         tracing::debug!("Cherry-picking commit {}", commit_hash);
+
+        // Validate git user configuration before attempting commit operations
+        self.validate_git_user_config()?;
 
         let oid = Oid::from_str(commit_hash).map_err(CascadeError::Git)?;
         let commit = self.repo.find_commit(oid).map_err(CascadeError::Git)?;
@@ -968,7 +1009,7 @@ impl GitRepository {
                 let error_string = e.to_string();
                 if error_string.contains("TLS stream") || error_string.contains("SSL") {
                     tracing::warn!(
-                        "git2 TLS error detected: {}, falling back to git CLI for pull operation",
+                        "git2 error detected: {}, falling back to git CLI for pull operation",
                         e
                     );
                     return self.pull_with_git_cli(branch);
@@ -1885,45 +1926,113 @@ impl GitRepository {
         println!("2. Force checkout (WILL LOSE UNCOMMITTED CHANGES)");
         println!("3. Cancel checkout");
 
-        let confirmation = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to stash your changes and proceed with checkout?")
+        // Use proper selection dialog instead of y/n confirmation
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Choose an action")
+            .items(&[
+                "Stash changes and checkout (recommended)",
+                "Force checkout (WILL LOSE UNCOMMITTED CHANGES)",
+                "Cancel checkout",
+            ])
+            .default(0)
             .interact()
-            .map_err(|e| CascadeError::branch(format!("Could not get user confirmation: {e}")))?;
+            .map_err(|e| CascadeError::branch(format!("Could not get user selection: {e}")))?;
 
-        if confirmation {
-            // Create stash before checkout
-            let stash_message = format!(
-                "Auto-stash before checkout to {} at {}",
-                target,
-                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
-            );
+        match selection {
+            0 => {
+                // Option 1: Stash changes and checkout
+                let stash_message = format!(
+                    "Auto-stash before checkout to {} at {}",
+                    target,
+                    chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+                );
 
-            match self.create_stash(&stash_message) {
-                Ok(stash_oid) => {
-                    println!("✅ Created stash: {stash_message} ({stash_oid})");
-                    println!("💡 You can restore with: git stash pop");
-                }
-                Err(e) => {
-                    println!("❌ Failed to create stash: {e}");
+                match self.create_stash(&stash_message) {
+                    Ok(stash_id) => {
+                        println!("✅ Created stash: {stash_message} ({stash_id})");
+                        println!("💡 You can restore with: git stash pop");
+                    }
+                    Err(e) => {
+                        println!("❌ Failed to create stash: {e}");
 
-                    let force_confirm = Confirm::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Stash failed. Force checkout anyway? (WILL LOSE CHANGES)")
-                        .interact()
-                        .map_err(|e| {
-                            CascadeError::branch(format!("Could not get confirmation: {e}"))
-                        })?;
+                        // If stash failed, provide better options
+                        use dialoguer::Select;
+                        let stash_failed_options = vec![
+                            "Commit staged changes and proceed",
+                            "Force checkout (WILL LOSE CHANGES)",
+                            "Cancel and handle manually",
+                        ];
 
-                    if !force_confirm {
-                        return Err(CascadeError::branch(
-                            "Checkout cancelled by user".to_string(),
-                        ));
+                        let stash_selection = Select::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Stash failed. What would you like to do?")
+                            .items(&stash_failed_options)
+                            .default(0)
+                            .interact()
+                            .map_err(|e| {
+                                CascadeError::branch(format!("Could not get user selection: {e}"))
+                            })?;
+
+                        match stash_selection {
+                            0 => {
+                                // Try to commit staged changes
+                                let staged_files = self.get_staged_files()?;
+                                if !staged_files.is_empty() {
+                                    println!(
+                                        "📝 Committing {} staged files...",
+                                        staged_files.len()
+                                    );
+                                    match self
+                                        .commit_staged_changes("WIP: Auto-commit before checkout")
+                                    {
+                                        Ok(Some(commit_hash)) => {
+                                            println!(
+                                                "✅ Committed staged changes as {}",
+                                                &commit_hash[..8]
+                                            );
+                                            println!("💡 You can undo with: git reset HEAD~1");
+                                        }
+                                        Ok(None) => {
+                                            println!("ℹ️  No staged changes found to commit");
+                                        }
+                                        Err(commit_err) => {
+                                            println!(
+                                                "❌ Failed to commit staged changes: {commit_err}"
+                                            );
+                                            return Err(CascadeError::branch(
+                                                "Could not commit staged changes".to_string(),
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    println!("ℹ️  No staged changes to commit");
+                                }
+                            }
+                            1 => {
+                                // Force checkout anyway
+                                println!("⚠️  Proceeding with force checkout - uncommitted changes will be lost!");
+                            }
+                            2 => {
+                                // Cancel
+                                return Err(CascadeError::branch(
+                                    "Checkout cancelled. Please handle changes manually and try again.".to_string(),
+                                ));
+                            }
+                            _ => unreachable!(),
+                        }
                     }
                 }
             }
-        } else {
-            return Err(CascadeError::branch(
-                "Checkout cancelled by user".to_string(),
-            ));
+            1 => {
+                // Option 2: Force checkout (lose changes)
+                println!("⚠️  Proceeding with force checkout - uncommitted changes will be lost!");
+            }
+            2 => {
+                // Option 3: Cancel
+                return Err(CascadeError::branch(
+                    "Checkout cancelled by user".to_string(),
+                ));
+            }
+            _ => unreachable!(),
         }
 
         Ok(())
@@ -1931,13 +2040,58 @@ impl GitRepository {
 
     /// Create a stash with uncommitted changes
     fn create_stash(&self, message: &str) -> Result<String> {
-        // For now, we'll use a different approach that doesn't require mutable access
-        // This is a simplified version that recommends manual stashing
+        tracing::info!("Creating stash: {}", message);
 
-        warn!("Automatic stashing not yet implemented - please stash manually");
-        Err(CascadeError::branch(format!(
-            "Please manually stash your changes first: git stash push -m \"{message}\""
-        )))
+        // Use git CLI for stashing since git2 stashing is complex and unreliable
+        let output = std::process::Command::new("git")
+            .args(["stash", "push", "-m", message])
+            .current_dir(&self.path)
+            .output()
+            .map_err(|e| {
+                CascadeError::branch(format!("Failed to execute git stash command: {e}"))
+            })?;
+
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            // Extract stash hash if available (git stash outputs like "Saved working directory and index state WIP on branch: message")
+            let stash_id = if stdout.contains("Saved working directory") {
+                // Get the most recent stash ID
+                let stash_list_output = std::process::Command::new("git")
+                    .args(["stash", "list", "-n", "1", "--format=%H"])
+                    .current_dir(&self.path)
+                    .output()
+                    .map_err(|e| CascadeError::branch(format!("Failed to get stash ID: {e}")))?;
+
+                if stash_list_output.status.success() {
+                    String::from_utf8_lossy(&stash_list_output.stdout)
+                        .trim()
+                        .to_string()
+                } else {
+                    "stash@{0}".to_string() // fallback
+                }
+            } else {
+                "stash@{0}".to_string() // fallback
+            };
+
+            tracing::info!("✅ Created stash: {} ({})", message, stash_id);
+            Ok(stash_id)
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            // Check for common stash failure reasons
+            if stderr.contains("No local changes to save")
+                || stdout.contains("No local changes to save")
+            {
+                return Err(CascadeError::branch("No local changes to save".to_string()));
+            }
+
+            Err(CascadeError::branch(format!(
+                "Failed to create stash: {}\nStderr: {}\nStdout: {}",
+                output.status, stderr, stdout
+            )))
+        }
     }
 
     /// Get modified files in working directory
@@ -1965,7 +2119,7 @@ impl GitRepository {
     }
 
     /// Get staged files in index
-    fn get_staged_files(&self) -> Result<Vec<String>> {
+    pub fn get_staged_files(&self) -> Result<Vec<String>> {
         let mut opts = git2::StatusOptions::new();
         opts.include_untracked(false).include_ignored(false);
 
@@ -2516,11 +2670,25 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let repo = GitRepository::open(&repo_path).unwrap();
 
-        // Test that stash creation returns helpful error message
+        // Test stash creation - newer git versions allow empty stashes
         let result = repo.create_stash("test stash");
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("git stash push"));
+
+        // Either succeeds (newer git with empty stash) or fails with helpful message
+        match result {
+            Ok(stash_id) => {
+                // Modern git allows empty stashes, verify we got a stash ID
+                assert!(!stash_id.is_empty());
+                assert!(stash_id.contains("stash") || stash_id.len() >= 7); // SHA or stash@{n}
+            }
+            Err(error) => {
+                // Older git should fail with helpful message
+                let error_msg = error.to_string();
+                assert!(
+                    error_msg.contains("No local changes to save")
+                        || error_msg.contains("git stash push")
+                );
+            }
+        }
     }
 
     #[test]

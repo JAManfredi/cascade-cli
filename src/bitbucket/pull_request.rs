@@ -332,7 +332,13 @@ impl PullRequestManager {
                 ParticipantStatus::NeedsWork => needs_work_count += 1,
                 ParticipantStatus::Unapproved => {
                     if matches!(participant.role, ParticipantRole::Reviewer) {
-                        missing_reviewers.push(participant.user.display_name.clone());
+                        missing_reviewers.push(
+                            participant
+                                .user
+                                .display_name
+                                .clone()
+                                .unwrap_or_else(|| participant.user.name.clone()),
+                        );
                     }
                 }
             }
@@ -489,7 +495,7 @@ pub struct Repository {
     pub scm_id: String,
     pub state: String,
     #[serde(rename = "statusMessage")]
-    pub status_message: String,
+    pub status_message: Option<String>, // Make nullable - can be null
     pub forkable: bool,
     pub project: Project,
     pub public: bool,
@@ -534,11 +540,11 @@ pub struct Participant {
 pub struct User {
     pub name: String,
     #[serde(rename = "displayName")]
-    pub display_name: String,
+    pub display_name: Option<String>, // Make nullable - can be null for service accounts
     #[serde(rename = "emailAddress")]
-    pub email_address: String,
+    pub email_address: Option<String>, // Make nullable - can be null for some users
     pub active: bool,
-    pub slug: String,
+    pub slug: Option<String>, // Make nullable - can be null in some cases
 }
 
 /// Pull request state
@@ -999,7 +1005,7 @@ mod tests {
             slug: "test-repo".to_string(),
             scm_id: "git".to_string(),
             state: "AVAILABLE".to_string(),
-            status_message: "Available".to_string(),
+            status_message: Some("Available".to_string()),
             forkable: true,
             project: Project {
                 id: 1,
@@ -1017,10 +1023,10 @@ mod tests {
         Participant {
             user: User {
                 name: "testuser".to_string(),
-                display_name: "Test User".to_string(),
-                email_address: "test@example.com".to_string(),
+                display_name: Some("Test User".to_string()),
+                email_address: Some("test@example.com".to_string()),
                 active: true,
-                slug: "testuser".to_string(),
+                slug: Some("testuser".to_string()),
             },
             role,
             approved: status == ParticipantStatus::Approved,

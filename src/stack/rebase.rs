@@ -404,7 +404,81 @@ impl RebaseManager {
         debug!("Cherry-picking commit {}", commit_hash);
 
         // Use the real cherry-pick implementation from GitRepository
-        self.git_repo.cherry_pick(commit_hash)
+        match self.git_repo.cherry_pick(commit_hash) {
+            Ok(new_commit_hash) => {
+                info!("✅ Cherry-picked {} -> {}", commit_hash, new_commit_hash);
+
+                // Check for any leftover staged changes after successful cherry-pick
+                match self.git_repo.get_staged_files() {
+                    Ok(staged_files) if !staged_files.is_empty() => {
+                        warn!(
+                            "Found {} staged files after successful cherry-pick. Committing them.",
+                            staged_files.len()
+                        );
+
+                        // Commit any leftover staged changes
+                        let cleanup_message =
+                            format!("Cleanup after cherry-pick {}", &commit_hash[..8]);
+                        match self.git_repo.commit_staged_changes(&cleanup_message) {
+                            Ok(Some(cleanup_commit)) => {
+                                info!(
+                                    "✅ Committed {} leftover staged files as {}",
+                                    staged_files.len(),
+                                    &cleanup_commit[..8]
+                                );
+                                Ok(new_commit_hash) // Return the original cherry-pick commit
+                            }
+                            Ok(None) => {
+                                // Staged files disappeared, this is fine
+                                Ok(new_commit_hash)
+                            }
+                            Err(commit_err) => {
+                                warn!("Failed to commit leftover staged changes: {}", commit_err);
+                                // Don't fail the whole operation for this
+                                Ok(new_commit_hash)
+                            }
+                        }
+                    }
+                    _ => {
+                        // No staged changes, normal case
+                        Ok(new_commit_hash)
+                    }
+                }
+            }
+            Err(e) => {
+                // Check if there are staged changes that need to be committed
+                match self.git_repo.get_staged_files() {
+                    Ok(staged_files) if !staged_files.is_empty() => {
+                        warn!(
+                            "Cherry-pick failed but found {} staged files. Attempting to commit them.",
+                            staged_files.len()
+                        );
+
+                        // Try to commit the staged changes
+                        let commit_message =
+                            format!("Cherry-pick (partial): {}", &commit_hash[..8]);
+                        match self.git_repo.commit_staged_changes(&commit_message) {
+                            Ok(Some(commit_hash)) => {
+                                info!("✅ Committed staged changes as {}", &commit_hash[..8]);
+                                Ok(commit_hash)
+                            }
+                            Ok(None) => {
+                                // No staged changes after all
+                                Err(e)
+                            }
+                            Err(commit_err) => {
+                                warn!("Failed to commit staged changes: {}", commit_err);
+                                Err(e)
+                            }
+                        }
+                    }
+                    _ => {
+                        // No staged changes, return original error
+                        Err(e)
+                    }
+                }
+            }
+        }
     }
 
     /// Attempt to automatically resolve conflicts

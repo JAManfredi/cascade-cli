@@ -1857,7 +1857,14 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
                         "      From: {} -> {}",
                         pr.from_ref.display_id, pr.to_ref.display_id
                     );
-                    println!("      Author: {}", pr.author.user.display_name);
+                    println!(
+                        "      Author: {}",
+                        pr.author
+                            .user
+                            .display_name
+                            .as_deref()
+                            .unwrap_or(&pr.author.user.name)
+                    );
                     if let Some(url) = pr.web_url() {
                         println!("      URL: {url}");
                     }
@@ -1935,12 +1942,35 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
             // Pull latest changes
             match git_repo.pull(&base_branch) {
                 Ok(_) => {
-                    Output::sub_item("Successfully pulled latest changes");
+                    Output::success("Successfully pulled latest changes");
                 }
                 Err(e) => {
                     if force {
-                        Output::warning(format!("Failed to pull: {e} (continuing due to --force)"));
+                        Output::warning(format!("Pull failed: {e} (continuing due to --force)"));
                     } else {
+                        Output::error(format!("Failed to pull latest changes: {e}"));
+
+                        // Provide diagnostic information for pull failures
+                        Output::section("Sync Diagnostic Information");
+
+                        let error_str = e.to_string();
+                        if error_str.contains("SSL") || error_str.contains("TLS") {
+                            Output::bullet("SSL/TLS authentication issue detected");
+                            Output::bullet("This is common with corporate Git servers");
+                        }
+
+                        Output::tip("Solutions to try:");
+                        Output::bullet("Test basic git authentication: git fetch origin");
+                        Output::bullet("Use --force to skip pull and continue with rebase");
+                        Output::bullet(format!(
+                            "Try manual pull first: git pull origin {base_branch}"
+                        ));
+
+                        Output::section("Quick Fix");
+                        Output::command_example(
+                            "ca sync --force    # Skip failed pull, continue with rebase",
+                        );
+
                         return Err(CascadeError::branch(format!(
                             "Failed to pull latest changes from '{base_branch}': {e}. Use --force to continue anyway."
                         )));
@@ -1954,6 +1984,10 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                     "Failed to checkout '{base_branch}': {e} (continuing due to --force)"
                 ));
             } else {
+                Output::error(format!(
+                    "Failed to checkout base branch '{base_branch}': {e}"
+                ));
+                Output::tip("Use --force to bypass checkout issues and continue anyway");
                 return Err(CascadeError::branch(format!(
                     "Failed to checkout base branch '{base_branch}': {e}. Use --force to continue anyway."
                 )));
@@ -1973,7 +2007,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
             if let Some(updated_stack) = updated_stack_manager.get_stack(&stack_id) {
                 match &updated_stack.status {
                     crate::stack::StackStatus::NeedsSync => {
-                        Output::sub_item(format!(
+                        Output::info(format!(
                             "Stack needs rebase due to new commits on '{base_branch}'"
                         ));
 
@@ -2021,7 +2055,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
                                     // Update PRs if enabled
                                     if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
-                                        Output::sub_item("Updating pull requests...");
+                                        Output::progress("Updating pull requests...");
 
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
@@ -2040,7 +2074,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                                         {
                                             Ok(updated_prs) => {
                                                 if !updated_prs.is_empty() {
-                                                    Output::sub_item(format!(
+                                                    Output::success(format!(
                                                         "Updated {} pull requests",
                                                         updated_prs.len()
                                                     ));

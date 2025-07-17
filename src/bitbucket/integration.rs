@@ -278,7 +278,7 @@ impl BitbucketIntegration {
             slug: bitbucket_config.repo.clone(),
             scm_id: "git".to_string(),
             state: "AVAILABLE".to_string(),
-            status_message: "Available".to_string(),
+            status_message: Some("Available".to_string()),
             forkable: true,
             project: Project {
                 id: 0,

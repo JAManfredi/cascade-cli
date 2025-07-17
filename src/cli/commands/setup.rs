@@ -43,8 +43,12 @@ pub async fn run(force: bool) -> Result<()> {
         }
     }
 
-    // Step 3: Detect Bitbucket from remotes
-    Output::progress("Step 2: Detecting Bitbucket configuration...");
+    // Step 3: Configure Git user settings
+    Output::progress("Step 2: Configuring Git user settings...");
+    configure_git_user(&git_repo).await?;
+
+    // Step 4: Detect Bitbucket from remotes
+    Output::progress("Step 3: Detecting Bitbucket configuration...");
     let auto_config = detect_bitbucket_config(&git_repo)?;
 
     if let Some((url, project, repo)) = &auto_config {
@@ -56,15 +60,15 @@ pub async fn run(force: bool) -> Result<()> {
         Output::warning("Could not auto-detect Bitbucket configuration");
     }
 
-    // Step 4: Interactive configuration
-    Output::progress("Step 3: Configure Bitbucket settings");
+    // Step 5: Interactive configuration
+    Output::progress("Step 4: Configure Bitbucket settings");
     let bitbucket_config = configure_bitbucket_interactive(auto_config).await?;
 
-    // Step 5: Initialize repository (using repo root, not current dir)
-    Output::progress("Step 4: Initializing Cascade");
+    // Step 6: Initialize repository (using repo root, not current dir)
+    Output::progress("Step 5: Initializing Cascade");
     initialize_repo(&repo_root, Some(bitbucket_config.url.clone()))?;
 
-    // Step 6: Save configuration
+    // Step 7: Save configuration
     let config_path = config_dir.join("config.json");
     let mut settings = Settings::load_from_file(&config_path).unwrap_or_default();
 
@@ -75,8 +79,8 @@ pub async fn run(force: bool) -> Result<()> {
 
     settings.save_to_file(&config_path)?;
 
-    // Step 7: Test connection (optional)
-    Output::progress("Step 5: Testing connection");
+    // Step 8: Test connection (optional)
+    Output::progress("Step 6: Testing connection");
     if let Some(ref token) = settings.bitbucket.token {
         if !token.is_empty() {
             match test_bitbucket_connection(&settings).await {
@@ -95,8 +99,8 @@ pub async fn run(force: bool) -> Result<()> {
         Output::warning("No token provided - skipping connection test");
     }
 
-    // Step 8: Setup completions (optional)
-    Output::progress("Step 6: Shell completions");
+    // Step 9: Setup completions (optional)
+    Output::progress("Step 7: Shell completions");
     let install_completions = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to install shell completions?")
         .default(true)
@@ -115,8 +119,8 @@ pub async fn run(force: bool) -> Result<()> {
         }
     }
 
-    // Step 9: Install Git hooks (recommended)
-    Output::progress("Step 7: Git hooks");
+    // Step 10: Install Git hooks (recommended)
+    Output::progress("Step 8: Git hooks");
     let install_hooks = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to install Git hooks for enhanced workflow?")
         .default(true)
@@ -146,8 +150,8 @@ pub async fn run(force: bool) -> Result<()> {
         }
     }
 
-    // Step 10: Configure PR description template (optional)
-    Output::progress("Step 8: PR Description Template");
+    // Step 11: Configure PR description template (optional)
+    Output::progress("Step 9: PR Description Template");
     let setup_template = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(
             "Would you like to configure a PR description template? (will be used for ALL PRs)",
@@ -165,7 +169,13 @@ pub async fn run(force: bool) -> Result<()> {
 
     // Success summary
     Output::section("Setup Complete!");
-    Output::success("Cascade CLI is now configured for your repository.");
+    Output::success("Cascade CLI is now fully configured for your repository.");
+    println!();
+    Output::info("Configuration includes:");
+    Output::bullet("✅ Git user settings (name and email)");
+    Output::bullet("✅ Bitbucket Server integration");
+    Output::bullet("✅ Essential Git hooks for enhanced workflow");
+    Output::bullet("✅ Shell completions (if selected)");
     println!();
     Output::tip("Next steps:");
     Output::bullet("Create your first stack: ca stack create \"My Feature\"");
@@ -183,6 +193,164 @@ pub async fn run(force: bool) -> Result<()> {
     );
     Output::bullet("Visit docs/HOOKS.md for hook details");
     Output::bullet("Visit the documentation for advanced usage");
+
+    Ok(())
+}
+
+/// Configure Git user settings (name and email)
+async fn configure_git_user(git_repo: &GitRepository) -> Result<()> {
+    let theme = ColorfulTheme::default();
+
+    // Check current git configuration
+    let repo_path = git_repo.path();
+    let git_repo_inner = git2::Repository::open(repo_path)
+        .map_err(|e| CascadeError::config(format!("Could not open git repository: {e}")))?;
+
+    let mut current_name: Option<String> = None;
+    let mut current_email: Option<String> = None;
+
+    if let Ok(config) = git_repo_inner.config() {
+        // Check for user configuration
+        if let Ok(name) = config.get_string("user.name") {
+            if !name.trim().is_empty() {
+                current_name = Some(name);
+            }
+        }
+
+        if let Ok(email) = config.get_string("user.email") {
+            if !email.trim().is_empty() {
+                current_email = Some(email);
+            }
+        }
+    }
+
+    // Display current configuration status
+    match (&current_name, &current_email) {
+        (Some(name), Some(email)) => {
+            Output::success("Git user configuration found:");
+            Output::sub_item(format!("Name: {name}"));
+            Output::sub_item(format!("Email: {email}"));
+
+            let keep_current = Confirm::with_theme(&theme)
+                .with_prompt("Keep current Git user settings?")
+                .default(true)
+                .interact()
+                .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+            if keep_current {
+                Output::success("Using existing Git user configuration");
+                return Ok(());
+            }
+        }
+        _ => {
+            if current_name.is_some() || current_email.is_some() {
+                Output::warning("Git user configuration incomplete:");
+                if let Some(name) = &current_name {
+                    Output::sub_item(format!("Name: {name}"));
+                } else {
+                    Output::sub_item("Name: not configured");
+                }
+                if let Some(email) = &current_email {
+                    Output::sub_item(format!("Email: {email}"));
+                } else {
+                    Output::sub_item("Email: not configured");
+                }
+            } else {
+                Output::warning("Git user not configured");
+                Output::info(
+                    "Git user name and email are required for commits and Cascade operations",
+                );
+            }
+        }
+    }
+
+    // Prompt for user information
+    println!("\n👤 Git User Configuration");
+    println!("   This information will be used for all git commits and Cascade operations.");
+
+    let name: String = Input::with_theme(&theme)
+        .with_prompt("Your name")
+        .with_initial_text(current_name.unwrap_or_default())
+        .validate_with(|input: &String| -> std::result::Result<(), &str> {
+            if input.trim().is_empty() {
+                Err("Name cannot be empty")
+            } else {
+                Ok(())
+            }
+        })
+        .interact_text()
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+    let email: String = Input::with_theme(&theme)
+        .with_prompt("Your email")
+        .with_initial_text(current_email.unwrap_or_default())
+        .validate_with(|input: &String| -> std::result::Result<(), &str> {
+            if input.trim().is_empty() {
+                Err("Email cannot be empty")
+            } else if !input.contains('@') {
+                Err("Please enter a valid email address")
+            } else {
+                Ok(())
+            }
+        })
+        .interact_text()
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+    // Ask about scope (global vs local)
+    let use_global = Confirm::with_theme(&theme)
+        .with_prompt("Set globally for all Git repositories? (otherwise only for this repository)")
+        .default(true)
+        .interact()
+        .map_err(|e| CascadeError::config(format!("Input error: {e}")))?;
+
+    // Set the configuration using git commands for reliability
+    let scope_flag = if use_global { "--global" } else { "--local" };
+
+    // Set user.name
+    let output = std::process::Command::new("git")
+        .args(["config", scope_flag, "user.name", &name])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| CascadeError::config(format!("Failed to execute git config: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CascadeError::config(format!(
+            "Failed to set git user.name: {stderr}"
+        )));
+    }
+
+    // Set user.email
+    let output = std::process::Command::new("git")
+        .args(["config", scope_flag, "user.email", &email])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| CascadeError::config(format!("Failed to execute git config: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CascadeError::config(format!(
+            "Failed to set git user.email: {stderr}"
+        )));
+    }
+
+    // Validate the configuration was set correctly
+    match git_repo.validate_git_user_config() {
+        Ok(_) => {
+            Output::success("Git user configuration updated successfully!");
+            if use_global {
+                Output::sub_item("Configuration applied globally for all Git repositories");
+            } else {
+                Output::sub_item("Configuration applied to this repository only");
+            }
+            Output::sub_item(format!("Name: {name}"));
+            Output::sub_item(format!("Email: {email}"));
+        }
+        Err(e) => {
+            Output::warning(format!("Configuration set but validation failed: {e}"));
+            Output::tip("You may need to check your git configuration manually");
+        }
+    }
 
     Ok(())
 }

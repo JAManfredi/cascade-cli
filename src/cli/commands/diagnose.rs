@@ -36,9 +36,6 @@ pub async fn run() -> Result<()> {
     if let Ok(repo) = GitRepository::open(Path::new(".")) {
         Output::section("Current Repository Analysis");
 
-        // Use the built-in diagnostic method
-        repo.diagnose_git2_support()?;
-
         // Check remote URLs
         if let Ok(remote_url) = repo.get_remote_url("origin") {
             Output::section("Remote Configuration");
