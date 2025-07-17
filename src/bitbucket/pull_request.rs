@@ -21,10 +21,7 @@ impl PullRequestManager {
         &self,
         request: CreatePullRequestRequest,
     ) -> Result<PullRequest> {
-        info!(
-            "Creating pull request: {} -> {}",
-            request.from_ref.id, request.to_ref.id
-        );
+        // Creating pull request
 
         // Debug the request being sent
         debug!(
@@ -34,7 +31,7 @@ impl PullRequestManager {
 
         let pr: PullRequest = self.client.post("pull-requests", &request).await?;
 
-        info!("Created pull request #{}: {}", pr.id, pr.title);
+        // Pull request created successfully
         Ok(pr)
     }
 

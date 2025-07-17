@@ -90,10 +90,7 @@ impl BitbucketIntegration {
 
         // Ensure target branch is also pushed to remote (if it's not the base branch)
         if target_branch != stack.base_branch {
-            info!(
-                "Ensuring target branch '{}' is pushed to remote",
-                target_branch
-            );
+            // Ensure target branch is pushed to remote
 
             // Push target branch - fail fast if this fails
             git_repo.push(&target_branch).map_err(|e| {
@@ -103,10 +100,7 @@ impl BitbucketIntegration {
                 ))
             })?;
 
-            info!(
-                "✅ Successfully pushed target branch '{}' to remote",
-                target_branch
-            );
+            // Target branch pushed successfully
         }
 
         // Create pull request
@@ -129,7 +123,7 @@ impl BitbucketIntegration {
         self.stack_manager
             .submit_entry(stack_id, entry_id, pr.id.to_string())?;
 
-        info!("Created pull request #{} for entry {}", pr.id, entry_id);
+        // Pull request created for entry
         Ok(pr)
     }
 
