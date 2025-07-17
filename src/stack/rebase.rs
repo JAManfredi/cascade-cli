@@ -188,13 +188,13 @@ impl RebaseManager {
             // Cherry-pick the commit onto the new branch
             match self.cherry_pick_commit(&entry.commit_hash) {
                 Ok(new_commit_hash) => {
-                    result.new_commits.push(new_commit_hash);
+                    result.new_commits.push(new_commit_hash.clone());
                     result
                         .branch_mapping
                         .insert(entry.branch.clone(), new_branch.clone());
 
-                    // Update stack entry with new branch
-                    self.update_stack_entry(stack.id, &entry.id, &new_branch)?;
+                    // Update stack entry with new branch and commit hash
+                    self.update_stack_entry(stack.id, &entry.id, &new_branch, &new_commit_hash)?;
 
                     // This branch becomes the base for the next entry
                     current_base = new_branch;
@@ -882,20 +882,49 @@ impl RebaseManager {
             .join("\n")
     }
 
-    /// Update a stack entry with new branch information
+    /// Update a stack entry with new commit information
+    /// NOTE: We keep the original branch name to preserve PR mapping, only update commit hash
     fn update_stack_entry(
         &mut self,
         stack_id: Uuid,
         entry_id: &Uuid,
-        new_branch: &str,
+        _new_branch: &str,
+        new_commit_hash: &str,
     ) -> Result<()> {
-        // This would update the stack entry in the stack manager
-        // For now, just log the operation
         debug!(
-            "Updating entry {} in stack {} with new branch {}",
-            entry_id, stack_id, new_branch
+            "Updating entry {} in stack {} with new commit {}",
+            entry_id, stack_id, new_commit_hash
         );
-        Ok(())
+
+        // Get the stack and update the entry
+        let stack = self
+            .stack_manager
+            .get_stack_mut(&stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        // Find and update the entry
+        if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == *entry_id) {
+            debug!(
+                "Found entry {} - updating commit from '{}' to '{}' (keeping original branch '{}')",
+                entry_id, entry.commit_hash, new_commit_hash, entry.branch
+            );
+
+            // CRITICAL: Keep the original branch name to preserve PR mapping
+            // Only update the commit hash to point to the new rebased commit
+            entry.commit_hash = new_commit_hash.to_string();
+
+            // Note: Stack will be saved by the caller (StackManager) after rebase completes
+
+            debug!(
+                "Successfully updated entry {} in stack {}",
+                entry_id, stack_id
+            );
+            Ok(())
+        } else {
+            Err(CascadeError::config(format!(
+                "Entry {entry_id} not found in stack {stack_id}"
+            )))
+        }
     }
 
     /// Pull latest changes from remote

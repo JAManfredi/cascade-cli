@@ -696,6 +696,78 @@ impl GitRepository {
     /// Configure remote callbacks with SSL settings
     /// Priority: Cascade SSL config > Git config > Default
     fn configure_remote_callbacks(&self) -> Result<git2::RemoteCallbacks<'_>> {
+        self.configure_remote_callbacks_with_fallback(false)
+    }
+
+    /// Determine if we should retry with DefaultCredentials based on git2 error classification
+    fn should_retry_with_default_credentials(&self, error: &git2::Error) -> bool {
+        match error.class() {
+            // Authentication errors that might be resolved with DefaultCredentials
+            git2::ErrorClass::Http => {
+                // HTTP errors often indicate authentication issues in corporate environments
+                match error.code() {
+                    git2::ErrorCode::Auth => true,
+                    _ => {
+                        // Check for specific HTTP authentication replay errors
+                        let error_string = error.to_string();
+                        error_string.contains("too many redirects")
+                            || error_string.contains("authentication replays")
+                            || error_string.contains("authentication required")
+                    }
+                }
+            }
+            git2::ErrorClass::Net => {
+                // Network errors that might be authentication-related
+                let error_string = error.to_string();
+                error_string.contains("authentication")
+                    || error_string.contains("unauthorized")
+                    || error_string.contains("forbidden")
+            }
+            _ => false,
+        }
+    }
+
+    /// Determine if we should fallback to git CLI based on git2 error classification
+    fn should_fallback_to_git_cli(&self, error: &git2::Error) -> bool {
+        match error.class() {
+            // SSL/TLS errors that git CLI handles better
+            git2::ErrorClass::Ssl => true,
+
+            // Certificate errors
+            git2::ErrorClass::Http if error.code() == git2::ErrorCode::Certificate => true,
+
+            // SSH errors that might need git CLI
+            git2::ErrorClass::Ssh => {
+                let error_string = error.to_string();
+                error_string.contains("no callback set")
+                    || error_string.contains("authentication required")
+            }
+
+            // Network errors that might be proxy/firewall related
+            git2::ErrorClass::Net => {
+                let error_string = error.to_string();
+                error_string.contains("TLS stream")
+                    || error_string.contains("SSL")
+                    || error_string.contains("proxy")
+                    || error_string.contains("firewall")
+            }
+
+            // General HTTP errors not handled by DefaultCredentials retry
+            git2::ErrorClass::Http => {
+                let error_string = error.to_string();
+                error_string.contains("TLS stream")
+                    || error_string.contains("SSL")
+                    || error_string.contains("proxy")
+            }
+
+            _ => false,
+        }
+    }
+
+    fn configure_remote_callbacks_with_fallback(
+        &self,
+        use_default_first: bool,
+    ) -> Result<git2::RemoteCallbacks<'_>> {
         let mut callbacks = git2::RemoteCallbacks::new();
 
         // Configure authentication with comprehensive credential support
@@ -718,6 +790,12 @@ impl GitRepository {
 
             // For HTTPS URLs, try multiple authentication methods in sequence
             if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
+                // If we're in corporate network fallback mode, try DefaultCredentials first
+                if use_default_first {
+                    tracing::debug!("Corporate network mode: trying DefaultCredentials first");
+                    return git2::Cred::default();
+                }
+
                 if url.contains("bitbucket") {
                     if let Some(creds) = &bitbucket_credentials {
                         // Method 1: Username + Token (common for Bitbucket)
@@ -981,12 +1059,36 @@ impl GitRepository {
                 Ok(())
             }
             Err(e) => {
-                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
-                let error_string = e.to_string();
-                if error_string.contains("TLS stream") || error_string.contains("SSL") {
-                    tracing::warn!(
-                        "git2 TLS error detected: {}, falling back to git CLI for fetch operation",
-                        e
+                if self.should_retry_with_default_credentials(&e) {
+                    tracing::debug!(
+                        "Authentication error detected (class: {:?}, code: {:?}): {}, retrying with DefaultCredentials",
+                        e.class(), e.code(), e
+                    );
+
+                    // Retry with DefaultCredentials for corporate networks
+                    let callbacks = self.configure_remote_callbacks_with_fallback(true)?;
+                    let mut fetch_options = git2::FetchOptions::new();
+                    fetch_options.remote_callbacks(callbacks);
+
+                    match remote.fetch::<&str>(&[], Some(&mut fetch_options), None) {
+                        Ok(_) => {
+                            tracing::debug!("Fetch succeeded with DefaultCredentials");
+                            return Ok(());
+                        }
+                        Err(retry_error) => {
+                            tracing::debug!(
+                                "DefaultCredentials retry failed: {}, falling back to git CLI",
+                                retry_error
+                            );
+                            return self.fetch_with_git_cli();
+                        }
+                    }
+                }
+
+                if self.should_fallback_to_git_cli(&e) {
+                    tracing::debug!(
+                        "Network/SSL error detected (class: {:?}, code: {:?}): {}, falling back to git CLI for fetch operation",
+                        e.class(), e.code(), e
                     );
                     return self.fetch_with_git_cli();
                 }
@@ -1130,18 +1232,44 @@ impl GitRepository {
                 Ok(())
             }
             Err(e) => {
-                // Check if this is a TLS/SSL or auth error that might be resolved by falling back to git CLI
-                let error_string = e.to_string();
-                tracing::debug!("git2 push error: {} (class: {:?})", error_string, e.class());
+                tracing::debug!(
+                    "git2 push error: {} (class: {:?}, code: {:?})",
+                    e,
+                    e.class(),
+                    e.code()
+                );
 
-                if error_string.contains("TLS stream")
-                    || error_string.contains("SSL")
-                    || e.class() == git2::ErrorClass::Ssl
-                    || error_string.contains("authentication required")
-                    || error_string.contains("no callback set")
-                    || e.class() == git2::ErrorClass::Http
-                {
-                    // Silently fall back to git CLI without logging
+                if self.should_retry_with_default_credentials(&e) {
+                    tracing::debug!(
+                        "Authentication error detected (class: {:?}, code: {:?}): {}, retrying with DefaultCredentials",
+                        e.class(), e.code(), e
+                    );
+
+                    // Retry with DefaultCredentials for corporate networks
+                    let callbacks = self.configure_remote_callbacks_with_fallback(true)?;
+                    let mut push_options = git2::PushOptions::new();
+                    push_options.remote_callbacks(callbacks);
+
+                    match remote.push(&[&refspec], Some(&mut push_options)) {
+                        Ok(_) => {
+                            tracing::debug!("Push succeeded with DefaultCredentials");
+                            return Ok(());
+                        }
+                        Err(retry_error) => {
+                            tracing::debug!(
+                                "DefaultCredentials retry failed: {}, falling back to git CLI",
+                                retry_error
+                            );
+                            return self.push_with_git_cli(branch);
+                        }
+                    }
+                }
+
+                if self.should_fallback_to_git_cli(&e) {
+                    tracing::debug!(
+                        "Network/SSL error detected (class: {:?}, code: {:?}): {}, falling back to git CLI for push operation",
+                        e.class(), e.code(), e
+                    );
                     return self.push_with_git_cli(branch);
                 }
 
@@ -1388,35 +1516,20 @@ impl GitRepository {
             .map_err(|e| {
                 CascadeError::config(format!("Failed to find source branch {source_branch}: {e}"))
             })?;
-        let source_commit = source_ref.peel_to_commit().map_err(|e| {
+        let _source_commit = source_ref.peel_to_commit().map_err(|e| {
             CascadeError::config(format!(
                 "Failed to get commit for source branch {source_branch}: {e}"
             ))
         })?;
 
-        // Update the target branch to point to the source commit
-        let mut target_ref = self
-            .repo
-            .find_reference(&format!("refs/heads/{target_branch}"))
-            .map_err(|e| {
-                CascadeError::config(format!("Failed to find target branch {target_branch}: {e}"))
-            })?;
-
-        target_ref
-            .set_target(source_commit.id(), "Force push from rebase")
-            .map_err(|e| {
-                CascadeError::config(format!(
-                    "Failed to update target branch {target_branch}: {e}"
-                ))
-            })?;
-
-        // Force push to remote
+        // Force push to remote without modifying local target branch
         let mut remote = self
             .repo
             .find_remote("origin")
             .map_err(|e| CascadeError::config(format!("Failed to find origin remote: {e}")))?;
 
-        let refspec = format!("+refs/heads/{target_branch}:refs/heads/{target_branch}");
+        // Push source branch content to remote target branch
+        let refspec = format!("+refs/heads/{source_branch}:refs/heads/{target_branch}");
 
         // Configure callbacks with SSL settings from git config
         let callbacks = self.configure_remote_callbacks()?;
@@ -1428,18 +1541,41 @@ impl GitRepository {
         match remote.push(&[&refspec], Some(&mut push_options)) {
             Ok(_) => {}
             Err(e) => {
-                // Check if this is a TLS/SSL error that might be resolved by falling back to git CLI
-                let error_string = e.to_string();
-                if error_string.contains("TLS stream") || error_string.contains("SSL") {
-                    tracing::warn!(
-                        "git2 TLS error detected: {}, falling back to git CLI for force push operation",
-                        e
+                if self.should_retry_with_default_credentials(&e) {
+                    tracing::debug!(
+                        "Authentication error detected (class: {:?}, code: {:?}): {}, retrying with DefaultCredentials",
+                        e.class(), e.code(), e
+                    );
+
+                    // Retry with DefaultCredentials for corporate networks
+                    let callbacks = self.configure_remote_callbacks_with_fallback(true)?;
+                    let mut push_options = git2::PushOptions::new();
+                    push_options.remote_callbacks(callbacks);
+
+                    match remote.push(&[&refspec], Some(&mut push_options)) {
+                        Ok(_) => {
+                            tracing::debug!("Force push succeeded with DefaultCredentials");
+                            // Success - continue to normal success path
+                        }
+                        Err(retry_error) => {
+                            tracing::debug!(
+                                "DefaultCredentials retry failed: {}, falling back to git CLI",
+                                retry_error
+                            );
+                            return self.force_push_with_git_cli(target_branch);
+                        }
+                    }
+                } else if self.should_fallback_to_git_cli(&e) {
+                    tracing::debug!(
+                        "Network/SSL error detected (class: {:?}, code: {:?}): {}, falling back to git CLI for force push operation",
+                        e.class(), e.code(), e
                     );
                     return self.force_push_with_git_cli(target_branch);
+                } else {
+                    return Err(CascadeError::config(format!(
+                        "Failed to force push {target_branch}: {e}"
+                    )));
                 }
-                return Err(CascadeError::config(format!(
-                    "Failed to force push {target_branch}: {e}"
-                )));
             }
         }
 

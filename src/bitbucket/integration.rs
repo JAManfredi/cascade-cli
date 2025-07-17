@@ -3,6 +3,7 @@ use crate::bitbucket::pull_request::{
     CreatePullRequestRequest, Project, PullRequest, PullRequestManager, PullRequestRef,
     PullRequestState, Repository,
 };
+use crate::cli::output::Output;
 use crate::config::CascadeConfig;
 use crate::errors::{CascadeError, Result};
 use crate::stack::{Stack, StackEntry, StackManager};
@@ -456,6 +457,17 @@ impl BitbucketIntegration {
                     // Get the existing PR to understand its current state
                     match self.pr_manager.get_pull_request(pr_id).await {
                         Ok(_existing_pr) => {
+                            // Validate that the new branch contains cumulative changes
+                            if let Err(validation_error) =
+                                self.validate_cumulative_changes(&entry.branch, new_branch)
+                            {
+                                Output::error(format!(
+                                    "❌ Validation failed for PR #{pr_id}: {validation_error}"
+                                ));
+                                Output::warning("Skipping force push to prevent data loss");
+                                continue;
+                            }
+
                             // Force push the new branch content to the old branch name
                             // This preserves the PR while updating its contents
                             match self
@@ -537,6 +549,63 @@ impl BitbucketIntegration {
         }
 
         Ok(updated_branches)
+    }
+
+    /// Validate that the new branch contains cumulative changes from the base
+    /// This prevents data loss during force push operations
+    fn validate_cumulative_changes(&self, original_branch: &str, new_branch: &str) -> Result<()> {
+        let git_repo = self.stack_manager.git_repo();
+
+        // Get the stack that contains this branch
+        let stack = self
+            .stack_manager
+            .get_all_stacks()
+            .into_iter()
+            .find(|s| s.entries.iter().any(|e| e.branch == original_branch))
+            .ok_or_else(|| {
+                CascadeError::config(format!(
+                    "No stack found containing branch '{original_branch}'"
+                ))
+            })?;
+
+        let base_branch = &stack.base_branch;
+
+        // Check that the new branch contains all changes from base to original branch
+        match git_repo.get_commits_between(base_branch, new_branch) {
+            Ok(new_commits) => {
+                if new_commits.is_empty() {
+                    return Err(CascadeError::validation(format!(
+                        "New branch '{new_branch}' contains no commits from base '{base_branch}' - this would result in data loss"
+                    )));
+                }
+
+                // Verify that the new branch has at least as many commits as expected
+                match git_repo.get_commits_between(base_branch, original_branch) {
+                    Ok(original_commits) => {
+                        if new_commits.len() < original_commits.len() {
+                            return Err(CascadeError::validation(format!(
+                                "New branch '{}' has {} commits but original branch '{}' had {} commits - potential data loss",
+                                new_branch, new_commits.len(), original_branch, original_commits.len()
+                            )));
+                        }
+
+                        tracing::debug!(
+                            "Validation passed: new branch '{}' has {} commits, original had {} commits",
+                            new_branch, new_commits.len(), original_commits.len()
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        tracing::warn!("Could not validate original branch commits: {}", e);
+                        // Continue with force push if we can't validate original (branch might not exist remotely)
+                        Ok(())
+                    }
+                }
+            }
+            Err(e) => Err(CascadeError::validation(format!(
+                "Could not get commits for validation: {e}"
+            ))),
+        }
     }
 
     /// Check the enhanced status of all pull requests in a stack

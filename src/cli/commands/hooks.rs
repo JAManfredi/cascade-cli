@@ -95,7 +95,7 @@ impl HookType {
 
 impl HooksManager {
     pub fn new(repo_path: &Path) -> Result<Self> {
-        let hooks_dir = repo_path.join(".git").join("hooks");
+        let hooks_dir = Self::get_hooks_path(repo_path)?;
 
         if !hooks_dir.exists() {
             return Err(CascadeError::config(
@@ -107,6 +107,37 @@ impl HooksManager {
             repo_path: repo_path.to_path_buf(),
             hooks_dir,
         })
+    }
+
+    /// Get the actual hooks directory path, respecting core.hooksPath configuration
+    fn get_hooks_path(repo_path: &Path) -> Result<PathBuf> {
+        use std::process::Command;
+
+        // Try to get core.hooksPath configuration
+        let output = Command::new("git")
+            .args(["config", "--get", "core.hooksPath"])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to check git config: {e}")))?;
+
+        let hooks_path = if output.status.success() {
+            let configured_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if configured_path.is_empty() {
+                // Empty value means default
+                repo_path.join(".git").join("hooks")
+            } else if configured_path.starts_with('/') {
+                // Absolute path
+                PathBuf::from(configured_path)
+            } else {
+                // Relative path - relative to repo root
+                repo_path.join(configured_path)
+            }
+        } else {
+            // No core.hooksPath configured, use default
+            repo_path.join(".git").join("hooks")
+        };
+
+        Ok(hooks_path)
     }
 
     /// Install all recommended Cascade hooks
@@ -171,26 +202,63 @@ impl HooksManager {
     /// Install a specific hook
     pub fn install_hook(&self, hook_type: &HookType) -> Result<()> {
         let hook_path = self.hooks_dir.join(hook_type.filename());
-        let hook_content = self.generate_hook_script(hook_type)?;
+        let cascade_content = self.generate_hook_script(hook_type)?;
 
-        // Backup existing hook if it exists
         if hook_path.exists() {
-            let backup_path = hook_path.with_extension("cascade-backup");
-            fs::copy(&hook_path, &backup_path).map_err(|e| {
-                CascadeError::config(format!("Failed to backup existing hook: {e}"))
+            // Check if cascade hooks are already installed
+            let existing_content = fs::read_to_string(&hook_path)
+                .map_err(|e| CascadeError::config(format!("Failed to read existing hook: {e}")))?;
+
+            if existing_content.contains("=== CASCADE CLI HOOKS START ===") {
+                Output::info(format!(
+                    "{} hook already has cascade hooks installed",
+                    hook_type.filename()
+                ));
+                return Ok(());
+            }
+
+            // Append cascade hooks to existing hook
+            self.append_to_existing_hook(&hook_path, &cascade_content)?;
+            Output::success(format!(
+                "Added cascade hooks to existing {} hook",
+                hook_type.filename()
+            ));
+        } else {
+            // No existing hook, install cascade hook directly
+            fs::write(&hook_path, cascade_content)
+                .map_err(|e| CascadeError::config(format!("Failed to write hook file: {e}")))?;
+
+            // Make executable (platform-specific)
+            crate::utils::platform::make_executable(&hook_path).map_err(|e| {
+                CascadeError::config(format!("Failed to make hook executable: {e}"))
             })?;
-            Output::info(format!("Backed up existing {} hook", hook_type.filename()));
+
+            Output::success(format!("Installed {} hook", hook_type.filename()));
         }
 
-        // Write new hook
-        fs::write(&hook_path, hook_content)
-            .map_err(|e| CascadeError::config(format!("Failed to write hook file: {e}")))?;
+        Ok(())
+    }
 
-        // Make executable (platform-specific)
-        crate::utils::platform::make_executable(&hook_path)
+    /// Append cascade hooks to an existing hook file
+    fn append_to_existing_hook(&self, hook_path: &Path, cascade_content: &str) -> Result<()> {
+        let existing_content = fs::read_to_string(hook_path)
+            .map_err(|e| CascadeError::config(format!("Failed to read existing hook: {e}")))?;
+
+        // Create the cascade section to append
+        let cascade_section = format!(
+            "\n# === CASCADE CLI HOOKS START ===\n{cascade_content}\n# === CASCADE CLI HOOKS END ===\n"
+        );
+
+        // Append cascade section to existing content
+        let new_content = format!("{existing_content}{cascade_section}");
+
+        fs::write(hook_path, new_content)
+            .map_err(|e| CascadeError::config(format!("Failed to update hook file: {e}")))?;
+
+        // Ensure it's still executable
+        crate::utils::platform::make_executable(hook_path)
             .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {e}")))?;
 
-        Output::success(format!("Installed {} hook", hook_type.filename()));
         Ok(())
     }
 
@@ -218,40 +286,68 @@ impl HooksManager {
         let hook_path = self.hooks_dir.join(hook_type.filename());
 
         if hook_path.exists() {
-            // Check if it's a Cascade hook
             let content = fs::read_to_string(&hook_path)
                 .map_err(|e| CascadeError::config(format!("Failed to read hook file: {e}")))?;
 
-            // Check for platform-appropriate hook marker
-            let is_cascade_hook = if cfg!(windows) {
-                content.contains("rem Cascade CLI Hook")
-            } else {
-                content.contains("# Cascade CLI Hook")
-            };
-
-            if is_cascade_hook {
-                fs::remove_file(&hook_path).map_err(|e| {
-                    CascadeError::config(format!("Failed to remove hook file: {e}"))
-                })?;
-
-                // Restore backup if it exists
-                let backup_path = hook_path.with_extension("cascade-backup");
-                if backup_path.exists() {
-                    fs::rename(&backup_path, &hook_path).map_err(|e| {
-                        CascadeError::config(format!("Failed to restore backup: {e}"))
-                    })?;
-                    Output::info(format!("Restored original {} hook", hook_type.filename()));
-                } else {
-                    Output::info(format!("Removed {} hook", hook_type.filename()));
-                }
-            } else {
-                Output::warning(format!(
-                    "{} hook exists but is not a Cascade hook, skipping",
+            if content.contains("=== CASCADE CLI HOOKS START ===") {
+                // Remove only the cascade section from the hook
+                self.remove_cascade_section_from_hook(&hook_path)?;
+                Output::success(format!(
+                    "Removed cascade hooks from {} hook",
                     hook_type.filename()
                 ));
+            } else {
+                // Check if it's a pure cascade hook (no project hooks)
+                let is_cascade_hook = if cfg!(windows) {
+                    content.contains("rem Cascade CLI Hook")
+                } else {
+                    content.contains("# Cascade CLI Hook")
+                };
+
+                if is_cascade_hook {
+                    fs::remove_file(&hook_path).map_err(|e| {
+                        CascadeError::config(format!("Failed to remove hook file: {e}"))
+                    })?;
+                    Output::info(format!("Removed {} hook", hook_type.filename()));
+                } else {
+                    Output::warning(format!(
+                        "{} hook exists but is not a Cascade hook, skipping",
+                        hook_type.filename()
+                    ));
+                }
             }
         } else {
             Output::info(format!("{} hook not found", hook_type.filename()));
+        }
+
+        Ok(())
+    }
+
+    /// Remove only the cascade section from a hook file, preserving the original content
+    fn remove_cascade_section_from_hook(&self, hook_path: &Path) -> Result<()> {
+        let content = fs::read_to_string(hook_path)
+            .map_err(|e| CascadeError::config(format!("Failed to read hook file: {e}")))?;
+
+        // Find and remove the cascade section
+        let start_marker = "# === CASCADE CLI HOOKS START ===";
+        let end_marker = "# === CASCADE CLI HOOKS END ===";
+
+        if let Some(start_pos) = content.find(start_marker) {
+            if let Some(end_pos) = content.find(end_marker) {
+                let end_pos = end_pos + end_marker.len();
+
+                // Remove everything from start marker to end marker (inclusive)
+                let mut new_content = String::new();
+                new_content.push_str(&content[..start_pos]);
+                new_content.push_str(&content[end_pos..]);
+
+                // Clean up any trailing newlines that might be left
+                let new_content = new_content.trim_end().to_string();
+
+                fs::write(hook_path, new_content).map_err(|e| {
+                    CascadeError::config(format!("Failed to update hook file: {e}"))
+                })?;
+            }
         }
 
         Ok(())
@@ -272,15 +368,26 @@ impl HooksManager {
             let hook_path = self.hooks_dir.join(hook.filename());
             if hook_path.exists() {
                 let content = fs::read_to_string(&hook_path).unwrap_or_default();
-                // Check for platform-appropriate hook marker
-                let is_cascade_hook = if cfg!(windows) {
-                    content.contains("rem Cascade CLI Hook")
-                } else {
-                    content.contains("# Cascade CLI Hook")
-                };
 
-                if is_cascade_hook {
-                    Output::success(format!("{}: {}", hook.filename(), hook.description()));
+                // Check if cascade hooks are present (either as standalone or chained)
+                let has_cascade_hooks = content.contains("=== CASCADE CLI HOOKS START ===")
+                    || if cfg!(windows) {
+                        content.contains("rem Cascade CLI Hook")
+                    } else {
+                        content.contains("# Cascade CLI Hook")
+                    };
+
+                if has_cascade_hooks {
+                    // Check if it's chained (has both project and cascade hooks)
+                    if content.contains("=== CASCADE CLI HOOKS START ===") {
+                        Output::success(format!(
+                            "{}: {} (Chained)",
+                            hook.filename(),
+                            hook.description()
+                        ));
+                    } else {
+                        Output::success(format!("{}: {}", hook.filename(), hook.description()));
+                    }
                 } else {
                     Output::warning(format!(
                         "{}: {} (Custom)",
@@ -1208,7 +1315,71 @@ mod tests {
         let _manager = HooksManager::new(&repo_path).unwrap();
 
         assert_eq!(_manager.repo_path, repo_path);
+        // Should use default hooks directory when no core.hooksPath is set
         assert_eq!(_manager.hooks_dir, repo_path.join(".git/hooks"));
+    }
+
+    #[test]
+    fn test_hooks_manager_custom_hooks_path() {
+        let (_temp_dir, repo_path) = create_test_repo();
+
+        // Set custom hooks path
+        Command::new("git")
+            .args(["config", "core.hooksPath", "custom-hooks"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Create the custom hooks directory
+        let custom_hooks_dir = repo_path.join("custom-hooks");
+        std::fs::create_dir_all(&custom_hooks_dir).unwrap();
+
+        let _manager = HooksManager::new(&repo_path).unwrap();
+
+        assert_eq!(_manager.repo_path, repo_path);
+        // Should use custom hooks directory when core.hooksPath is set
+        assert_eq!(_manager.hooks_dir, custom_hooks_dir);
+    }
+
+    #[test]
+    fn test_hook_chaining_with_existing_hooks() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let manager = HooksManager::new(&repo_path).unwrap();
+
+        let hook_type = HookType::PreCommit;
+        let hook_path = repo_path.join(".git/hooks").join(hook_type.filename());
+
+        // Create an existing project hook
+        let existing_hook_content = "#!/bin/bash\n# Project pre-commit hook\n./scripts/lint.sh\n";
+        std::fs::write(&hook_path, existing_hook_content).unwrap();
+        crate::utils::platform::make_executable(&hook_path).unwrap();
+
+        // Install cascade hook (should chain with existing)
+        let result = manager.install_hook(&hook_type);
+        assert!(result.is_ok());
+
+        // Read the resulting hook
+        let final_content = std::fs::read_to_string(&hook_path).unwrap();
+
+        // Should contain both original and cascade content
+        assert!(final_content.contains("# Project pre-commit hook"));
+        assert!(final_content.contains("./scripts/lint.sh"));
+        assert!(final_content.contains("=== CASCADE CLI HOOKS START ==="));
+        assert!(final_content.contains("=== CASCADE CLI HOOKS END ==="));
+
+        // Test uninstall removes only cascade section
+        let uninstall_result = manager.uninstall_hook(&hook_type);
+        assert!(uninstall_result.is_ok());
+
+        // Read the hook after uninstall
+        let after_uninstall = std::fs::read_to_string(&hook_path).unwrap();
+
+        // Should still contain original project hook
+        assert!(after_uninstall.contains("# Project pre-commit hook"));
+        assert!(after_uninstall.contains("./scripts/lint.sh"));
+        // But not cascade content
+        assert!(!after_uninstall.contains("=== CASCADE CLI HOOKS START ==="));
+        assert!(!after_uninstall.contains("=== CASCADE CLI HOOKS END ==="));
     }
 
     #[test]
@@ -1401,12 +1572,12 @@ mod tests {
 
         std::fs::write(&hook_path, existing_content).unwrap();
 
-        // Install hook (should backup and replace existing)
+        // Install hook (should chain with existing)
         let hook_type = HookType::PostCommit;
         let result = manager.install_hook(&hook_type);
         assert!(result.is_ok());
 
-        // Verify new content replaced old content
+        // Verify both old and new content exist
         let content = std::fs::read_to_string(&hook_path).unwrap();
         #[cfg(windows)]
         {
@@ -1416,10 +1587,10 @@ mod tests {
         {
             assert!(content.contains("# Cascade CLI Hook"));
         }
-        assert!(!content.contains("existing hook"));
-
-        // Verify backup was created
-        let backup_path = hook_path.with_extension("cascade-backup");
-        assert!(backup_path.exists());
+        // Original content should still be there
+        assert!(content.contains("existing hook"));
+        // Chaining markers should be present
+        assert!(content.contains("=== CASCADE CLI HOOKS START ==="));
+        assert!(content.contains("=== CASCADE CLI HOOKS END ==="));
     }
 }

@@ -7,7 +7,7 @@ use clap::{Subcommand, ValueEnum};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
 use std::io::{self, Write};
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 /// CLI argument version of RebaseStrategy
 #[derive(ValueEnum, Clone, Debug)]
@@ -1929,48 +1929,22 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     let base_branch = active_stack.base_branch.clone();
     let stack_name = active_stack.name.clone();
 
-    Output::progress(format!("Syncing stack '{stack_name}' with remote..."));
+    // Single progress message for the entire sync operation
+    println!("Syncing stack '{stack_name}' with remote...");
 
-    // Step 1: Pull latest changes from base branch
-    Output::section(format!("Pulling latest changes from '{base_branch}'"));
-
-    // Checkout base branch first
+    // Step 1: Pull latest changes from base branch (silent unless error)
     match git_repo.checkout_branch(&base_branch) {
         Ok(_) => {
-            Output::sub_item(format!("Switched to '{base_branch}'"));
-
-            // Pull latest changes
             match git_repo.pull(&base_branch) {
                 Ok(_) => {
-                    Output::success("Successfully pulled latest changes");
+                    // Silent success - only show on verbose or error
                 }
                 Err(e) => {
                     if force {
                         Output::warning(format!("Pull failed: {e} (continuing due to --force)"));
                     } else {
                         Output::error(format!("Failed to pull latest changes: {e}"));
-
-                        // Provide diagnostic information for pull failures
-                        Output::section("Sync Diagnostic Information");
-
-                        let error_str = e.to_string();
-                        if error_str.contains("SSL") || error_str.contains("TLS") {
-                            Output::bullet("SSL/TLS authentication issue detected");
-                            Output::bullet("This is common with corporate Git servers");
-                        }
-
-                        Output::tip("Solutions to try:");
-                        Output::bullet("Test basic git authentication: git fetch origin");
-                        Output::bullet("Use --force to skip pull and continue with rebase");
-                        Output::bullet(format!(
-                            "Try manual pull first: git pull origin {base_branch}"
-                        ));
-
-                        Output::section("Quick Fix");
-                        Output::command_example(
-                            "ca sync --force    # Skip failed pull, continue with rebase",
-                        );
-
+                        Output::tip("Use --force to skip pull and continue with rebase");
                         return Err(CascadeError::branch(format!(
                             "Failed to pull latest changes from '{base_branch}': {e}. Use --force to continue anyway."
                         )));
@@ -1995,9 +1969,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         }
     }
 
-    // Step 2: Check if stack needs rebase
-    Output::section("Checking if stack needs rebase");
-
+    // Step 2: Check if stack needs rebase and handle it
     let mut updated_stack_manager = StackManager::new(&repo_root)?;
     let stack_id = active_stack.id;
 
@@ -2007,13 +1979,6 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
             if let Some(updated_stack) = updated_stack_manager.get_stack(&stack_id) {
                 match &updated_stack.status {
                     crate::stack::StackStatus::NeedsSync => {
-                        Output::info(format!(
-                            "Stack needs rebase due to new commits on '{base_branch}'"
-                        ));
-
-                        // Step 3: Rebase the stack
-                        Output::section(format!("Rebasing stack onto updated '{base_branch}'"));
-
                         // Load configuration for Bitbucket integration
                         let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
                         let config_path = config_dir.join("config.json");
@@ -2045,18 +2010,9 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
                         match rebase_manager.rebase_stack(&stack_id) {
                             Ok(result) => {
-                                Output::success("Rebase completed successfully!");
-
                                 if !result.branch_mapping.is_empty() {
-                                    Output::section("Updated branches:");
-                                    for (old, new) in &result.branch_mapping {
-                                        Output::bullet(format!("{old} → {new}"));
-                                    }
-
                                     // Update PRs if enabled
                                     if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
-                                        Output::progress("Updating pull requests...");
-
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
                                         let mut integration =
@@ -2074,10 +2030,10 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                                         {
                                             Ok(updated_prs) => {
                                                 if !updated_prs.is_empty() {
-                                                    Output::success(format!(
+                                                    println!(
                                                         "Updated {} pull requests",
                                                         updated_prs.len()
-                                                    ));
+                                                    );
                                                 }
                                             }
                                             Err(e) => {
@@ -2100,9 +2056,10 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                         }
                     }
                     crate::stack::StackStatus::Clean => {
-                        Output::success("Stack is already up to date");
+                        // Already up to date - silent success
                     }
                     other => {
+                        // Only show unexpected status
                         Output::info(format!("Stack status: {other:?}"));
                     }
                 }
@@ -2119,25 +2076,17 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         }
     }
 
-    // Step 4: Cleanup merged branches (optional)
+    // Step 3: Cleanup merged branches (optional) - only show if something happens
     if !skip_cleanup {
-        Output::section("Checking for merged branches to clean up");
-        // TODO: Implement merged branch cleanup
+        // TODO: Implement merged branch cleanup silently
         // This would:
         // 1. Find branches that have been merged into base
         // 2. Ask user if they want to delete them
         // 3. Remove them from the stack metadata
-        Output::info("Branch cleanup not yet implemented");
-    } else {
-        Output::info("Skipping branch cleanup");
+        // Only show output if branches are found to clean up
     }
 
     Output::success("Sync completed successfully!");
-    Output::sub_item(format!("Base branch: {base_branch}"));
-    Output::next_steps(&[
-        "Review your updated stack: ca stack show",
-        "Check PR status: ca stack status",
-    ]);
 
     Ok(())
 }
@@ -2218,10 +2167,10 @@ async fn rebase_stack(
         skip_pull: None, // Normal rebase should pull latest changes
     };
 
-    info!("   Strategy: {:?}", rebase_strategy);
-    info!("   Interactive: {}", interactive);
-    info!("   Target base: {:?}", options.target_base);
-    info!("   Entries: {}", active_stack.entries.len());
+    debug!("   Strategy: {:?}", rebase_strategy);
+    debug!("   Interactive: {}", interactive);
+    debug!("   Target base: {:?}", options.target_base);
+    debug!("   Entries: {}", active_stack.entries.len());
 
     // Check if there's already a rebase in progress
     let mut rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);

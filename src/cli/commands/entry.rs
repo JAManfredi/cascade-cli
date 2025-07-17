@@ -25,7 +25,6 @@ pub enum EntryAction {
     /// Interactively checkout a stack entry for editing
     Checkout {
         /// Stack entry number (optional, shows picker if not provided)
-        #[arg(short, long)]
         entry: Option<usize>,
         /// Skip interactive picker and use entry number directly
         #[arg(long)]
@@ -120,12 +119,12 @@ async fn checkout_entry(
         warn!("Already in edit mode for entry in stack");
 
         if !skip_confirmation {
-            println!("⚠️  Already in edit mode!");
-            println!(
-                "   Current target: {} (TODO: get commit message)",
+            Output::warning("Already in edit mode!");
+            Output::sub_item(format!(
+                "Current target: {} (TODO: get commit message)",
                 &edit_info.original_commit_hash[..8]
-            );
-            println!("   Do you want to exit current edit mode and start a new one? [y/N]");
+            ));
+            Output::info("Do you want to exit current edit mode and start a new one? [y/N]");
 
             // TODO: Implement interactive confirmation
             // For now, just warn and exit
@@ -135,15 +134,17 @@ async fn checkout_entry(
 
     // Confirmation prompt
     if !skip_confirmation {
-        println!("🎯 Checking out entry for editing:");
-        println!("   Entry #{target_entry_num}: {entry_short_hash} ({entry_short_message})");
-        println!("   Branch: {entry_branch}");
+        Output::section("Checking out entry for editing");
+        Output::sub_item(format!(
+            "Entry #{target_entry_num}: {entry_short_hash} ({entry_short_message})"
+        ));
+        Output::sub_item(format!("Branch: {entry_branch}"));
         if let Some(pr_id) = &entry_pr_id {
-            println!("   PR: #{pr_id}");
+            Output::sub_item(format!("PR: #{pr_id}"));
         }
-        println!("\n⚠️  This will checkout the commit and enter edit mode.");
-        println!("   Any changes you make can be amended to this commit or create new entries.");
-        println!("\nContinue? [y/N]");
+        Output::warning("This will checkout the commit and enter edit mode.");
+        Output::info("Any changes you make can be amended to this commit or create new entries.");
+        Output::info("\nContinue? [y/N]");
 
         // TODO: Implement interactive confirmation with dialoguer
         // For now, just proceed
@@ -164,13 +165,25 @@ async fn checkout_entry(
     info!("Checking out commit: {}", entry_commit_hash);
     repo.checkout_commit(&entry_commit_hash)?;
 
-    println!("✅ Entered edit mode for entry #{target_entry_num}");
-    println!("   You are now on commit: {entry_short_hash} ({entry_short_message})");
-    println!("   Branch: {entry_branch}");
-    println!("\n📝 Make your changes and commit normally.");
-    println!("   • Use 'ca entry status' to see edit mode info");
-    println!("   • Changes will be smartly handled when you commit");
-    println!("   • Use 'ca stack commit-edit' when ready (coming in next step)");
+    Output::success(format!("Entered edit mode for entry #{target_entry_num}"));
+    Output::sub_item(format!(
+        "You are now on commit: {entry_short_hash} ({entry_short_message})"
+    ));
+    Output::sub_item(format!("Branch: {entry_branch}"));
+
+    Output::section("Make your changes and commit normally");
+    Output::bullet("Use 'ca entry status' to see edit mode info");
+    Output::bullet("Use 'git commit --amend' to modify this entry");
+    Output::bullet("Use 'git commit' to create a new entry on top");
+    Output::bullet("Run 'ca sync' after committing to update PRs");
+
+    // Check if prepare-commit-msg hook is installed
+    let hooks_dir = repo_root.join(".git/hooks");
+    let hook_path = hooks_dir.join("prepare-commit-msg");
+    if !hook_path.exists() {
+        Output::tip("Install the prepare-commit-msg hook for better guidance:");
+        Output::sub_item("ca hooks add prepare-commit-msg");
+    }
 
     Ok(())
 }
@@ -332,8 +345,8 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
         if quiet {
             println!("inactive");
         } else {
-            println!("📝 Not in edit mode");
-            println!("   Use 'ca entry checkout' to start editing a stack entry");
+            Output::info("Not in edit mode");
+            Output::sub_item("Use 'ca entry checkout' to start editing a stack entry");
         }
         return Ok(());
     }
@@ -345,27 +358,27 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("🎯 Currently in edit mode");
-    println!("   Target entry: {:?}", edit_info.target_entry_id);
-    println!(
-        "   Original commit: {}",
+    Output::section("Currently in edit mode");
+    Output::sub_item(format!("Target entry: {:?}", edit_info.target_entry_id));
+    Output::sub_item(format!(
+        "Original commit: {}",
         &edit_info.original_commit_hash[..8]
-    );
-    println!(
-        "   Started: {}",
+    ));
+    Output::sub_item(format!(
+        "Started: {}",
         edit_info.started_at.format("%Y-%m-%d %H:%M:%S")
-    );
+    ));
 
     // Show current Git status
-    println!("\n📋 Current state:");
+    Output::section("Current state");
 
     // TODO: Add Git status information
     // - Current HEAD vs original commit
     // - Working directory status
     // - Staged changes
 
-    println!("   Use 'git status' for detailed working directory status");
-    println!("   Use 'ca entry list' to see all entries");
+    Output::sub_item("Use 'git status' for detailed working directory status");
+    Output::sub_item("Use 'ca entry list' to see all entries");
 
     Ok(())
 }
