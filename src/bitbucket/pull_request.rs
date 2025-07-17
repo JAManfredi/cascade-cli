@@ -40,6 +40,32 @@ impl PullRequestManager {
         self.client.get(&format!("pull-requests/{pr_id}")).await
     }
 
+    /// Update a pull request (title, description, etc)
+    pub async fn update_pull_request(
+        &self,
+        pr_id: u64,
+        title: Option<String>,
+        description: Option<String>,
+        version: u64,
+    ) -> Result<PullRequest> {
+        #[derive(Debug, Serialize)]
+        struct UpdatePullRequestRequest {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            title: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            description: Option<String>,
+            version: u64,
+        }
+
+        let request = UpdatePullRequestRequest {
+            title,
+            description,
+            version,
+        };
+
+        self.client.put(&format!("pull-requests/{pr_id}"), &request).await
+    }
+
     /// List pull requests with optional filters
     pub async fn list_pull_requests(
         &self,

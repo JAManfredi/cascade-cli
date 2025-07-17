@@ -1654,6 +1654,22 @@ async fn submit_entry(
         pb.inc(1);
     }
 
+    // Update all PR descriptions in the stack if any PRs were created/exist
+    let has_any_prs = active_stack.entries.iter().any(|e| e.pull_request_id.is_some());
+    if has_any_prs && submitted_count > 0 {
+        pb.set_message("Updating PR descriptions...");
+        match integration.update_all_pr_descriptions(&stack_id).await {
+            Ok(updated_prs) => {
+                if !updated_prs.is_empty() {
+                    Output::sub_item(format!("Updated {} PR descriptions with current stack hierarchy", updated_prs.len()));
+                }
+            }
+            Err(e) => {
+                Output::warning(format!("Failed to update some PR descriptions: {e}"));
+            }
+        }
+    }
+
     if failed_entries.is_empty() {
         pb.finish_with_message("✅ All pull requests created successfully");
         Output::success(format!(

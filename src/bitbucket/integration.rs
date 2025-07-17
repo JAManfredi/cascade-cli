@@ -35,6 +35,60 @@ impl BitbucketIntegration {
         })
     }
 
+    /// Update all PR descriptions in a stack with current hierarchy
+    pub async fn update_all_pr_descriptions(&self, stack_id: &Uuid) -> Result<Vec<u64>> {
+        let stack = self
+            .stack_manager
+            .get_stack(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        let mut updated_prs = Vec::new();
+
+        // Update each PR with current stack hierarchy
+        for entry in &stack.entries {
+            if let Some(pr_id_str) = &entry.pull_request_id {
+                if let Ok(pr_id) = pr_id_str.parse::<u64>() {
+                    // Get current PR to get its version
+                    match self.pr_manager.get_pull_request(pr_id).await {
+                        Ok(pr) => {
+                            // Generate updated description with current stack state
+                            let updated_description = self.add_stack_hierarchy_footer(
+                                pr.description.clone().and_then(|desc| {
+                                    // Remove old stack hierarchy if present
+                                    desc.split("---\n\n## 📚 Stack:")
+                                        .next()
+                                        .map(|s| s.trim().to_string())
+                                }),
+                                &stack,
+                                entry,
+                            )?;
+
+                            // Update the PR description
+                            match self.pr_manager.update_pull_request(
+                                pr_id,
+                                None, // Don't change title
+                                updated_description,
+                                pr.version,
+                            ).await {
+                                Ok(_) => {
+                                    updated_prs.push(pr_id);
+                                }
+                                Err(e) => {
+                                    warn!("Failed to update PR #{}: {}", pr_id, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to get PR #{} for update: {}", pr_id, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(updated_prs)
+    }
+
     /// Submit a single stack entry as a pull request
     pub async fn submit_entry(
         &mut self,
