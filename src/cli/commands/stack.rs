@@ -794,21 +794,24 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         )
     };
 
-    println!("📊 Stack: {stack_name}");
-    println!("   Base branch: {stack_base}");
-    if let Some(working) = &stack_working {
-        println!("   Working branch: {working}");
-    }
-    println!("   Total entries: {}", stack_entries.len());
+    // Use the new output format for stack info
+    Output::stack_info(
+        &stack_name,
+        &stack_id.to_string(),
+        &stack_base,
+        stack_working.as_deref(),
+        true, // is_active
+    );
+    Output::sub_item(format!("Total entries: {}", stack_entries.len()));
 
     if stack_entries.is_empty() {
-        println!("   No entries in this stack yet");
-        println!("   Use 'ca push' to add commits to this stack");
+        Output::info("No entries in this stack yet");
+        Output::tip("Use 'ca push' to add commits to this stack");
         return Ok(());
     }
 
     // Show entries
-    println!("\n📚 Stack Entries:");
+    Output::section("Stack Entries");
     for (i, entry) in stack_entries.iter().enumerate() {
         let entry_num = i + 1;
         let short_hash = entry.short_hash();
@@ -829,29 +832,27 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             String::new()
         };
 
-        println!(
-            "   {entry_num}. {} {} {}{}",
-            short_hash,
-            if entry.is_submitted { "📤" } else { "📝" },
-            short_msg,
-            source_branch_info
+        let status_icon = if entry.is_submitted { "[submitted]" } else { "[pending]" };
+        Output::numbered_item(
+            entry_num,
+            format!("{} {} {}{}", short_hash, status_icon, short_msg, source_branch_info)
         );
 
         if verbose {
-            println!("      Branch: {}", entry.branch);
-            println!(
-                "      Created: {}",
+            Output::sub_item(format!("Branch: {}", entry.branch));
+            Output::sub_item(format!(
+                "Created: {}",
                 entry.created_at.format("%Y-%m-%d %H:%M")
-            );
+            ));
             if let Some(pr_id) = &entry.pull_request_id {
-                println!("      PR: #{pr_id}");
+                Output::sub_item(format!("PR: #{pr_id}"));
             }
         }
     }
 
     // Enhanced PR status if requested and available
     if show_mergeable {
-        println!("\n🔍 Mergability Status:");
+        Output::section("Mergability Status");
 
         // Load configuration and create Bitbucket integration
         let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
@@ -870,30 +871,30 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
         match integration.check_enhanced_stack_status(&stack_id).await {
             Ok(status) => {
-                println!("   Total entries: {}", status.total_entries);
-                println!("   Submitted: {}", status.submitted_entries);
-                println!("   Open PRs: {}", status.open_prs);
-                println!("   Merged PRs: {}", status.merged_prs);
-                println!("   Declined PRs: {}", status.declined_prs);
-                println!("   Completion: {:.1}%", status.completion_percentage());
+                Output::bullet(format!("Total entries: {}", status.total_entries));
+                Output::bullet(format!("Submitted: {}", status.submitted_entries));
+                Output::bullet(format!("Open PRs: {}", status.open_prs));
+                Output::bullet(format!("Merged PRs: {}", status.merged_prs));
+                Output::bullet(format!("Declined PRs: {}", status.declined_prs));
+                Output::bullet(format!("Completion: {:.1}%", status.completion_percentage()));
 
                 if !status.enhanced_statuses.is_empty() {
-                    println!("\n📋 Pull Request Status:");
+                    Output::section("Pull Request Status");
                     let mut ready_to_land = 0;
 
                     for enhanced in &status.enhanced_statuses {
                         let status_display = enhanced.get_display_status();
                         let ready_icon = if enhanced.is_ready_to_land() {
                             ready_to_land += 1;
-                            "🚀"
+                            "[READY]"
                         } else {
-                            "⏳"
+                            "[PENDING]"
                         };
 
-                        println!(
-                            "   {} PR #{}: {} ({})",
+                        Output::bullet(format!(
+                            "{} PR #{}: {} ({})",
                             ready_icon, enhanced.pr.id, enhanced.pr.title, status_display
-                        );
+                        ));
 
                         if verbose {
                             println!(
