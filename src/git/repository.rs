@@ -1102,15 +1102,7 @@ impl GitRepository {
                     || error_string.contains("no callback set")
                     || e.class() == git2::ErrorClass::Http
                 {
-                    Output::info(format!(
-                        "git2 push failed ({}), falling back to git CLI for push operation",
-                        if error_string.contains("authentication") || error_string.contains("Auth")
-                        {
-                            "authentication issue"
-                        } else {
-                            "TLS/SSL issue"
-                        }
-                    ));
+                    // Silently fall back to git CLI without logging
                     return self.push_with_git_cli(branch);
                 }
 
@@ -1139,15 +1131,22 @@ impl GitRepository {
             .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
-            Output::success(format!("✅ Git CLI push succeeded for branch: {branch}"));
+            // Silent success - no need to log when fallback works
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let error_msg = format!(
-                "Git CLI push failed for branch '{}': {}\nStdout: {}\nStderr: {}",
-                branch, output.status, stdout, stderr
-            );
+            // Extract the most relevant error message
+            let error_msg = if stderr.contains("SSL_connect") || stderr.contains("SSL_ERROR") {
+                format!("Network error: Unable to connect to repository (VPN may be required)")
+            } else if stderr.contains("repository") && stderr.contains("not found") {
+                format!("Repository not found - check your Bitbucket configuration")
+            } else if stderr.contains("authentication") || stderr.contains("403") {
+                format!("Authentication failed - check your credentials")
+            } else {
+                // For other errors, just show the stderr without the verbose prefix
+                stderr.trim().to_string()
+            };
             tracing::error!("{}", error_msg);
             Err(CascadeError::branch(error_msg))
         }

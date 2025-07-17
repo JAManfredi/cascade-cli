@@ -1609,7 +1609,7 @@ async fn submit_entry(
     let total_entries = entries_to_submit.len();
 
     for (entry_num, entry_to_submit) in &entries_to_submit {
-        pb.set_message("Submitting entries...");
+        pb.set_message(format!("Submitting entry {entry_num}..."));
 
         // Use provided title/description only for first entry or single entry submissions
         let entry_title = if total_entries == 1 {
@@ -1647,7 +1647,7 @@ async fn submit_entry(
             }
             Err(e) => {
                 failed_entries.push((*entry_num, e.to_string()));
-                Output::error(format!("Entry {entry_num} failed: {e}"));
+                // Don't print the error here - we'll show it in the summary
             }
         }
 

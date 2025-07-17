@@ -68,7 +68,7 @@ impl BitbucketIntegration {
         // Push the entry branch - fail fast if this fails
         git_repo
             .push(&entry.branch)
-            .map_err(|e| CascadeError::bitbucket(format!("Cannot create PR: {e}")))?;
+            .map_err(|e| CascadeError::bitbucket(e.to_string()))?;
 
         // Branch pushed successfully
 

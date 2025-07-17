@@ -60,31 +60,22 @@ impl StackManager {
         let settings = Settings::load_from_file(&config_file).unwrap_or_default();
         let configured_default = &settings.git.default_branch;
 
-        info!("Using configured default branch: {}", configured_default);
+        // Using configured default branch
 
         // Determine default base branch - use configured default if it exists
         let default_base = if repo.branch_exists(configured_default) {
-            info!(
-                "Found configured default branch locally: {}",
-                configured_default
-            );
+            // Found configured default branch locally
             configured_default.clone()
         } else {
             // Fall back to detecting a suitable branch
             match repo.detect_main_branch() {
                 Ok(detected) => {
-                    info!(
-                        "Configured default branch '{}' not found, using detected branch: {}",
-                        configured_default, detected
-                    );
+                    // Configured default branch not found, using detected branch
                     detected
                 }
                 Err(_) => {
                     // Use configured default even if it doesn't exist yet (might be created later)
-                    info!(
-                        "Using configured default branch '{}' even though it doesn't exist locally",
-                        configured_default
-                    );
+                    // Using configured default branch even though it doesn't exist locally
                     configured_default.clone()
                 }
             }
