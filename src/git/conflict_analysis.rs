@@ -115,29 +115,21 @@ impl ConflictAnalyzer {
     pub fn new() -> Self {
         let mut file_patterns = HashMap::new();
 
-        // Rust patterns
+        // Rust patterns (only imports/declarations, not function definitions)
         file_patterns.insert(
             "rs".to_string(),
             vec![
                 "use ".to_string(),
                 "extern crate ".to_string(),
-                "mod ".to_string(),
-                "fn ".to_string(),
-                "struct ".to_string(),
-                "enum ".to_string(),
-                "impl ".to_string(),
             ],
         );
 
-        // Python patterns
+        // Python patterns (only imports)
         file_patterns.insert(
             "py".to_string(),
             vec![
                 "import ".to_string(),
                 "from ".to_string(),
-                "def ".to_string(),
-                "class ".to_string(),
-                "__init__".to_string(),
             ],
         );
 
@@ -147,9 +139,6 @@ impl ConflictAnalyzer {
             vec![
                 "import ".to_string(),
                 "export ".to_string(),
-                "const ".to_string(),
-                "function ".to_string(),
-                "class ".to_string(),
             ],
         );
 
@@ -160,8 +149,6 @@ impl ConflictAnalyzer {
                 "export ".to_string(),
                 "interface ".to_string(),
                 "type ".to_string(),
-                "function ".to_string(),
-                "class ".to_string(),
             ],
         );
 

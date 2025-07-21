@@ -515,8 +515,34 @@ impl CleanupStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use tempfile::TempDir;
+    use std::process::Command;
+    
+    fn create_test_repo() -> (TempDir, std::path::PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_path_buf();
+        
+        // Initialize git repository
+        Command::new("git")
+            .args(["init"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        (temp_dir, repo_path)
+    }
 
     #[test]
     fn test_cleanup_reason_serialization() {
@@ -537,9 +563,9 @@ mod tests {
 
     #[test]
     fn test_protected_branches() {
-        let temp_dir = TempDir::new().unwrap();
-        let git_repo = crate::git::GitRepository::open(temp_dir.path()).unwrap();
-        let stack_manager = crate::stack::StackManager::new(temp_dir.path()).unwrap();
+        let (_temp_dir, repo_path) = create_test_repo();
+        let git_repo = crate::git::GitRepository::open(&repo_path).unwrap();
+        let stack_manager = crate::stack::StackManager::new(&repo_path).unwrap();
         let options = CleanupOptions::default();
 
         let cleanup_manager = CleanupManager::new(stack_manager, git_repo, options);

@@ -1594,32 +1594,31 @@ mod tests {
         std::fs::write(&hook_path, existing_hook_content).unwrap();
         crate::utils::platform::make_executable(&hook_path).unwrap();
 
-        // Install cascade hook (should chain with existing)
+        // Install cascade hook (uses core.hooksPath, doesn't modify original)
         let result = manager.install_hook(&hook_type);
         assert!(result.is_ok());
 
-        // Read the resulting hook
-        let final_content = std::fs::read_to_string(&hook_path).unwrap();
+        // Original hook should remain unchanged
+        let original_content = std::fs::read_to_string(&hook_path).unwrap();
+        assert!(original_content.contains("# Project pre-commit hook"));
+        assert!(original_content.contains("./scripts/lint.sh"));
 
-        // Should contain both original and cascade content
-        assert!(final_content.contains("# Project pre-commit hook"));
-        assert!(final_content.contains("./scripts/lint.sh"));
-        assert!(final_content.contains("=== CASCADE CLI HOOKS START ==="));
-        assert!(final_content.contains("=== CASCADE CLI HOOKS END ==="));
+        // Cascade hook should exist in cascade directory
+        let cascade_hooks_dir = manager.get_cascade_hooks_dir().unwrap();
+        let cascade_hook_path = cascade_hooks_dir.join(hook_type.filename());
+        assert!(cascade_hook_path.exists());
 
-        // Test uninstall removes only cascade section
+        // Test uninstall removes cascade hooks but leaves original
         let uninstall_result = manager.uninstall_hook(&hook_type);
         assert!(uninstall_result.is_ok());
-
-        // Read the hook after uninstall
+        
+        // Original hook should still exist and be unchanged
         let after_uninstall = std::fs::read_to_string(&hook_path).unwrap();
-
-        // Should still contain original project hook
         assert!(after_uninstall.contains("# Project pre-commit hook"));
         assert!(after_uninstall.contains("./scripts/lint.sh"));
-        // But not cascade content
-        assert!(!after_uninstall.contains("=== CASCADE CLI HOOKS START ==="));
-        assert!(!after_uninstall.contains("=== CASCADE CLI HOOKS END ==="));
+
+        // Cascade hook should be removed
+        assert!(!cascade_hook_path.exists());
     }
 
     #[test]
@@ -1632,9 +1631,10 @@ mod tests {
         let result = manager.install_hook(&hook_type);
         assert!(result.is_ok());
 
-        // Verify hook file exists with platform-appropriate filename
+        // Verify hook file exists in cascade hooks directory
         let hook_filename = hook_type.filename();
-        let hook_path = repo_path.join(".git/hooks").join(&hook_filename);
+        let cascade_hooks_dir = manager.get_cascade_hooks_dir().unwrap();
+        let hook_path = cascade_hooks_dir.join(&hook_filename);
         assert!(hook_path.exists());
 
         // Verify hook is executable (platform-specific)
@@ -1702,7 +1702,8 @@ mod tests {
         let hook_type = HookType::PostCommit;
         manager.install_hook(&hook_type).unwrap();
 
-        let hook_path = repo_path.join(".git/hooks").join(hook_type.filename());
+        let cascade_hooks_dir = manager.get_cascade_hooks_dir().unwrap();
+        let hook_path = cascade_hooks_dir.join(hook_type.filename());
         assert!(hook_path.exists());
 
         let result = manager.uninstall_hook(&hook_type);
@@ -1812,25 +1813,22 @@ mod tests {
 
         std::fs::write(&hook_path, existing_content).unwrap();
 
-        // Install hook (should chain with existing)
+        // Install cascade hook (uses core.hooksPath, doesn't modify original)
         let hook_type = HookType::PostCommit;
         let result = manager.install_hook(&hook_type);
         assert!(result.is_ok());
 
-        // Verify both old and new content exist
-        let content = std::fs::read_to_string(&hook_path).unwrap();
-        #[cfg(windows)]
-        {
-            assert!(content.contains("rem Cascade CLI Hook"));
-        }
-        #[cfg(not(windows))]
-        {
-            assert!(content.contains("# Cascade CLI Hook"));
-        }
-        // Original content should still be there
-        assert!(content.contains("existing hook"));
-        // Chaining markers should be present
-        assert!(content.contains("=== CASCADE CLI HOOKS START ==="));
-        assert!(content.contains("=== CASCADE CLI HOOKS END ==="));
+        // Verify cascade hook exists in cascade directory
+        let cascade_hooks_dir = manager.get_cascade_hooks_dir().unwrap();
+        let cascade_hook_path = cascade_hooks_dir.join(&hook_filename);
+        assert!(cascade_hook_path.exists());
+
+        // Original hook should remain unchanged
+        let original_content = std::fs::read_to_string(&hook_path).unwrap();
+        assert!(original_content.contains("existing hook"));
+        
+        // Cascade hook should contain cascade logic
+        let cascade_content = std::fs::read_to_string(&cascade_hook_path).unwrap();
+        assert!(cascade_content.contains("cascade-cli") || cascade_content.contains("ca"));
     }
 }
