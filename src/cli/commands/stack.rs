@@ -2,11 +2,11 @@ use crate::bitbucket::BitbucketIntegration;
 use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, GitRepository};
-use crate::stack::{StackManager, StackStatus};
+use crate::stack::{CleanupManager, CleanupOptions, CleanupResult, StackManager, StackStatus};
 use clap::{Subcommand, ValueEnum};
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
-use std::io::{self, Write};
 use tracing::{debug, warn};
 
 /// CLI argument version of RebaseStrategy
@@ -299,6 +299,31 @@ pub enum StackAction {
     /// Show status of in-progress land operation
     LandStatus,
 
+    /// Clean up merged and stale branches
+    Cleanup {
+        /// Show what would be cleaned up without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+        /// Skip confirmation prompts
+        #[arg(long)]
+        force: bool,
+        /// Include stale branches in cleanup
+        #[arg(long)]
+        include_stale: bool,
+        /// Age threshold for stale branches (days)
+        #[arg(long, default_value = "30")]
+        stale_days: u32,
+        /// Also cleanup remote tracking branches
+        #[arg(long)]
+        cleanup_remote: bool,
+        /// Include non-stack branches in cleanup
+        #[arg(long)]
+        include_non_stack: bool,
+        /// Show detailed information about cleanup candidates
+        #[arg(long)]
+        verbose: bool,
+    },
+
     /// Repair data consistency issues in stack metadata
     Repair,
 }
@@ -401,6 +426,26 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::ContinueLand => continue_land().await,
         StackAction::AbortLand => abort_land().await,
         StackAction::LandStatus => land_status().await,
+        StackAction::Cleanup {
+            dry_run,
+            force,
+            include_stale,
+            stale_days,
+            cleanup_remote,
+            include_non_stack,
+            verbose,
+        } => {
+            cleanup_branches(
+                dry_run,
+                force,
+                include_stale,
+                stale_days,
+                cleanup_remote,
+                include_non_stack,
+                verbose,
+            )
+            .await
+        }
         StackAction::Repair => repair_stack_data().await,
     }
 }
@@ -743,15 +788,14 @@ async fn deactivate_stack(force: bool) -> Result<()> {
         Output::sub_item(format!(
             "You can reactivate it later with 'ca stacks switch {stack_name}'"
         ));
-        print!("   Continue? (y/N): ");
+        // Interactive confirmation to deactivate stack
+        let should_deactivate = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Continue with deactivation?")
+            .default(false)
+            .interact()
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
 
-        use std::io::{self, Write};
-        io::stdout().flush().unwrap();
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-
-        if !input.trim().to_lowercase().starts_with('y') {
+        if !should_deactivate {
             Output::info("Cancelled deactivation");
             return Ok(());
         }
@@ -850,6 +894,13 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             ));
             if let Some(pr_id) = &entry.pull_request_id {
                 Output::sub_item(format!("PR: #{pr_id}"));
+            }
+
+            // Display full commit message
+            Output::sub_item("Commit Message:");
+            let lines: Vec<&str> = entry.message.lines().collect();
+            for line in lines {
+                Output::sub_item(format!("  {line}"));
             }
         }
     }
@@ -2078,12 +2129,37 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
 
     // Step 3: Cleanup merged branches (optional) - only show if something happens
     if !skip_cleanup {
-        // TODO: Implement merged branch cleanup silently
-        // This would:
-        // 1. Find branches that have been merged into base
-        // 2. Ask user if they want to delete them
-        // 3. Remove them from the stack metadata
-        // Only show output if branches are found to clean up
+        let git_repo_for_cleanup = GitRepository::open(&repo_root)?;
+        match perform_simple_cleanup(&stack_manager, &git_repo_for_cleanup, false).await {
+            Ok(result) => {
+                if result.total_candidates > 0 {
+                    Output::section("Cleanup Summary");
+                    if !result.cleaned_branches.is_empty() {
+                        Output::success(format!(
+                            "Cleaned up {} merged branches",
+                            result.cleaned_branches.len()
+                        ));
+                        for branch in &result.cleaned_branches {
+                            Output::sub_item(format!("🗑️  Deleted: {branch}"));
+                        }
+                    }
+                    if !result.skipped_branches.is_empty() {
+                        Output::sub_item(format!(
+                            "Skipped {} branches",
+                            result.skipped_branches.len()
+                        ));
+                    }
+                    if !result.failed_branches.is_empty() {
+                        for (branch, error) in &result.failed_branches {
+                            Output::warning(format!("Failed to clean up {branch}: {error}"));
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                Output::warning(format!("Branch cleanup failed: {e}"));
+            }
+        }
     }
 
     Output::success("Sync completed successfully!");
@@ -3264,6 +3340,193 @@ async fn repair_stack_data() -> Result<()> {
     Ok(())
 }
 
+/// Clean up merged and stale branches
+async fn cleanup_branches(
+    dry_run: bool,
+    force: bool,
+    include_stale: bool,
+    stale_days: u32,
+    cleanup_remote: bool,
+    include_non_stack: bool,
+    verbose: bool,
+) -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let stack_manager = StackManager::new(&repo_root)?;
+    let git_repo = GitRepository::open(&repo_root)?;
+
+    let result = perform_cleanup(
+        &stack_manager,
+        &git_repo,
+        dry_run,
+        force,
+        include_stale,
+        stale_days,
+        cleanup_remote,
+        include_non_stack,
+        verbose,
+    )
+    .await?;
+
+    // Display results
+    if result.total_candidates == 0 {
+        Output::success("No branches found that need cleanup");
+        return Ok(());
+    }
+
+    Output::section("Cleanup Results");
+
+    if dry_run {
+        Output::sub_item(format!(
+            "Found {} branches that would be cleaned up",
+            result.total_candidates
+        ));
+    } else {
+        if !result.cleaned_branches.is_empty() {
+            Output::success(format!(
+                "Successfully cleaned up {} branches",
+                result.cleaned_branches.len()
+            ));
+            for branch in &result.cleaned_branches {
+                Output::sub_item(format!("🗑️  Deleted: {branch}"));
+            }
+        }
+
+        if !result.skipped_branches.is_empty() {
+            Output::sub_item(format!(
+                "Skipped {} branches",
+                result.skipped_branches.len()
+            ));
+            if verbose {
+                for (branch, reason) in &result.skipped_branches {
+                    Output::sub_item(format!("⏭️  {branch}: {reason}"));
+                }
+            }
+        }
+
+        if !result.failed_branches.is_empty() {
+            Output::warning(format!(
+                "Failed to clean up {} branches",
+                result.failed_branches.len()
+            ));
+            for (branch, error) in &result.failed_branches {
+                Output::sub_item(format!("❌ {branch}: {error}"));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Perform cleanup with the given options
+#[allow(clippy::too_many_arguments)]
+async fn perform_cleanup(
+    stack_manager: &StackManager,
+    git_repo: &GitRepository,
+    dry_run: bool,
+    force: bool,
+    include_stale: bool,
+    stale_days: u32,
+    cleanup_remote: bool,
+    include_non_stack: bool,
+    verbose: bool,
+) -> Result<CleanupResult> {
+    let options = CleanupOptions {
+        dry_run,
+        force,
+        include_stale,
+        cleanup_remote,
+        stale_threshold_days: stale_days,
+        cleanup_non_stack: include_non_stack,
+    };
+
+    let stack_manager_copy = StackManager::new(stack_manager.repo_path())?;
+    let git_repo_copy = GitRepository::open(git_repo.path())?;
+    let mut cleanup_manager = CleanupManager::new(stack_manager_copy, git_repo_copy, options);
+
+    // Find candidates
+    let candidates = cleanup_manager.find_cleanup_candidates()?;
+
+    if candidates.is_empty() {
+        return Ok(CleanupResult {
+            cleaned_branches: Vec::new(),
+            failed_branches: Vec::new(),
+            skipped_branches: Vec::new(),
+            total_candidates: 0,
+        });
+    }
+
+    // Show candidates if verbose or dry run
+    if verbose || dry_run {
+        Output::section("Cleanup Candidates");
+        for candidate in &candidates {
+            let reason_icon = match candidate.reason {
+                crate::stack::CleanupReason::FullyMerged => "🔀",
+                crate::stack::CleanupReason::StackEntryMerged => "✅",
+                crate::stack::CleanupReason::Stale => "⏰",
+                crate::stack::CleanupReason::Orphaned => "👻",
+            };
+
+            Output::sub_item(format!(
+                "{} {} - {} ({})",
+                reason_icon,
+                candidate.branch_name,
+                candidate.reason_to_string(),
+                candidate.safety_info
+            ));
+        }
+    }
+
+    // If not force and not dry run, ask for confirmation
+    if !force && !dry_run && !candidates.is_empty() {
+        Output::warning(format!("About to delete {} branches", candidates.len()));
+
+        // Interactive confirmation to proceed with cleanup
+        let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Continue with branch cleanup?")
+            .default(false)
+            .interact()
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !should_continue {
+            Output::sub_item("Cleanup cancelled");
+            return Ok(CleanupResult {
+                cleaned_branches: Vec::new(),
+                failed_branches: Vec::new(),
+                skipped_branches: Vec::new(),
+                total_candidates: candidates.len(),
+            });
+        }
+    }
+
+    // Perform cleanup
+    cleanup_manager.perform_cleanup(&candidates)
+}
+
+/// Simple perform_cleanup for sync command
+async fn perform_simple_cleanup(
+    stack_manager: &StackManager,
+    git_repo: &GitRepository,
+    dry_run: bool,
+) -> Result<CleanupResult> {
+    perform_cleanup(
+        stack_manager,
+        git_repo,
+        dry_run,
+        false, // force
+        false, // include_stale
+        30,    // stale_days
+        false, // cleanup_remote
+        false, // include_non_stack
+        false, // verbose
+    )
+    .await
+}
+
 /// Analyze commits for various safeguards before pushing
 async fn analyze_commits_for_safeguards(
     commits_to_push: &[String],
@@ -3356,18 +3619,14 @@ async fn analyze_commits_for_safeguards(
 
 /// Prompt user for confirmation when pushing large number of commits
 fn confirm_large_push(count: usize) -> Result<bool> {
-    print!("Do you want to continue pushing {count} commits? [y/N]: ");
-    io::stdout()
-        .flush()
-        .map_err(|e| CascadeError::config(format!("Failed to flush stdout: {e}")))?;
+    // Interactive confirmation for large push
+    let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(format!("Continue pushing {count} commits?"))
+        .default(false)
+        .interact()
+        .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
-
-    let input = input.trim().to_lowercase();
-    Ok(input == "y" || input == "yes")
+    Ok(should_continue)
 }
 
 #[cfg(test)]

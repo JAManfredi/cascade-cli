@@ -1,8 +1,10 @@
 pub mod branch_manager;
+pub mod conflict_analysis;
 pub mod repository;
 
 pub use branch_manager::{BranchInfo, BranchManager};
-pub use repository::{GitRepository, RepositoryInfo};
+pub use conflict_analysis::{ConflictAnalysis, ConflictAnalyzer, ConflictRegion, ConflictType};
+pub use repository::{GitRepository, GitStatusSummary, RepositoryInfo};
 
 use crate::errors::{CascadeError, Result};
 use std::path::Path;

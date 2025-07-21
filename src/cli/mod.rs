@@ -225,6 +225,25 @@ pub enum Commands {
         name: String,
     },
 
+    /// Analyze conflicts in the repository
+    Conflicts {
+        /// Show detailed information about each conflict
+        #[arg(long)]
+        detailed: bool,
+
+        /// Only show conflicts that can be auto-resolved
+        #[arg(long)]
+        auto_only: bool,
+
+        /// Only show conflicts that require manual resolution
+        #[arg(long)]
+        manual_only: bool,
+
+        /// Analyze specific files (if not provided, analyzes all conflicted files)
+        #[arg(value_name = "FILE")]
+        files: Vec<String>,
+    },
+
     /// Deactivate the current stack - turn off stack mode (shortcut for 'stacks deactivate')
     Deactivate {
         /// Force deactivation without confirmation
@@ -593,6 +612,21 @@ impl Cli {
             } => commands::stack::rebase(interactive, onto, strategy).await,
 
             Commands::Switch { name } => commands::stack::switch(name).await,
+
+            Commands::Conflicts {
+                detailed,
+                auto_only,
+                manual_only,
+                files,
+            } => {
+                commands::conflicts::run(commands::conflicts::ConflictsArgs {
+                    detailed,
+                    auto_only,
+                    manual_only,
+                    files,
+                })
+                .await
+            }
 
             Commands::Deactivate { force } => commands::stack::deactivate(force).await,
 

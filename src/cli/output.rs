@@ -104,6 +104,11 @@ impl Output {
     pub fn numbered_item<T: Display>(number: usize, message: T) {
         println!("  {}. {}", style(number).cyan(), message);
     }
+
+    /// Print empty line for spacing
+    pub fn spacing() {
+        println!();
+    }
 }
 
 /// Emojis for different contexts

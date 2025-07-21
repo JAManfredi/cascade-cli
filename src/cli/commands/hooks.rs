@@ -2,6 +2,7 @@ use crate::cli::output::Output;
 use crate::config::Settings;
 use crate::errors::{CascadeError, Result};
 use crate::git::find_repository_root;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,7 @@ impl Default for InstallOptions {
 /// Git hooks integration for Cascade CLI
 pub struct HooksManager {
     repo_path: PathBuf,
-    hooks_dir: PathBuf,
+    repo_id: String,
 }
 
 /// Available Git hooks that Cascade can install
@@ -95,21 +96,153 @@ impl HookType {
 
 impl HooksManager {
     pub fn new(repo_path: &Path) -> Result<Self> {
-        let hooks_dir = Self::get_hooks_path(repo_path)?;
-
-        if !hooks_dir.exists() {
+        // Verify this is a git repository
+        let git_dir = repo_path.join(".git");
+        if !git_dir.exists() {
             return Err(CascadeError::config(
-                "Git hooks directory not found. Is this a Git repository?".to_string(),
+                "Not a Git repository. Git hooks require a valid Git repository.".to_string(),
             ));
         }
 
+        // Generate a unique repo ID based on remote URL
+        let repo_id = Self::generate_repo_id(repo_path)?;
+
         Ok(Self {
             repo_path: repo_path.to_path_buf(),
-            hooks_dir,
+            repo_id,
         })
     }
 
+    /// Generate a unique repository identifier based on remote URL
+    fn generate_repo_id(repo_path: &Path) -> Result<String> {
+        use std::process::Command;
+
+        let output = Command::new("git")
+            .args(["remote", "get-url", "origin"])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to get remote URL: {e}")))?;
+
+        if !output.status.success() {
+            // Fallback to absolute path hash if no remote
+            use sha2::{Digest, Sha256};
+            let canonical_path = repo_path
+                .canonicalize()
+                .unwrap_or_else(|_| repo_path.to_path_buf());
+            let path_str = canonical_path.to_string_lossy();
+            let mut hasher = Sha256::new();
+            hasher.update(path_str.as_bytes());
+            let result = hasher.finalize();
+            let hash = format!("{result:x}");
+            return Ok(format!("local-{}", &hash[..8]));
+        }
+
+        let remote_url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        // Convert URL to safe directory name
+        // e.g., https://github.com/user/repo.git -> github.com-user-repo
+        let safe_name = remote_url
+            .replace("https://", "")
+            .replace("http://", "")
+            .replace("git@", "")
+            .replace("ssh://", "")
+            .replace(".git", "")
+            .replace([':', '/', '\\'], "-")
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '.' || *c == '_')
+            .collect::<String>();
+
+        Ok(safe_name)
+    }
+
+    /// Get the Cascade-specific hooks directory for this repo
+    fn get_cascade_hooks_dir(&self) -> Result<PathBuf> {
+        let home = dirs::home_dir()
+            .ok_or_else(|| CascadeError::config("Could not find home directory".to_string()))?;
+        let cascade_hooks = home.join(".cascade").join("hooks").join(&self.repo_id);
+        Ok(cascade_hooks)
+    }
+
+    /// Get the Cascade config directory for this repo
+    fn get_cascade_config_dir(&self) -> Result<PathBuf> {
+        let home = dirs::home_dir()
+            .ok_or_else(|| CascadeError::config("Could not find home directory".to_string()))?;
+        let cascade_config = home.join(".cascade").join("config").join(&self.repo_id);
+        Ok(cascade_config)
+    }
+
+    /// Save the current core.hooksPath value for later restoration
+    fn save_original_hooks_path(&self) -> Result<()> {
+        use std::process::Command;
+
+        let output = Command::new("git")
+            .args(["config", "--get", "core.hooksPath"])
+            .current_dir(&self.repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to check git config: {e}")))?;
+
+        let config_dir = self.get_cascade_config_dir()?;
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| CascadeError::config(format!("Failed to create config directory: {e}")))?;
+
+        let original_path = if output.status.success() {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        } else {
+            // Empty string means it wasn't set
+            String::new()
+        };
+
+        fs::write(config_dir.join("original-hooks-path"), original_path).map_err(|e| {
+            CascadeError::config(format!("Failed to save original hooks path: {e}"))
+        })?;
+
+        Ok(())
+    }
+
+    /// Restore the original core.hooksPath value
+    fn restore_original_hooks_path(&self) -> Result<()> {
+        use std::process::Command;
+
+        let config_dir = self.get_cascade_config_dir()?;
+        let original_path_file = config_dir.join("original-hooks-path");
+
+        if !original_path_file.exists() {
+            // Nothing to restore
+            return Ok(());
+        }
+
+        let original_path = fs::read_to_string(&original_path_file).map_err(|e| {
+            CascadeError::config(format!("Failed to read original hooks path: {e}"))
+        })?;
+
+        if original_path.is_empty() {
+            // It wasn't set originally, so unset it
+            Command::new("git")
+                .args(["config", "--unset", "core.hooksPath"])
+                .current_dir(&self.repo_path)
+                .output()
+                .map_err(|e| {
+                    CascadeError::config(format!("Failed to unset core.hooksPath: {e}"))
+                })?;
+        } else {
+            // Restore the original value
+            Command::new("git")
+                .args(["config", "core.hooksPath", &original_path])
+                .current_dir(&self.repo_path)
+                .output()
+                .map_err(|e| {
+                    CascadeError::config(format!("Failed to restore core.hooksPath: {e}"))
+                })?;
+        }
+
+        // Clean up the saved file
+        fs::remove_file(original_path_file).ok();
+
+        Ok(())
+    }
+
     /// Get the actual hooks directory path, respecting core.hooksPath configuration
+    #[allow(dead_code)]
     fn get_hooks_path(repo_path: &Path) -> Result<PathBuf> {
         use std::process::Command;
 
@@ -201,63 +334,53 @@ impl HooksManager {
 
     /// Install a specific hook
     pub fn install_hook(&self, hook_type: &HookType) -> Result<()> {
-        let hook_path = self.hooks_dir.join(hook_type.filename());
-        let cascade_content = self.generate_hook_script(hook_type)?;
+        // Ensure we've saved the original hooks path first
+        self.save_original_hooks_path()?;
 
-        if hook_path.exists() {
-            // Check if cascade hooks are already installed
-            let existing_content = fs::read_to_string(&hook_path)
-                .map_err(|e| CascadeError::config(format!("Failed to read existing hook: {e}")))?;
+        // Create cascade hooks directory
+        let cascade_hooks_dir = self.get_cascade_hooks_dir()?;
+        fs::create_dir_all(&cascade_hooks_dir).map_err(|e| {
+            CascadeError::config(format!("Failed to create cascade hooks directory: {e}"))
+        })?;
 
-            if existing_content.contains("=== CASCADE CLI HOOKS START ===") {
-                Output::info(format!(
-                    "{} hook already has cascade hooks installed",
-                    hook_type.filename()
-                ));
-                return Ok(());
-            }
+        // Generate hook that chains to original
+        let hook_content = self.generate_chaining_hook_script(hook_type)?;
+        let hook_path = cascade_hooks_dir.join(hook_type.filename());
 
-            // Append cascade hooks to existing hook
-            self.append_to_existing_hook(&hook_path, &cascade_content)?;
-            Output::success(format!(
-                "Added cascade hooks to existing {} hook",
-                hook_type.filename()
-            ));
-        } else {
-            // No existing hook, install cascade hook directly
-            fs::write(&hook_path, cascade_content)
-                .map_err(|e| CascadeError::config(format!("Failed to write hook file: {e}")))?;
+        // Write the hook
+        fs::write(&hook_path, hook_content)
+            .map_err(|e| CascadeError::config(format!("Failed to write hook file: {e}")))?;
 
-            // Make executable (platform-specific)
-            crate::utils::platform::make_executable(&hook_path).map_err(|e| {
-                CascadeError::config(format!("Failed to make hook executable: {e}"))
-            })?;
+        // Make executable (platform-specific)
+        crate::utils::platform::make_executable(&hook_path)
+            .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {e}")))?;
 
-            Output::success(format!("Installed {} hook", hook_type.filename()));
-        }
+        // Set core.hooksPath to our cascade directory
+        self.set_cascade_hooks_path()?;
 
+        Output::success(format!("Installed {} hook", hook_type.filename()));
         Ok(())
     }
 
-    /// Append cascade hooks to an existing hook file
-    fn append_to_existing_hook(&self, hook_path: &Path, cascade_content: &str) -> Result<()> {
-        let existing_content = fs::read_to_string(hook_path)
-            .map_err(|e| CascadeError::config(format!("Failed to read existing hook: {e}")))?;
+    /// Set git's core.hooksPath to our cascade hooks directory
+    fn set_cascade_hooks_path(&self) -> Result<()> {
+        use std::process::Command;
 
-        // Create the cascade section to append
-        let cascade_section = format!(
-            "\n# === CASCADE CLI HOOKS START ===\n{cascade_content}\n# === CASCADE CLI HOOKS END ===\n"
-        );
+        let cascade_hooks_dir = self.get_cascade_hooks_dir()?;
+        let hooks_path_str = cascade_hooks_dir.to_string_lossy();
 
-        // Append cascade section to existing content
-        let new_content = format!("{existing_content}{cascade_section}");
+        let output = Command::new("git")
+            .args(["config", "core.hooksPath", &hooks_path_str])
+            .current_dir(&self.repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to set core.hooksPath: {e}")))?;
 
-        fs::write(hook_path, new_content)
-            .map_err(|e| CascadeError::config(format!("Failed to update hook file: {e}")))?;
-
-        // Ensure it's still executable
-        crate::utils::platform::make_executable(hook_path)
-            .map_err(|e| CascadeError::config(format!("Failed to make hook executable: {e}")))?;
+        if !output.status.success() {
+            return Err(CascadeError::config(format!(
+                "Failed to set core.hooksPath: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
 
         Ok(())
     }
@@ -266,15 +389,22 @@ impl HooksManager {
     pub fn uninstall_all(&self) -> Result<()> {
         Output::progress("Removing Cascade Git hooks");
 
-        let hooks = vec![
-            HookType::PostCommit,
-            HookType::PrePush,
-            HookType::CommitMsg,
-            HookType::PrepareCommitMsg,
-        ];
+        // Restore original core.hooksPath
+        self.restore_original_hooks_path()?;
 
-        for hook in hooks {
-            self.uninstall_hook(&hook)?;
+        // Clean up cascade hooks directory
+        let cascade_hooks_dir = self.get_cascade_hooks_dir()?;
+        if cascade_hooks_dir.exists() {
+            fs::remove_dir_all(&cascade_hooks_dir).map_err(|e| {
+                CascadeError::config(format!("Failed to remove cascade hooks directory: {e}"))
+            })?;
+        }
+
+        // Clean up config directory if empty
+        let cascade_config_dir = self.get_cascade_config_dir()?;
+        if cascade_config_dir.exists() {
+            // Try to remove, but ignore if not empty
+            fs::remove_dir(&cascade_config_dir).ok();
         }
 
         Output::success("All Cascade hooks removed!");
@@ -283,71 +413,32 @@ impl HooksManager {
 
     /// Remove a specific hook
     pub fn uninstall_hook(&self, hook_type: &HookType) -> Result<()> {
-        let hook_path = self.hooks_dir.join(hook_type.filename());
+        let cascade_hooks_dir = self.get_cascade_hooks_dir()?;
+        let hook_path = cascade_hooks_dir.join(hook_type.filename());
 
         if hook_path.exists() {
-            let content = fs::read_to_string(&hook_path)
-                .map_err(|e| CascadeError::config(format!("Failed to read hook file: {e}")))?;
+            fs::remove_file(&hook_path)
+                .map_err(|e| CascadeError::config(format!("Failed to remove hook file: {e}")))?;
+            Output::success(format!("Removed {} hook", hook_type.filename()));
 
-            if content.contains("=== CASCADE CLI HOOKS START ===") {
-                // Remove only the cascade section from the hook
-                self.remove_cascade_section_from_hook(&hook_path)?;
-                Output::success(format!(
-                    "Removed cascade hooks from {} hook",
-                    hook_type.filename()
-                ));
-            } else {
-                // Check if it's a pure cascade hook (no project hooks)
-                let is_cascade_hook = if cfg!(windows) {
-                    content.contains("rem Cascade CLI Hook")
-                } else {
-                    content.contains("# Cascade CLI Hook")
-                };
+            // If no more hooks in cascade directory, restore original hooks path
+            let remaining_hooks = fs::read_dir(&cascade_hooks_dir)
+                .map_err(|e| CascadeError::config(format!("Failed to read hooks directory: {e}")))?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry.path().is_file() && !entry.file_name().to_string_lossy().starts_with('.')
+                })
+                .count();
 
-                if is_cascade_hook {
-                    fs::remove_file(&hook_path).map_err(|e| {
-                        CascadeError::config(format!("Failed to remove hook file: {e}"))
-                    })?;
-                    Output::info(format!("Removed {} hook", hook_type.filename()));
-                } else {
-                    Output::warning(format!(
-                        "{} hook exists but is not a Cascade hook, skipping",
-                        hook_type.filename()
-                    ));
-                }
+            if remaining_hooks == 0 {
+                Output::info(
+                    "No more Cascade hooks installed, restoring original hooks configuration",
+                );
+                self.restore_original_hooks_path()?;
+                fs::remove_dir(&cascade_hooks_dir).ok();
             }
         } else {
             Output::info(format!("{} hook not found", hook_type.filename()));
-        }
-
-        Ok(())
-    }
-
-    /// Remove only the cascade section from a hook file, preserving the original content
-    fn remove_cascade_section_from_hook(&self, hook_path: &Path) -> Result<()> {
-        let content = fs::read_to_string(hook_path)
-            .map_err(|e| CascadeError::config(format!("Failed to read hook file: {e}")))?;
-
-        // Find and remove the cascade section
-        let start_marker = "# === CASCADE CLI HOOKS START ===";
-        let end_marker = "# === CASCADE CLI HOOKS END ===";
-
-        if let Some(start_pos) = content.find(start_marker) {
-            if let Some(end_pos) = content.find(end_marker) {
-                let end_pos = end_pos + end_marker.len();
-
-                // Remove everything from start marker to end marker (inclusive)
-                let mut new_content = String::new();
-                new_content.push_str(&content[..start_pos]);
-                new_content.push_str(&content[end_pos..]);
-
-                // Clean up any trailing newlines that might be left
-                let new_content = new_content.trim_end().to_string();
-
-                fs::write(hook_path, new_content).map_err(|e| {
-                    CascadeError::config(format!("Failed to update hook file: {e}"))
-                })?;
-            }
         }
 
         Ok(())
@@ -360,51 +451,87 @@ impl HooksManager {
             HookType::PrePush,
             HookType::CommitMsg,
             HookType::PrepareCommitMsg,
+            HookType::PreCommit,
         ];
 
         Output::section("Git Hooks Status");
 
-        for hook in hooks {
-            let hook_path = self.hooks_dir.join(hook.filename());
-            if hook_path.exists() {
-                let content = fs::read_to_string(&hook_path).unwrap_or_default();
+        // Check if we're using cascade hooks directory
+        let cascade_hooks_dir = self.get_cascade_hooks_dir()?;
+        let using_cascade_hooks = cascade_hooks_dir.exists()
+            && self.get_current_hooks_path()?
+                == Some(cascade_hooks_dir.to_string_lossy().to_string());
 
-                // Check if cascade hooks are present (either as standalone or chained)
-                let has_cascade_hooks = content.contains("=== CASCADE CLI HOOKS START ===")
-                    || if cfg!(windows) {
-                        content.contains("rem Cascade CLI Hook")
-                    } else {
-                        content.contains("# Cascade CLI Hook")
-                    };
+        if using_cascade_hooks {
+            Output::info(format!(
+                "Using Cascade hooks directory: {}",
+                cascade_hooks_dir.display()
+            ));
 
-                if has_cascade_hooks {
-                    // Check if it's chained (has both project and cascade hooks)
-                    if content.contains("=== CASCADE CLI HOOKS START ===") {
-                        Output::success(format!(
-                            "{}: {} (Chained)",
-                            hook.filename(),
-                            hook.description()
-                        ));
-                    } else {
-                        Output::success(format!("{}: {}", hook.filename(), hook.description()));
-                    }
+            // Check what original hooks path was saved
+            let config_dir = self.get_cascade_config_dir()?;
+            let original_path_file = config_dir.join("original-hooks-path");
+            if original_path_file.exists() {
+                let original_path = fs::read_to_string(original_path_file).unwrap_or_default();
+                if !original_path.is_empty() {
+                    Output::info(format!("Original hooks path: {original_path}"));
                 } else {
+                    Output::info("Original hooks path: (default .git/hooks)");
+                }
+            }
+        }
+
+        for hook in hooks {
+            let cascade_hook_path = cascade_hooks_dir.join(hook.filename());
+
+            if using_cascade_hooks && cascade_hook_path.exists() {
+                Output::success(format!("{}: {} ✓", hook.filename(), hook.description()));
+            } else {
+                // Check default location
+                let default_hook_path = self
+                    .repo_path
+                    .join(".git")
+                    .join("hooks")
+                    .join(hook.filename());
+                if default_hook_path.exists() {
                     Output::warning(format!(
-                        "{}: {} (Custom)",
+                        "{}: {} (In .git/hooks, not managed by Cascade)",
+                        hook.filename(),
+                        hook.description()
+                    ));
+                } else {
+                    Output::error(format!(
+                        "{}: {} (Not installed)",
                         hook.filename(),
                         hook.description()
                     ));
                 }
-            } else {
-                Output::error(format!(
-                    "{}: {} (Missing)",
-                    hook.filename(),
-                    hook.description()
-                ));
             }
         }
 
         Ok(())
+    }
+
+    /// Get the current core.hooksPath value
+    fn get_current_hooks_path(&self) -> Result<Option<String>> {
+        use std::process::Command;
+
+        let output = Command::new("git")
+            .args(["config", "--get", "core.hooksPath"])
+            .current_dir(&self.repo_path)
+            .output()
+            .map_err(|e| CascadeError::config(format!("Failed to check git config: {e}")))?;
+
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if path.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(path))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// Generate hook script content
@@ -425,6 +552,120 @@ impl HooksManager {
         };
 
         Ok(script)
+    }
+
+    /// Generate hook script that chains to original hooks
+    pub fn generate_chaining_hook_script(&self, hook_type: &HookType) -> Result<String> {
+        let cascade_cli = env::current_exe()
+            .map_err(|e| {
+                CascadeError::config(format!("Failed to get current executable path: {e}"))
+            })?
+            .to_string_lossy()
+            .to_string();
+
+        let config_dir = self.get_cascade_config_dir()?;
+        let hook_name = match hook_type {
+            HookType::PostCommit => "post-commit",
+            HookType::PrePush => "pre-push",
+            HookType::CommitMsg => "commit-msg",
+            HookType::PreCommit => "pre-commit",
+            HookType::PrepareCommitMsg => "prepare-commit-msg",
+        };
+
+        // Generate the cascade-specific hook logic
+        let cascade_logic = match hook_type {
+            HookType::PostCommit => self.generate_post_commit_hook(&cascade_cli),
+            HookType::PrePush => self.generate_pre_push_hook(&cascade_cli),
+            HookType::CommitMsg => self.generate_commit_msg_hook(&cascade_cli),
+            HookType::PreCommit => self.generate_pre_commit_hook(&cascade_cli),
+            HookType::PrepareCommitMsg => self.generate_prepare_commit_msg_hook(&cascade_cli),
+        };
+
+        // Create wrapper that chains to original
+        #[cfg(windows)]
+        return Ok(format!(
+                "@echo off\n\
+                 rem Cascade CLI Hook Wrapper - {}\n\
+                 rem This hook runs Cascade logic first, then chains to original hooks\n\n\
+                 rem Run Cascade logic first\n\
+                 call :cascade_logic %*\n\
+                 set CASCADE_RESULT=%ERRORLEVEL%\n\
+                 if %CASCADE_RESULT% neq 0 exit /b %CASCADE_RESULT%\n\n\
+                 rem Check for original hook\n\
+                 set ORIGINAL_HOOKS_PATH=\n\
+                 if exist \"{}\\original-hooks-path\" (\n\
+                     set /p ORIGINAL_HOOKS_PATH=<\"{}\\original-hooks-path\"\n\
+                 )\n\n\
+                 if \"%ORIGINAL_HOOKS_PATH%\"==\"\" (\n\
+                     rem Default location\n\
+                     for /f \"tokens=*\" %%i in ('git rev-parse --git-dir 2^>nul') do set GIT_DIR=%%i\n\
+                     if exist \"%GIT_DIR%\\hooks\\{}\" (\n\
+                         call \"%GIT_DIR%\\hooks\\{}\" %*\n\
+                         exit /b %ERRORLEVEL%\n\
+                     )\n\
+                 ) else (\n\
+                     rem Custom hooks path\n\
+                     if exist \"%ORIGINAL_HOOKS_PATH%\\{}\" (\n\
+                         call \"%ORIGINAL_HOOKS_PATH%\\{}\" %*\n\
+                         exit /b %ERRORLEVEL%\n\
+                     )\n\
+                 )\n\n\
+                 exit /b 0\n\n\
+                 :cascade_logic\n\
+                 {}\n\
+                 exit /b %ERRORLEVEL%\n",
+                hook_name,
+                config_dir.to_string_lossy(),
+                config_dir.to_string_lossy(),
+                hook_name,
+                hook_name,
+                hook_name,
+                hook_name,
+                cascade_logic
+            ));
+
+        #[cfg(not(windows))]
+        Ok(format!(
+                "#!/bin/sh\n\
+                 # Cascade CLI Hook Wrapper - {}\n\
+                 # This hook runs Cascade logic first, then chains to original hooks\n\n\
+                 set -e\n\n\
+                 # Function to run Cascade logic\n\
+                 cascade_logic() {{\n\
+                 {}\n\
+                 }}\n\n\
+                 # Run Cascade logic first\n\
+                 cascade_logic \"$@\"\n\
+                 CASCADE_RESULT=$?\n\
+                 if [ $CASCADE_RESULT -ne 0 ]; then\n\
+                     exit $CASCADE_RESULT\n\
+                 fi\n\n\
+                 # Check for original hook\n\
+                 ORIGINAL_HOOKS_PATH=\"\"\n\
+                 if [ -f \"{}/original-hooks-path\" ]; then\n\
+                     ORIGINAL_HOOKS_PATH=$(cat \"{}/original-hooks-path\" 2>/dev/null || echo \"\")\n\
+                 fi\n\n\
+                 if [ -z \"$ORIGINAL_HOOKS_PATH\" ]; then\n\
+                     # Default location\n\
+                     GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || echo \".git\")\n\
+                     ORIGINAL_HOOK=\"$GIT_DIR/hooks/{}\"\n\
+                 else\n\
+                     # Custom hooks path\n\
+                     ORIGINAL_HOOK=\"$ORIGINAL_HOOKS_PATH/{}\"\n\
+                 fi\n\n\
+                 # Run original hook if it exists and is executable\n\
+                 if [ -x \"$ORIGINAL_HOOK\" ]; then\n\
+                     \"$ORIGINAL_HOOK\" \"$@\"\n\
+                     exit $?\n\
+                 fi\n\n\
+                 exit 0\n",
+                hook_name,
+                cascade_logic.trim_start_matches("#!/bin/sh\n").trim_start_matches("set -e\n"),
+                config_dir.to_string_lossy(),
+                config_dir.to_string_lossy(),
+                hook_name,
+                hook_name
+        ))
     }
 
     fn generate_post_commit_hook(&self, cascade_cli: &str) -> String {
@@ -1118,15 +1359,14 @@ echo "✅ Commit message validation passed"
         Output::sub_item("ca submit        → Submits all by default");
         Output::sub_item("ca autoland      → Auto-merges when ready");
 
-        use std::io::{self, Write};
-        print!("\nInstall Cascade hooks? [Y/n]: ");
-        io::stdout().flush().unwrap();
+        // Interactive confirmation to proceed with installation
+        let should_install = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Install Cascade hooks?")
+            .default(true)
+            .interact()
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim().to_lowercase();
-
-        if input.is_empty() || input == "y" || input == "yes" {
+        if should_install {
             Output::success("Proceeding with installation");
             Ok(())
         } else {
@@ -1315,8 +1555,8 @@ mod tests {
         let _manager = HooksManager::new(&repo_path).unwrap();
 
         assert_eq!(_manager.repo_path, repo_path);
-        // Should use default hooks directory when no core.hooksPath is set
-        assert_eq!(_manager.hooks_dir, repo_path.join(".git/hooks"));
+        // Should create a HooksManager successfully
+        assert!(!_manager.repo_id.is_empty());
     }
 
     #[test]
@@ -1337,8 +1577,8 @@ mod tests {
         let _manager = HooksManager::new(&repo_path).unwrap();
 
         assert_eq!(_manager.repo_path, repo_path);
-        // Should use custom hooks directory when core.hooksPath is set
-        assert_eq!(_manager.hooks_dir, custom_hooks_dir);
+        // Should create a HooksManager successfully
+        assert!(!_manager.repo_id.is_empty());
     }
 
     #[test]

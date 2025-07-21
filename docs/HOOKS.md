@@ -2,6 +2,14 @@
 
 Cascade CLI provides Git hooks to seamlessly integrate stack management with your regular Git workflow. This guide explains each hook in detail, when to use them, and what manual steps you'd need if hooks were disabled.
 
+## 🔐 Clean Installation Approach
+
+Cascade hooks are installed in a **user-specific directory** (`~/.cascade/hooks/<repo-id>/`) and use Git's `core.hooksPath` configuration. This means:
+- ✅ **No repository modification** - Nothing changes in your `.git/hooks/` directory
+- ✅ **Preserves existing hooks** - Automatically chains to any existing project hooks
+- ✅ **Clean uninstall** - Restores original `core.hooksPath` when removed
+- ✅ **Per-repository control** - Different hook configurations for different repos
+
 ## 🎯 Key Concept: Hooks vs CLI Protections
 
 **Git Hooks** protect against **raw Git commands** (`git commit`, `git push`)  
@@ -128,7 +136,7 @@ ca push --commit $(git rev-parse HEAD)  # You'd have to remember this every time
 
 **Install if needed:**
 ```bash
-ca hooks install post-commit
+ca hooks add post-commit
 ```
 
 ## 🔄 Complete Workflow Comparison
@@ -167,6 +175,25 @@ git push origin feature-branch
 # 💥 Could accidentally use --force and break stacks
 ```
 
+## 🔗 How Hook Chaining Works
+
+When Cascade hooks are installed, they:
+1. **Save your current hooks configuration** - Remembers if you use custom `core.hooksPath`
+2. **Create Cascade hooks** - In `~/.cascade/hooks/<repo-id>/`
+3. **Chain to original hooks** - Each Cascade hook automatically calls the original
+4. **Restore on uninstall** - Returns `core.hooksPath` to its original value
+
+### Example Flow
+```bash
+# You run: git push --force origin feature
+
+1. Git calls: ~/.cascade/hooks/github.com-user-repo/pre-push
+2. Cascade hook runs validation (blocks force push)
+3. If Cascade approves, calls original: .git/hooks/pre-push (if exists)
+4. Original hook runs its checks
+5. Push proceeds only if both pass
+```
+
 ## 🛠️ Hook Management
 
 ### Install Essential Hooks (Recommended)
@@ -174,12 +201,18 @@ git push origin feature-branch
 ca hooks install
 ```
 
+This command:
+- Creates `~/.cascade/hooks/<repo-id>/` directory
+- Saves current `core.hooksPath` value (if any)
+- Sets `core.hooksPath` to Cascade directory
+- Installs pre-push, commit-msg, and pre-commit hooks
+
 ### Install Specific Hook
 ```bash
-ca hooks install post-commit    # Only if no conflicting repo hooks
-ca hooks install pre-push       # Stack protection
-ca hooks install commit-msg     # Message validation
-ca hooks install prepare-commit-msg  # Stack context
+ca hooks add post-commit    # Only if no conflicting repo hooks
+ca hooks add pre-push       # Stack protection
+ca hooks add commit-msg     # Message validation
+ca hooks add prepare-commit-msg  # Stack context
 ```
 
 ### Check Hook Status
@@ -211,14 +244,31 @@ ca hooks remove prepare-commit-msg  # Remove specific hook
 
 **Solution:**
 ```bash
-# Check if hooks are executable (Unix/Mac)
-ls -la .git/hooks/
+# Check current hooks configuration
+git config core.hooksPath
 
 # Verify Cascade hooks are installed
 ca hooks status
 
+# Check Cascade hooks directory
+ls -la ~/.cascade/hooks/*/
+
 # Reinstall if needed
 ca hooks install --force
+```
+
+### Restoring Original Hooks
+**Problem:** Want to temporarily disable Cascade hooks.
+
+**Solution:**
+```bash
+# Remove all Cascade hooks and restore original config
+ca hooks uninstall
+
+# Or manually restore (emergency)
+git config --unset core.hooksPath  # If you had no custom path
+# OR
+git config core.hooksPath /path/to/original  # If you had custom hooks
 ```
 
 ### Force Push Still Blocked
@@ -230,9 +280,9 @@ ca hooks install --force
 git push --force-with-lease origin branch-name
 
 # Or temporarily uninstall pre-push hook
-ca hooks uninstall pre-push
+ca hooks remove pre-push
 git push --force origin branch-name
-ca hooks install pre-push
+ca hooks add pre-push
 ```
 
 ## 📈 Recommendation

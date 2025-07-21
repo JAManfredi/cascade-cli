@@ -8,6 +8,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
@@ -120,15 +121,46 @@ async fn checkout_entry(
 
         if !skip_confirmation {
             Output::warning("Already in edit mode!");
-            Output::sub_item(format!(
-                "Current target: {} (TODO: get commit message)",
-                &edit_info.original_commit_hash[..8]
-            ));
-            Output::info("Do you want to exit current edit mode and start a new one? [y/N]");
 
-            // TODO: Implement interactive confirmation
-            // For now, just warn and exit
-            return Err(CascadeError::config("Exit current edit mode first with 'ca entry status' and handle any pending changes"));
+            // Try to get the commit message for the current edit target
+            let commit_message = if let Some(target_entry_id) = edit_info.target_entry_id {
+                if let Some(entry) = active_stack
+                    .entries
+                    .iter()
+                    .find(|e| e.id == target_entry_id)
+                {
+                    entry.short_message(50)
+                } else {
+                    "Unknown entry".to_string()
+                }
+            } else {
+                "Unknown target".to_string()
+            };
+
+            Output::sub_item(format!(
+                "Current target: {} ({})",
+                &edit_info.original_commit_hash[..8],
+                commit_message
+            ));
+
+            // Interactive confirmation to exit current edit mode
+            let should_exit_edit_mode = Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Exit current edit mode and start a new one?")
+                .default(false)
+                .interact()
+                .map_err(|e| {
+                    CascadeError::config(format!("Failed to get user confirmation: {e}"))
+                })?;
+
+            if !should_exit_edit_mode {
+                return Err(CascadeError::config(
+                    "Operation cancelled. Use 'ca entry status' to see current edit mode details.",
+                ));
+            }
+
+            // TODO: Implement proper exit from edit mode
+            // For now, just warn that this isn't implemented yet
+            return Err(CascadeError::config("Exiting edit mode not yet implemented. Use 'ca entry status' and handle any pending changes manually."));
         }
     }
 
@@ -142,13 +174,27 @@ async fn checkout_entry(
         if let Some(pr_id) = &entry_pr_id {
             Output::sub_item(format!("PR: #{pr_id}"));
         }
+
+        // Display full commit message
+        Output::sub_item("Commit Message:");
+        let lines: Vec<&str> = target_entry.message.lines().collect();
+        for line in lines {
+            Output::sub_item(format!("  {line}"));
+        }
+
         Output::warning("This will checkout the commit and enter edit mode.");
         Output::info("Any changes you make can be amended to this commit or create new entries.");
-        Output::info("\nContinue? [y/N]");
 
-        // TODO: Implement interactive confirmation with dialoguer
-        // For now, just proceed
-        info!("Skipping confirmation for now - will implement interactive prompt in next step");
+        // Interactive confirmation to proceed with checkout
+        let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Continue with checkout?")
+            .default(false)
+            .interact()
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !should_continue {
+            return Err(CascadeError::config("Entry checkout cancelled"));
+        }
     }
 
     // Enter edit mode
@@ -359,7 +405,38 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
     }
 
     Output::section("Currently in edit mode");
-    Output::sub_item(format!("Target entry: {:?}", edit_info.target_entry_id));
+
+    // Try to get the entry information
+    if let Some(active_stack) = manager.get_active_stack() {
+        if let Some(target_entry_id) = edit_info.target_entry_id {
+            if let Some(entry) = active_stack
+                .entries
+                .iter()
+                .find(|e| e.id == target_entry_id)
+            {
+                Output::sub_item(format!(
+                    "Target entry: {} ({})",
+                    entry.short_hash(),
+                    entry.short_message(50)
+                ));
+                Output::sub_item(format!("Branch: {}", entry.branch));
+
+                // Display full commit message
+                Output::sub_item("Commit Message:");
+                let lines: Vec<&str> = entry.message.lines().collect();
+                for line in lines {
+                    Output::sub_item(format!("  {line}"));
+                }
+            } else {
+                Output::sub_item(format!("Target entry: {target_entry_id:?} (not found)"));
+            }
+        } else {
+            Output::sub_item("Target entry: Unknown");
+        }
+    } else {
+        Output::sub_item(format!("Target entry: {:?}", edit_info.target_entry_id));
+    }
+
     Output::sub_item(format!(
         "Original commit: {}",
         &edit_info.original_commit_hash[..8]
@@ -372,12 +449,60 @@ async fn show_edit_status(quiet: bool) -> Result<()> {
     // Show current Git status
     Output::section("Current state");
 
-    // TODO: Add Git status information
-    // - Current HEAD vs original commit
-    // - Working directory status
-    // - Staged changes
+    // Get current repository state
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+    let repo = crate::git::GitRepository::open(&repo_root)?;
 
-    Output::sub_item("Use 'git status' for detailed working directory status");
+    // Current HEAD vs original commit
+    let current_head = repo.get_current_commit_hash()?;
+    if current_head != edit_info.original_commit_hash {
+        let current_short = &current_head[..8];
+        let original_short = &edit_info.original_commit_hash[..8];
+        Output::sub_item(format!("HEAD moved: {original_short} → {current_short}"));
+
+        // Show if there are new commits
+        match repo.get_commit_count_between(&edit_info.original_commit_hash, &current_head) {
+            Ok(count) if count > 0 => {
+                Output::sub_item(format!("  {count} new commit(s) created"));
+            }
+            _ => {}
+        }
+    } else {
+        Output::sub_item(format!("HEAD: {} (unchanged)", &current_head[..8]));
+    }
+
+    // Working directory and staging status
+    match repo.get_status_summary() {
+        Ok(status) => {
+            if status.is_clean() {
+                Output::sub_item("Working directory: clean");
+            } else {
+                if status.has_staged_changes() {
+                    Output::sub_item(format!("Staged changes: {} files", status.staged_count()));
+                }
+                if status.has_unstaged_changes() {
+                    Output::sub_item(format!(
+                        "Unstaged changes: {} files",
+                        status.unstaged_count()
+                    ));
+                }
+                if status.has_untracked_files() {
+                    Output::sub_item(format!(
+                        "Untracked files: {} files",
+                        status.untracked_count()
+                    ));
+                }
+            }
+        }
+        Err(_) => {
+            Output::sub_item("Working directory: status unavailable");
+        }
+    }
+
+    Output::tip("Use 'git status' for detailed file-level status");
     Output::sub_item("Use 'ca entry list' to see all entries");
 
     Ok(())
@@ -453,29 +578,77 @@ async fn list_entries(verbose: bool) -> Result<()> {
         }
 
         print!("{edit_indicator}");
-        println!();
+        println!(); // Line break for entry
 
         // Verbose information
         if verbose {
-            println!("      Branch: {}", entry.branch);
-            println!(
-                "      Created: {}",
+            Output::sub_item(format!("Branch: {}", entry.branch));
+            Output::sub_item(format!("Commit: {}", entry.commit_hash));
+            Output::sub_item(format!(
+                "Created: {}",
                 entry.created_at.format("%Y-%m-%d %H:%M:%S")
-            );
+            ));
             if entry.is_submitted {
-                println!("      Status: Submitted");
+                Output::sub_item("Status: Submitted");
             } else {
-                println!("      Status: Draft");
+                Output::sub_item("Status: Draft");
             }
-            println!();
+
+            // Display full commit message
+            Output::sub_item("Message:");
+            let lines: Vec<&str> = entry.message.lines().collect();
+            for line in lines {
+                Output::sub_item(format!("  {line}"));
+            }
+
+            // Add Git status info for entry in edit mode
+            if edit_mode_info.is_some() && edit_mode_info.unwrap().target_entry_id == Some(entry.id)
+            {
+                if let Ok(repo_root) = find_repository_root(&env::current_dir().unwrap_or_default())
+                {
+                    if let Ok(repo) = crate::git::GitRepository::open(&repo_root) {
+                        match repo.get_status_summary() {
+                            Ok(status) => {
+                                if !status.is_clean() {
+                                    Output::sub_item("Git Status:");
+                                    if status.has_staged_changes() {
+                                        Output::sub_item(format!(
+                                            "  Staged: {} files",
+                                            status.staged_count()
+                                        ));
+                                    }
+                                    if status.has_unstaged_changes() {
+                                        Output::sub_item(format!(
+                                            "  Unstaged: {} files",
+                                            status.unstaged_count()
+                                        ));
+                                    }
+                                    if status.has_untracked_files() {
+                                        Output::sub_item(format!(
+                                            "  Untracked: {} files",
+                                            status.untracked_count()
+                                        ));
+                                    }
+                                } else {
+                                    Output::sub_item("Git Status: clean");
+                                }
+                            }
+                            Err(_) => {
+                                Output::sub_item("Git Status: unavailable");
+                            }
+                        }
+                    }
+                }
+            }
+            // Add spacing between entries
         }
     }
 
     if let Some(_edit_info) = edit_mode_info {
-        println!();
+        Output::spacing();
         Output::info("Edit mode active - use 'ca entry status' for details");
     } else {
-        println!();
+        Output::spacing();
         Output::tip("Use 'ca entry checkout' to start editing an entry");
     }
 

@@ -1,8 +1,10 @@
 use super::metadata::RepositoryMetadata;
 use super::{CommitMetadata, Stack, StackEntry, StackMetadata, StackStatus};
+use crate::cli::output::Output;
 use crate::config::{get_repo_config_dir, Settings};
 use crate::errors::{CascadeError, Result};
 use crate::git::GitRepository;
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -359,13 +361,15 @@ impl StackManager {
                         stack.name, stack.base_branch, current_branch
                     );
 
-                    println!("🎯 Smart Base Branch Update:");
-                    println!(
-                        "   Stack '{}' was created with base '{}'",
+                    Output::info("🎯 Smart Base Branch Update:");
+                    Output::sub_item(format!(
+                        "Stack '{}' was created with base '{}'",
                         stack.name, stack.base_branch
-                    );
-                    println!("   You're now working on feature branch '{current_branch}'");
-                    println!("   Updating stack base branch to match your workflow");
+                    ));
+                    Output::sub_item(format!(
+                        "You're now working on feature branch '{current_branch}'"
+                    ));
+                    Output::sub_item("Updating stack base branch to match your workflow");
 
                     // Update the stack's base branch
                     stack.base_branch = current_branch.clone();
@@ -835,88 +839,99 @@ impl StackManager {
 
         // Check if branch has changed
         if stored_branch.as_ref() != current_branch.as_ref() {
-            println!("⚠️  Branch change detected!");
-            println!(
-                "   Stack '{}' was active on: {}",
+            Output::warning("Branch change detected!");
+            Output::sub_item(format!(
+                "Stack '{}' was active on: {}",
                 stack_name,
                 stored_branch.as_deref().unwrap_or("unknown")
-            );
-            println!(
-                "   Current branch: {}",
+            ));
+            Output::sub_item(format!(
+                "Current branch: {}",
                 current_branch.as_deref().unwrap_or("unknown")
-            );
-            println!();
-            println!("What would you like to do?");
-            println!("   1. Keep stack '{stack_name}' active (continue with stack workflow)");
-            println!("   2. Deactivate stack (use normal Git workflow)");
-            println!("   3. Switch to a different stack");
-            println!("   4. Cancel and stay on current workflow");
-            print!("   Choice (1-4): ");
+            ));
+            Output::spacing();
 
-            use std::io::{self, Write};
-            io::stdout()
-                .flush()
-                .map_err(|e| CascadeError::config(format!("Failed to write to stdout: {e}")))?;
+            let options = vec![
+                format!("Keep stack '{stack_name}' active (continue with stack workflow)"),
+                "Deactivate stack (use normal Git workflow)".to_string(),
+                "Switch to a different stack".to_string(),
+                "Cancel and stay on current workflow".to_string(),
+            ];
 
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .map_err(|e| CascadeError::config(format!("Failed to read user input: {e}")))?;
+            let choice = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("What would you like to do?")
+                .default(0)
+                .items(&options)
+                .interact()
+                .map_err(|e| CascadeError::config(format!("Failed to get user choice: {e}")))?;
 
-            match input.trim() {
-                "1" => {
+            match choice {
+                0 => {
                     // Update the tracked branch and continue
                     if let Some(stack_meta) = self.metadata.get_stack_mut(&stack_id) {
                         stack_meta.set_current_branch(current_branch);
                     }
                     self.save_to_disk()?;
-                    println!("✅ Continuing with stack '{stack_name}' on current branch");
+                    Output::success(format!(
+                        "Continuing with stack '{stack_name}' on current branch"
+                    ));
                     return Ok(true);
                 }
-                "2" => {
+                1 => {
                     // Deactivate the stack
                     self.set_active_stack(None)?;
-                    println!("✅ Deactivated stack '{stack_name}' - using normal Git workflow");
+                    Output::success(format!(
+                        "Deactivated stack '{stack_name}' - using normal Git workflow"
+                    ));
                     return Ok(false);
                 }
-                "3" => {
+                2 => {
                     // Show available stacks
                     let stacks = self.get_all_stacks();
                     if stacks.len() <= 1 {
-                        println!("⚠️  No other stacks available. Deactivating current stack.");
+                        Output::warning("No other stacks available. Deactivating current stack.");
                         self.set_active_stack(None)?;
                         return Ok(false);
                     }
 
-                    println!("\nAvailable stacks:");
+                    Output::spacing();
+                    Output::info("Available stacks:");
                     for (i, stack) in stacks.iter().enumerate() {
                         if stack.id != stack_id {
-                            println!("   {}. {}", i + 1, stack.name);
+                            Output::numbered_item(i + 1, &stack.name);
                         }
                     }
-                    print!("   Enter stack name: ");
-                    io::stdout().flush().map_err(|e| {
-                        CascadeError::config(format!("Failed to write to stdout: {e}"))
-                    })?;
-
-                    let mut stack_name_input = String::new();
-                    io::stdin().read_line(&mut stack_name_input).map_err(|e| {
-                        CascadeError::config(format!("Failed to read user input: {e}"))
-                    })?;
+                    let stack_name_input: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Enter stack name")
+                        .validate_with(|input: &String| -> std::result::Result<(), &str> {
+                            if input.trim().is_empty() {
+                                Err("Stack name cannot be empty")
+                            } else {
+                                Ok(())
+                            }
+                        })
+                        .interact_text()
+                        .map_err(|e| {
+                            CascadeError::config(format!("Failed to get user input: {e}"))
+                        })?;
                     let stack_name_input = stack_name_input.trim();
 
                     if let Err(e) = self.set_active_stack_by_name(stack_name_input) {
-                        println!("⚠️  {e}");
-                        println!("   Deactivating stack instead.");
+                        Output::warning(format!("{e}"));
+                        Output::sub_item("Deactivating stack instead.");
                         self.set_active_stack(None)?;
                         return Ok(false);
                     } else {
-                        println!("✅ Switched to stack '{stack_name_input}'");
+                        Output::success(format!("Switched to stack '{stack_name_input}'"));
                         return Ok(true);
                     }
                 }
+                3 => {
+                    Output::info("Cancelled - no changes made");
+                    return Ok(false);
+                }
                 _ => {
-                    println!("Cancelled - no changes made");
+                    Output::info("Invalid choice - no changes made");
                     return Ok(false);
                 }
             }
@@ -981,19 +996,22 @@ impl StackManager {
         }
 
         if modifications.is_empty() {
-            println!("✅ Stack '{}' has no Git integrity issues", stack.name);
+            Output::success(format!(
+                "Stack '{}' has no Git integrity issues",
+                stack.name
+            ));
             return Ok(());
         }
 
         // Show detected modifications
-        println!(
-            "🔍 Detected branch modifications in stack '{}':",
+        Output::check_start(format!(
+            "Detected branch modifications in stack '{}':",
             stack.name
-        );
+        ));
         for (i, modification) in modifications.iter().enumerate() {
             match modification {
                 BranchModification::Missing { branch, .. } => {
-                    println!("   {}. Branch '{}' is missing", i + 1, branch);
+                    Output::numbered_item(i + 1, format!("Branch '{branch}' is missing"));
                 }
                 BranchModification::ExtraCommits {
                     branch,
@@ -1018,16 +1036,19 @@ impl StackManager {
                     // Show extra commit messages (first few only)
                     for (j, message) in extra_commit_messages.iter().enumerate() {
                         if j < 3 {
-                            println!("         + {message}");
+                            Output::sub_item(format!("     + {message}"));
                         } else if j == 3 {
-                            println!("         + ... and {} more", extra_commit_count - 3);
+                            Output::sub_item(format!(
+                                "     + ... and {} more",
+                                extra_commit_count - 3
+                            ));
                             break;
                         }
                     }
                 }
             }
         }
-        println!();
+        Output::spacing();
 
         // Auto mode handling
         if let Some(mode) = auto_mode {
@@ -1040,7 +1061,7 @@ impl StackManager {
         }
 
         self.save_to_disk()?;
-        println!("🎉 All branch modifications handled successfully!");
+        Output::success("All branch modifications handled successfully!");
         Ok(())
     }
 
@@ -1056,14 +1077,14 @@ impl StackManager {
                 expected_commit,
                 ..
             } => {
-                println!("🔧 Missing branch '{branch}'");
-                println!(
-                    "   This will create the branch at commit {}",
+                Output::info(format!("🔧 Missing branch '{branch}'"));
+                Output::sub_item(format!(
+                    "This will create the branch at commit {}",
                     &expected_commit[..8]
-                );
+                ));
 
                 self.repo.create_branch(branch, Some(expected_commit))?;
-                println!("   ✅ Created branch '{branch}'");
+                Output::success(format!("Created branch '{branch}'"));
             }
 
             BranchModification::ExtraCommits {
@@ -1073,36 +1094,40 @@ impl StackManager {
                 extra_commit_count,
                 ..
             } => {
-                println!(
+                Output::info(format!(
                     "🤔 Branch '{branch}' has {extra_commit_count} extra commit(s). What would you like to do?"
-                );
-                println!("   1. 📝 Incorporate - Update stack entry to include extra commits");
-                println!("   2. ➕ Split - Create new stack entry for extra commits");
-                println!("   3. 🗑️  Reset - Remove extra commits (DESTRUCTIVE)");
-                println!("   4. ⏭️  Skip - Leave as-is for now");
-                print!("   Choice (1-4): ");
+                ));
+                let options = vec![
+                    "📝 Incorporate - Update stack entry to include extra commits",
+                    "➕ Split - Create new stack entry for extra commits",
+                    "🗑️  Reset - Remove extra commits (DESTRUCTIVE)",
+                    "⏭️  Skip - Leave as-is for now",
+                ];
 
-                use std::io::{self, Write};
-                io::stdout().flush().unwrap();
+                let choice = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Choose how to handle extra commits")
+                    .default(0)
+                    .items(&options)
+                    .interact()
+                    .map_err(|e| CascadeError::config(format!("Failed to get user choice: {e}")))?;
 
-                let mut input = String::new();
-                io::stdin().read_line(&mut input).unwrap();
-
-                match input.trim() {
-                    "1" | "incorporate" | "inc" => {
+                match choice {
+                    0 => {
                         self.incorporate_extra_commits(stack_id, *entry_id, branch)?;
                     }
-                    "2" | "split" | "new" => {
+                    1 => {
                         self.split_extra_commits(stack_id, *entry_id, branch)?;
                     }
-                    "3" | "reset" | "remove" => {
+                    2 => {
                         self.reset_branch_destructive(branch, expected_commit)?;
                     }
-                    "4" | "skip" | "ignore" => {
-                        println!("   ⏭️  Skipping '{branch}' (integrity issue remains)");
+                    3 => {
+                        Output::sub_item(format!(
+                            "⏭️  Skipping '{branch}' (integrity issue remains)"
+                        ));
                     }
                     _ => {
-                        println!("   ❌ Invalid choice. Skipping '{branch}'");
+                        Output::sub_item(format!("❌ Invalid choice. Skipping '{branch}'"));
                     }
                 }
             }
@@ -1118,7 +1143,7 @@ impl StackManager {
         modifications: &[BranchModification],
         mode: &str,
     ) -> Result<()> {
-        println!("🤖 Applying automatic fix mode: {mode}");
+        Output::info(format!("🤖 Applying automatic fix mode: {mode}"));
 
         for modification in modifications {
             match (modification, mode) {
@@ -1131,7 +1156,7 @@ impl StackManager {
                     _,
                 ) => {
                     self.repo.create_branch(branch, Some(expected_commit))?;
-                    println!("   ✅ Created missing branch '{branch}'");
+                    Output::success(format!("Created missing branch '{branch}'"));
                 }
 
                 (
@@ -1172,7 +1197,7 @@ impl StackManager {
         }
 
         self.save_to_disk()?;
-        println!("🎉 Auto-fix completed for mode: {mode}");
+        Output::success(format!("Auto-fix completed for mode: {mode}"));
         Ok(())
     }
 
@@ -1214,12 +1239,12 @@ impl StackManager {
                 );
             }
 
-            println!(
-                "   ✅ Incorporated {} commit(s) into entry '{}'",
+            Output::success(format!(
+                "Incorporated {} commit(s) into entry '{}'",
                 extra_commits.len(),
                 entry.short_hash()
-            );
-            println!("      Updated: {} -> {}", old_commit, &new_head[..8]);
+            ));
+            Output::sub_item(format!("Updated: {} -> {}", old_commit, &new_head[..8]));
         }
 
         Ok(())
@@ -1302,11 +1327,11 @@ impl StackManager {
     /// Reset branch to expected commit (destructive - loses extra work)
     fn reset_branch_destructive(&self, branch: &str, expected_commit: &str) -> Result<()> {
         self.repo.reset_branch_to_commit(branch, expected_commit)?;
-        println!(
-            "   ⚠️  Reset branch '{}' to {} (extra commits lost)",
+        Output::warning(format!(
+            "Reset branch '{}' to {} (extra commits lost)",
             branch,
             &expected_commit[..8]
-        );
+        ));
         Ok(())
     }
 }

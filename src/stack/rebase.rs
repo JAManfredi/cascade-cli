@@ -1,5 +1,5 @@
 use crate::errors::{CascadeError, Result};
-use crate::git::GitRepository;
+use crate::git::{ConflictAnalyzer, GitRepository};
 use crate::stack::{Stack, StackManager};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,7 @@ enum ConflictResolution {
 
 /// Represents a conflict region in a file
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct ConflictRegion {
     /// Byte position where conflict starts
     start: usize,
@@ -87,6 +88,7 @@ pub struct RebaseManager {
     stack_manager: StackManager,
     git_repo: GitRepository,
     options: RebaseOptions,
+    conflict_analyzer: ConflictAnalyzer,
 }
 
 impl Default for RebaseOptions {
@@ -114,6 +116,7 @@ impl RebaseManager {
             stack_manager,
             git_repo,
             options,
+            conflict_analyzer: ConflictAnalyzer::new(),
         }
     }
 
@@ -502,26 +505,56 @@ impl RebaseManager {
             conflicted_files
         );
 
+        // Use the new conflict analyzer for detailed analysis
+        let analysis = self
+            .conflict_analyzer
+            .analyze_conflicts(&conflicted_files, self.git_repo.path())?;
+
+        info!(
+            "🔍 Conflict analysis: {} total conflicts, {} auto-resolvable",
+            analysis.total_conflicts, analysis.auto_resolvable_count
+        );
+
+        // Display recommendations
+        for recommendation in &analysis.recommendations {
+            info!("💡 {}", recommendation);
+        }
+
         let mut resolved_count = 0;
         let mut failed_files = Vec::new();
 
-        for file_path in &conflicted_files {
-            match self.resolve_file_conflicts(file_path) {
-                Ok(ConflictResolution::Resolved) => {
-                    resolved_count += 1;
-                    info!("✅ Auto-resolved conflicts in {}", file_path);
+        for file_analysis in &analysis.files {
+            if file_analysis.auto_resolvable {
+                match self.resolve_file_conflicts_enhanced(
+                    &file_analysis.file_path,
+                    &file_analysis.conflicts,
+                ) {
+                    Ok(ConflictResolution::Resolved) => {
+                        resolved_count += 1;
+                        info!("✅ Auto-resolved conflicts in {}", file_analysis.file_path);
+                    }
+                    Ok(ConflictResolution::TooComplex) => {
+                        debug!(
+                            "⚠️  Conflicts in {} are too complex for auto-resolution",
+                            file_analysis.file_path
+                        );
+                        failed_files.push(file_analysis.file_path.clone());
+                    }
+                    Err(e) => {
+                        warn!(
+                            "❌ Failed to resolve conflicts in {}: {}",
+                            file_analysis.file_path, e
+                        );
+                        failed_files.push(file_analysis.file_path.clone());
+                    }
                 }
-                Ok(ConflictResolution::TooComplex) => {
-                    debug!(
-                        "⚠️  Conflicts in {} are too complex for auto-resolution",
-                        file_path
-                    );
-                    failed_files.push(file_path.clone());
-                }
-                Err(e) => {
-                    warn!("❌ Failed to analyze conflicts in {}: {}", file_path, e);
-                    failed_files.push(file_path.clone());
-                }
+            } else {
+                failed_files.push(file_analysis.file_path.clone());
+                info!(
+                    "⚠️  {} requires manual resolution ({} conflicts)",
+                    file_analysis.file_path,
+                    file_analysis.conflicts.len()
+                );
             }
         }
 
@@ -550,7 +583,152 @@ impl RebaseManager {
         Ok(all_resolved)
     }
 
+    /// Resolve conflicts using enhanced analysis
+    fn resolve_file_conflicts_enhanced(
+        &self,
+        file_path: &str,
+        conflicts: &[crate::git::ConflictRegion],
+    ) -> Result<ConflictResolution> {
+        let repo_path = self.git_repo.path();
+        let full_path = repo_path.join(file_path);
+
+        // Read the file content with conflict markers
+        let mut content = std::fs::read_to_string(&full_path)
+            .map_err(|e| CascadeError::config(format!("Failed to read file {file_path}: {e}")))?;
+
+        if conflicts.is_empty() {
+            return Ok(ConflictResolution::Resolved);
+        }
+
+        info!(
+            "Resolving {} conflicts in {} using enhanced analysis",
+            conflicts.len(),
+            file_path
+        );
+
+        let mut any_resolved = false;
+
+        // Process conflicts in reverse order to maintain string indices
+        for conflict in conflicts.iter().rev() {
+            match self.resolve_single_conflict_enhanced(conflict) {
+                Ok(Some(resolution)) => {
+                    // Replace the conflict region with the resolved content
+                    let before = &content[..conflict.start_pos];
+                    let after = &content[conflict.end_pos..];
+                    content = format!("{before}{resolution}{after}");
+                    any_resolved = true;
+                    debug!(
+                        "✅ Resolved {} conflict at lines {}-{} in {}",
+                        format!("{:?}", conflict.conflict_type).to_lowercase(),
+                        conflict.start_line,
+                        conflict.end_line,
+                        file_path
+                    );
+                }
+                Ok(None) => {
+                    debug!(
+                        "⚠️  {} conflict at lines {}-{} in {} requires manual resolution",
+                        format!("{:?}", conflict.conflict_type).to_lowercase(),
+                        conflict.start_line,
+                        conflict.end_line,
+                        file_path
+                    );
+                    return Ok(ConflictResolution::TooComplex);
+                }
+                Err(e) => {
+                    debug!("❌ Failed to resolve conflict in {}: {}", file_path, e);
+                    return Ok(ConflictResolution::TooComplex);
+                }
+            }
+        }
+
+        if any_resolved {
+            // Check if we resolved ALL conflicts in this file
+            let remaining_conflicts = self.parse_conflict_markers(&content)?;
+
+            if remaining_conflicts.is_empty() {
+                // All conflicts resolved - write the file back
+                std::fs::write(&full_path, content).map_err(|e| {
+                    CascadeError::config(format!("Failed to write resolved file {file_path}: {e}"))
+                })?;
+
+                return Ok(ConflictResolution::Resolved);
+            } else {
+                info!(
+                    "⚠️  Partially resolved conflicts in {} ({} remaining)",
+                    file_path,
+                    remaining_conflicts.len()
+                );
+            }
+        }
+
+        Ok(ConflictResolution::TooComplex)
+    }
+
+    /// Resolve a single conflict using enhanced analysis
+    fn resolve_single_conflict_enhanced(
+        &self,
+        conflict: &crate::git::ConflictRegion,
+    ) -> Result<Option<String>> {
+        debug!(
+            "Resolving {} conflict in {} (lines {}-{})",
+            format!("{:?}", conflict.conflict_type).to_lowercase(),
+            conflict.file_path,
+            conflict.start_line,
+            conflict.end_line
+        );
+
+        use crate::git::ConflictType;
+
+        match conflict.conflict_type {
+            ConflictType::Whitespace => {
+                // Use the version with better formatting
+                if conflict.our_content.trim().len() >= conflict.their_content.trim().len() {
+                    Ok(Some(conflict.our_content.clone()))
+                } else {
+                    Ok(Some(conflict.their_content.clone()))
+                }
+            }
+            ConflictType::LineEnding => {
+                // Normalize to Unix line endings
+                let normalized = conflict
+                    .our_content
+                    .replace("\r\n", "\n")
+                    .replace('\r', "\n");
+                Ok(Some(normalized))
+            }
+            ConflictType::PureAddition => {
+                // Merge both additions
+                if conflict.our_content.is_empty() {
+                    Ok(Some(conflict.their_content.clone()))
+                } else if conflict.their_content.is_empty() {
+                    Ok(Some(conflict.our_content.clone()))
+                } else {
+                    // Try to combine both
+                    let combined = format!("{}\n{}", conflict.our_content, conflict.their_content);
+                    Ok(Some(combined))
+                }
+            }
+            ConflictType::ImportMerge => {
+                // Sort and merge imports
+                let mut all_imports: Vec<&str> = conflict
+                    .our_content
+                    .lines()
+                    .chain(conflict.their_content.lines())
+                    .collect();
+                all_imports.sort();
+                all_imports.dedup();
+                Ok(Some(all_imports.join("\n")))
+            }
+            ConflictType::Structural | ConflictType::ContentOverlap | ConflictType::Complex => {
+                // These require manual resolution
+                Ok(None)
+            }
+        }
+    }
+
     /// Resolve conflicts in a single file using smart strategies
+    #[allow(dead_code)]
     fn resolve_file_conflicts(&self, file_path: &str) -> Result<ConflictResolution> {
         let repo_path = self.git_repo.path();
         let full_path = repo_path.join(file_path);

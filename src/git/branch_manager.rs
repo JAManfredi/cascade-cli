@@ -2,13 +2,23 @@ use crate::errors::Result;
 use crate::git::GitRepository;
 use serde::{Deserialize, Serialize};
 
+/// Information about upstream tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpstreamInfo {
+    pub remote: String,
+    pub branch: String,
+    pub full_name: String, // e.g., "origin/feature-auth"
+    pub ahead: usize,      // commits ahead of upstream
+    pub behind: usize,     // commits behind upstream
+}
+
 /// Information about a branch
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BranchInfo {
     pub name: String,
     pub commit_hash: String,
     pub is_current: bool,
-    pub upstream: Option<String>,
+    pub upstream: Option<UpstreamInfo>,
 }
 
 /// Manages branch operations and metadata
@@ -31,12 +41,13 @@ impl BranchManager {
         for branch_name in branches {
             let commit_hash = self.get_branch_commit_hash(&branch_name)?;
             let is_current = current_branch.as_ref() == Some(&branch_name);
+            let upstream = self.get_upstream_info(&branch_name)?;
 
             branch_info.push(BranchInfo {
                 name: branch_name,
                 commit_hash,
                 is_current,
-                upstream: None, // TODO: Implement upstream tracking
+                upstream,
             });
         }
 
@@ -46,6 +57,57 @@ impl BranchManager {
     /// Get the commit hash for a specific branch safely without switching branches
     fn get_branch_commit_hash(&self, branch_name: &str) -> Result<String> {
         self.git_repo.get_branch_commit_hash(branch_name)
+    }
+
+    /// Get upstream tracking information for a branch
+    fn get_upstream_info(&self, branch_name: &str) -> Result<Option<UpstreamInfo>> {
+        // First, try to get the upstream tracking from git config
+        if let Some(upstream) = self.git_repo.get_upstream_branch(branch_name)? {
+            let (remote, remote_branch) = self.parse_upstream_name(&upstream)?;
+
+            // Calculate ahead/behind counts
+            let (ahead, behind) = self.calculate_ahead_behind_counts(branch_name, &upstream)?;
+
+            Ok(Some(UpstreamInfo {
+                remote,
+                branch: remote_branch,
+                full_name: upstream,
+                ahead,
+                behind,
+            }))
+        } else {
+            // No upstream configured
+            Ok(None)
+        }
+    }
+
+    /// Parse upstream name like "origin/feature-auth" into remote and branch
+    fn parse_upstream_name(&self, upstream: &str) -> Result<(String, String)> {
+        let parts: Vec<&str> = upstream.splitn(2, '/').collect();
+        if parts.len() == 2 {
+            Ok((parts[0].to_string(), parts[1].to_string()))
+        } else {
+            // Fallback - assume origin if no slash
+            Ok(("origin".to_string(), upstream.to_string()))
+        }
+    }
+
+    /// Calculate how many commits ahead/behind the local branch is from upstream
+    fn calculate_ahead_behind_counts(
+        &self,
+        local_branch: &str,
+        upstream_branch: &str,
+    ) -> Result<(usize, usize)> {
+        match self
+            .git_repo
+            .get_ahead_behind_counts(local_branch, upstream_branch)
+        {
+            Ok((ahead, behind)) => Ok((ahead, behind)),
+            Err(_) => {
+                // If we can't calculate (e.g., remote doesn't exist), return 0,0
+                Ok((0, 0))
+            }
+        }
     }
 
     /// Generate a safe branch name from a commit message
@@ -90,6 +152,22 @@ impl BranchManager {
         let branch_name = self.generate_branch_name(message);
         self.git_repo.create_branch(&branch_name, target)?;
         Ok(branch_name)
+    }
+
+    /// Set upstream tracking for a branch
+    pub fn set_upstream(&self, branch_name: &str, remote: &str, remote_branch: &str) -> Result<()> {
+        self.git_repo
+            .set_upstream(branch_name, remote, remote_branch)
+    }
+
+    /// Get upstream info for a specific branch
+    pub fn get_branch_upstream(&self, branch_name: &str) -> Result<Option<UpstreamInfo>> {
+        self.get_upstream_info(branch_name)
+    }
+
+    /// Check if a branch has upstream tracking
+    pub fn has_upstream(&self, branch_name: &str) -> Result<bool> {
+        Ok(self.get_upstream_info(branch_name)?.is_some())
     }
 
     /// Get the underlying Git repository
@@ -186,5 +264,33 @@ mod tests {
 
         // Should have at least 2 branches (default + the test feature branch we created)
         assert!(branch_info.len() >= 2);
+
+        // Test that upstream info is included (even if None for test branches)
+        for branch in &branch_info {
+            // In a test environment, branches typically don't have upstream
+            // but the field should exist and be None
+            assert!(branch.upstream.is_none());
+        }
+    }
+
+    #[test]
+    fn test_upstream_parsing() {
+        let (_temp_dir, branch_manager) = create_test_branch_manager();
+
+        // Test parsing upstream names
+        let (remote, branch) = branch_manager
+            .parse_upstream_name("origin/feature-auth")
+            .unwrap();
+        assert_eq!(remote, "origin");
+        assert_eq!(branch, "feature-auth");
+
+        let (remote, branch) = branch_manager.parse_upstream_name("upstream/main").unwrap();
+        assert_eq!(remote, "upstream");
+        assert_eq!(branch, "main");
+
+        // Test fallback for names without slash
+        let (remote, branch) = branch_manager.parse_upstream_name("feature-auth").unwrap();
+        assert_eq!(remote, "origin");
+        assert_eq!(branch, "feature-auth");
     }
 }

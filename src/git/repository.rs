@@ -55,6 +55,44 @@ pub struct GitSslConfig {
     pub ca_bundle_path: Option<String>,
 }
 
+/// Summary of git repository status
+#[derive(Debug, Clone)]
+pub struct GitStatusSummary {
+    staged_files: usize,
+    unstaged_files: usize,
+    untracked_files: usize,
+}
+
+impl GitStatusSummary {
+    pub fn is_clean(&self) -> bool {
+        self.staged_files == 0 && self.unstaged_files == 0 && self.untracked_files == 0
+    }
+
+    pub fn has_staged_changes(&self) -> bool {
+        self.staged_files > 0
+    }
+
+    pub fn has_unstaged_changes(&self) -> bool {
+        self.unstaged_files > 0
+    }
+
+    pub fn has_untracked_files(&self) -> bool {
+        self.untracked_files > 0
+    }
+
+    pub fn staged_count(&self) -> usize {
+        self.staged_files
+    }
+
+    pub fn unstaged_count(&self) -> usize {
+        self.unstaged_files
+    }
+
+    pub fn untracked_count(&self) -> usize {
+        self.untracked_files
+    }
+}
+
 /// Wrapper around git2::Repository with safe operations
 ///
 /// For thread safety, use the async variants (e.g., fetch_async, pull_async)
@@ -462,6 +500,90 @@ impl GitRepository {
         }
 
         Ok(branch_names)
+    }
+
+    /// Get the upstream branch for a local branch
+    pub fn get_upstream_branch(&self, branch_name: &str) -> Result<Option<String>> {
+        // Try to get the upstream from git config
+        let config = self.repo.config().map_err(CascadeError::Git)?;
+
+        // Check for branch.{branch_name}.remote and branch.{branch_name}.merge
+        let remote_key = format!("branch.{branch_name}.remote");
+        let merge_key = format!("branch.{branch_name}.merge");
+
+        if let (Ok(remote), Ok(merge_ref)) = (
+            config.get_string(&remote_key),
+            config.get_string(&merge_key),
+        ) {
+            // Parse the merge ref (e.g., "refs/heads/feature-auth" -> "feature-auth")
+            if let Some(branch_part) = merge_ref.strip_prefix("refs/heads/") {
+                return Ok(Some(format!("{remote}/{branch_part}")));
+            }
+        }
+
+        // Fallback: check if there's a remote tracking branch with the same name
+        let potential_upstream = format!("origin/{branch_name}");
+        if self
+            .repo
+            .find_reference(&format!("refs/remotes/{potential_upstream}"))
+            .is_ok()
+        {
+            return Ok(Some(potential_upstream));
+        }
+
+        Ok(None)
+    }
+
+    /// Get ahead/behind counts compared to upstream
+    pub fn get_ahead_behind_counts(
+        &self,
+        local_branch: &str,
+        upstream_branch: &str,
+    ) -> Result<(usize, usize)> {
+        // Get the commit objects for both branches
+        let local_ref = self
+            .repo
+            .find_reference(&format!("refs/heads/{local_branch}"))
+            .map_err(|_| {
+                CascadeError::config(format!("Local branch '{local_branch}' not found"))
+            })?;
+        let local_commit = local_ref.peel_to_commit().map_err(CascadeError::Git)?;
+
+        let upstream_ref = self
+            .repo
+            .find_reference(&format!("refs/remotes/{upstream_branch}"))
+            .map_err(|_| {
+                CascadeError::config(format!("Upstream branch '{upstream_branch}' not found"))
+            })?;
+        let upstream_commit = upstream_ref.peel_to_commit().map_err(CascadeError::Git)?;
+
+        // Use git2's graph_ahead_behind to calculate the counts
+        let (ahead, behind) = self
+            .repo
+            .graph_ahead_behind(local_commit.id(), upstream_commit.id())
+            .map_err(CascadeError::Git)?;
+
+        Ok((ahead, behind))
+    }
+
+    /// Set upstream tracking for a branch
+    pub fn set_upstream(&self, branch_name: &str, remote: &str, remote_branch: &str) -> Result<()> {
+        let mut config = self.repo.config().map_err(CascadeError::Git)?;
+
+        // Set branch.{branch_name}.remote = remote
+        let remote_key = format!("branch.{branch_name}.remote");
+        config
+            .set_str(&remote_key, remote)
+            .map_err(CascadeError::Git)?;
+
+        // Set branch.{branch_name}.merge = refs/heads/{remote_branch}
+        let merge_key = format!("branch.{branch_name}.merge");
+        let merge_value = format!("refs/heads/{remote_branch}");
+        config
+            .set_str(&merge_key, &merge_value)
+            .map_err(CascadeError::Git)?;
+
+        Ok(())
     }
 
     /// Create a commit with all staged changes
@@ -916,6 +1038,65 @@ impl GitRepository {
     /// Get repository status
     pub fn get_status(&self) -> Result<git2::Statuses<'_>> {
         self.repo.statuses(None).map_err(CascadeError::Git)
+    }
+
+    /// Get a summary of repository status
+    pub fn get_status_summary(&self) -> Result<GitStatusSummary> {
+        let statuses = self.get_status()?;
+
+        let mut staged_files = 0;
+        let mut unstaged_files = 0;
+        let mut untracked_files = 0;
+
+        for status in statuses.iter() {
+            let flags = status.status();
+
+            if flags.intersects(
+                git2::Status::INDEX_MODIFIED
+                    | git2::Status::INDEX_NEW
+                    | git2::Status::INDEX_DELETED
+                    | git2::Status::INDEX_RENAMED
+                    | git2::Status::INDEX_TYPECHANGE,
+            ) {
+                staged_files += 1;
+            }
+
+            if flags.intersects(
+                git2::Status::WT_MODIFIED
+                    | git2::Status::WT_DELETED
+                    | git2::Status::WT_TYPECHANGE
+                    | git2::Status::WT_RENAMED,
+            ) {
+                unstaged_files += 1;
+            }
+
+            if flags.intersects(git2::Status::WT_NEW) {
+                untracked_files += 1;
+            }
+        }
+
+        Ok(GitStatusSummary {
+            staged_files,
+            unstaged_files,
+            untracked_files,
+        })
+    }
+
+    /// Get the current commit hash (alias for get_head_commit_hash)
+    pub fn get_current_commit_hash(&self) -> Result<String> {
+        self.get_head_commit_hash()
+    }
+
+    /// Get the count of commits between two commits
+    pub fn get_commit_count_between(&self, from_commit: &str, to_commit: &str) -> Result<usize> {
+        let from_oid = git2::Oid::from_str(from_commit).map_err(CascadeError::Git)?;
+        let to_oid = git2::Oid::from_str(to_commit).map_err(CascadeError::Git)?;
+
+        let mut revwalk = self.repo.revwalk().map_err(CascadeError::Git)?;
+        revwalk.push(to_oid).map_err(CascadeError::Git)?;
+        revwalk.hide(from_oid).map_err(CascadeError::Git)?;
+
+        Ok(revwalk.count())
     }
 
     /// Get remote URL for a given remote name

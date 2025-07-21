@@ -76,9 +76,33 @@ fn show_git_status(git_repo: &GitRepository) -> Result<()> {
         Output::sub_item("Untracked files: None");
     }
 
-    // Branches
-    let branches = git_repo.list_branches()?;
-    Output::sub_item(format!("Local branches: {} total", branches.len()));
+    // Branches with upstream tracking
+    let repo_path = git_repo.path();
+    let new_git_repo = crate::git::GitRepository::open(repo_path)?;
+    let branch_manager = crate::git::branch_manager::BranchManager::new(new_git_repo);
+    let branch_info = branch_manager.get_branch_info()?;
+
+    Output::sub_item(format!("Local branches: {} total", branch_info.len()));
+
+    // Show current branch with upstream info
+    if let Some(current_branch) = branch_info.iter().find(|b| b.is_current) {
+        if let Some(upstream) = &current_branch.upstream {
+            let ahead_behind = if upstream.ahead > 0 || upstream.behind > 0 {
+                format!(" (↑{} ↓{})", upstream.ahead, upstream.behind)
+            } else {
+                " (up to date)".to_string()
+            };
+            Output::sub_item(format!(
+                "Current branch: {} → {}{}",
+                current_branch.name, upstream.full_name, ahead_behind
+            ));
+        } else {
+            Output::sub_item(format!(
+                "Current branch: {} (no upstream)",
+                current_branch.name
+            ));
+        }
+    }
 
     Ok(())
 }
