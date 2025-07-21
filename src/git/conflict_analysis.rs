@@ -118,28 +118,19 @@ impl ConflictAnalyzer {
         // Rust patterns (only imports/declarations, not function definitions)
         file_patterns.insert(
             "rs".to_string(),
-            vec![
-                "use ".to_string(),
-                "extern crate ".to_string(),
-            ],
+            vec!["use ".to_string(), "extern crate ".to_string()],
         );
 
         // Python patterns (only imports)
         file_patterns.insert(
             "py".to_string(),
-            vec![
-                "import ".to_string(),
-                "from ".to_string(),
-            ],
+            vec!["import ".to_string(), "from ".to_string()],
         );
 
         // JavaScript/TypeScript patterns
         file_patterns.insert(
             "js".to_string(),
-            vec![
-                "import ".to_string(),
-                "export ".to_string(),
-            ],
+            vec!["import ".to_string(), "export ".to_string()],
         );
 
         file_patterns.insert(

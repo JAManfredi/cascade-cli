@@ -515,32 +515,32 @@ impl CleanupStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::process::Command;
-    
+    use tempfile::TempDir;
+
     fn create_test_repo() -> (TempDir, std::path::PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_path_buf();
-        
+
         // Initialize git repository
         Command::new("git")
             .args(["init"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
-        
+
         Command::new("git")
             .args(["config", "user.name", "Test"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
-        
+
         Command::new("git")
             .args(["config", "user.email", "test@example.com"])
             .current_dir(&repo_path)
             .output()
             .unwrap();
-        
+
         (temp_dir, repo_path)
     }
 

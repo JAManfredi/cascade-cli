@@ -1611,7 +1611,7 @@ mod tests {
         // Test uninstall removes cascade hooks but leaves original
         let uninstall_result = manager.uninstall_hook(&hook_type);
         assert!(uninstall_result.is_ok());
-        
+
         // Original hook should still exist and be unchanged
         let after_uninstall = std::fs::read_to_string(&hook_path).unwrap();
         assert!(after_uninstall.contains("# Project pre-commit hook"));
@@ -1826,7 +1826,7 @@ mod tests {
         // Original hook should remain unchanged
         let original_content = std::fs::read_to_string(&hook_path).unwrap();
         assert!(original_content.contains("existing hook"));
-        
+
         // Cascade hook should contain cascade logic
         let cascade_content = std::fs::read_to_string(&cascade_hook_path).unwrap();
         assert!(cascade_content.contains("cascade-cli") || cascade_content.contains("ca"));
