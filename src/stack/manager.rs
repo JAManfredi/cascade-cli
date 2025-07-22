@@ -113,8 +113,16 @@ impl StackManager {
             )));
         }
 
-        // Use provided base branch or default
-        let base_branch = base_branch.unwrap_or_else(|| self.metadata.default_base_branch.clone());
+        // Use provided base branch, or try to detect parent branch, or fall back to default
+        let base_branch = base_branch.unwrap_or_else(|| {
+            // Try to detect the parent branch of the current branch
+            if let Ok(Some(detected_parent)) = self.repo.detect_parent_branch() {
+                detected_parent
+            } else {
+                // Fall back to default base branch
+                self.metadata.default_base_branch.clone()
+            }
+        });
 
         // Verify base branch exists (try to fetch from remote if not local)
         if !self.repo.branch_exists_or_fetch(&base_branch)? {
