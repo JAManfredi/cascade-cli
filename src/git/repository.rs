@@ -3055,4 +3055,200 @@ mod tests {
         let _result = repo.force_push_branch_unsafe("test-branch", "test-branch");
         // The key is that it doesn't trigger safety confirmation dialogs
     }
+
+    #[test]
+    fn test_cherry_pick_basic() {
+        let (temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+        
+        // Create a branch with a commit to cherry-pick
+        repo.create_branch("source", None).unwrap();
+        repo.checkout_branch("source").unwrap();
+        
+        std::fs::write(repo_path.join("cherry.txt"), "Cherry content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Cherry commit"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        let cherry_commit = repo.get_head_commit_hash().unwrap();
+        
+        // Switch to another branch  
+        repo.checkout_branch("master").unwrap();
+        repo.create_branch("target", None).unwrap();
+        repo.checkout_branch("target").unwrap();
+        
+        // Cherry-pick the commit
+        let new_commit = repo.cherry_pick(&cherry_commit).unwrap();
+        
+        // Verify new commit exists and is different
+        assert_ne!(new_commit, cherry_commit, "Should create new commit hash");
+        
+        // Verify file exists on target branch
+        assert!(repo_path.join("cherry.txt").exists(), "Cherry-picked file should exist");
+        
+        // Verify source branch is unchanged
+        repo.checkout_branch("source").unwrap();
+        let source_head = repo.get_head_commit_hash().unwrap();
+        assert_eq!(source_head, cherry_commit, "Source branch should be unchanged");
+    }
+
+    #[test]
+    fn test_cherry_pick_preserves_commit_message() {
+        let (temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+        
+        // Create commit with specific message
+        repo.create_branch("msg-test", None).unwrap();
+        repo.checkout_branch("msg-test").unwrap();
+        
+        std::fs::write(repo_path.join("msg.txt"), "Content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        let commit_msg = "Test: Special commit message\n\nWith body";
+        Command::new("git")
+            .args(["commit", "-m", commit_msg])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        let original_commit = repo.get_head_commit_hash().unwrap();
+        
+        // Cherry-pick to another branch
+        repo.checkout_branch("master").unwrap();
+        let new_commit = repo.cherry_pick(&original_commit).unwrap();
+        
+        // Get commit message of new commit
+        let output = Command::new("git")
+            .args(["log", "-1", "--format=%B", &new_commit])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        let new_msg = String::from_utf8_lossy(&output.stdout);
+        assert!(new_msg.contains("Special commit message"), "Should preserve commit message");
+    }
+
+    #[test]
+    fn test_cherry_pick_handles_conflicts() {
+        let (temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+        
+        // Create conflicting content
+        std::fs::write(repo_path.join("conflict.txt"), "Original").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Add conflict file"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        // Create branch with different content
+        repo.create_branch("conflict-branch", None).unwrap();
+        repo.checkout_branch("conflict-branch").unwrap();
+        
+        std::fs::write(repo_path.join("conflict.txt"), "Modified").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Modify conflict file"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        let conflict_commit = repo.get_head_commit_hash().unwrap();
+        
+        // Try to cherry-pick (should fail due to conflict)
+        repo.checkout_branch("master").unwrap();
+        std::fs::write(repo_path.join("conflict.txt"), "Different").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["commit", "-m", "Different change"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        
+        // Cherry-pick should fail with conflict
+        let result = repo.cherry_pick(&conflict_commit);
+        assert!(result.is_err(), "Cherry-pick with conflict should fail");
+    }
+
+    #[test]
+    fn test_cherry_pick_does_not_modify_source() {
+        let (temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+        
+        // Create source branch with multiple commits
+        repo.create_branch("feature", None).unwrap();
+        repo.checkout_branch("feature").unwrap();
+        
+        // Add multiple commits
+        for i in 1..=3 {
+            std::fs::write(repo_path.join(format!("file{}.txt", i)), format!("Content {}", i)).unwrap();
+            Command::new("git")
+                .args(["add", "."])
+                .current_dir(&repo_path)
+                .output()
+                .unwrap();
+            
+            Command::new("git")
+                .args(["commit", "-m", &format!("Commit {}", i)])
+                .current_dir(&repo_path)
+                .output()
+                .unwrap();
+        }
+        
+        // Get source branch state
+        let source_commits = Command::new("git")
+            .args(["log", "--format=%H", "feature"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let source_state = String::from_utf8_lossy(&source_commits.stdout).to_string();
+        
+        // Cherry-pick middle commit to another branch
+        let commits: Vec<&str> = source_state.lines().collect();
+        let middle_commit = commits[1];
+        
+        repo.checkout_branch("master").unwrap();
+        repo.create_branch("target", None).unwrap();
+        repo.checkout_branch("target").unwrap();
+        
+        repo.cherry_pick(middle_commit).unwrap();
+        
+        // Verify source branch is completely unchanged
+        let after_commits = Command::new("git")
+            .args(["log", "--format=%H", "feature"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        let after_state = String::from_utf8_lossy(&after_commits.stdout).to_string();
+        
+        assert_eq!(source_state, after_state, "Source branch should be completely unchanged after cherry-pick");
+    }
 }
