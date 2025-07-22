@@ -256,6 +256,26 @@ fn test_multiple_version_branches_independent() {
     create_branch_with_commit(repo_path, "feature", "file.txt");
     let original_commit = get_branch_commits(repo_path, "feature")[0].clone();
 
+    // Add a different commit to main to make the cherry-picks create different hashes
+    Command::new("git")
+        .args(["checkout", "main"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    std::fs::write(repo_path.join("base.txt"), "Base content for v2").unwrap();
+    Command::new("git")
+        .args(["add", "."])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .args(["commit", "-m", "Base commit for v2"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
     // Create v2 by cherry-picking
     Command::new("git")
         .args(["checkout", "-b", "feature-v2", "main"])
@@ -265,6 +285,26 @@ fn test_multiple_version_branches_independent() {
 
     Command::new("git")
         .args(["cherry-pick", &original_commit])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    // Add another different commit to main to make v3 different
+    Command::new("git")
+        .args(["checkout", "main"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    std::fs::write(repo_path.join("base2.txt"), "Base content for v3").unwrap();
+    Command::new("git")
+        .args(["add", "."])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .args(["commit", "-m", "Base commit for v3"])
         .current_dir(repo_path)
         .output()
         .unwrap();

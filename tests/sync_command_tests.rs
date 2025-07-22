@@ -89,7 +89,7 @@ fn setup_test_repo() -> Result<(TempDir, String), String> {
 /// Helper to create a stack with commits
 fn create_test_stack(repo_path: &Path, stack_name: &str) -> Result<(), String> {
     // Create stack
-    let (success, _, stderr) = run_ca_command(&["stack", "create", stack_name], repo_path)?;
+    let (success, _, stderr) = run_ca_command(&["stacks", "create", stack_name], repo_path)?;
     if !success {
         return Err(format!("Failed to create stack: {stderr}"));
     }
@@ -301,7 +301,7 @@ fn test_sync_with_conflicts() {
     let repo_path = temp_dir.path();
 
     // Create a stack with a file
-    run_ca_command(&["stack", "create", "conflict-stack"], repo_path).unwrap();
+    run_ca_command(&["stacks", "create", "conflict-stack"], repo_path).unwrap();
 
     std::fs::write(repo_path.join("conflict.txt"), "Original content").unwrap();
     Command::new("git")
@@ -370,7 +370,7 @@ fn test_sync_empty_stack() {
     let repo_path = temp_dir.path();
 
     // Create empty stack
-    run_ca_command(&["stack", "create", "empty-stack"], repo_path).unwrap();
+    run_ca_command(&["stacks", "create", "empty-stack"], repo_path).unwrap();
 
     // Sync should handle empty stack gracefully
     let (success, stdout, _) = run_ca_command(&["sync"], repo_path).unwrap();

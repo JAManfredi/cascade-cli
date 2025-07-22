@@ -1182,6 +1182,20 @@ impl GitRepository {
             )
             .map_err(CascadeError::Git)?;
 
+        // Update working directory to reflect the new commit
+        let new_commit = self
+            .repo
+            .find_commit(new_commit_oid)
+            .map_err(CascadeError::Git)?;
+        let new_tree = new_commit.tree().map_err(CascadeError::Git)?;
+
+        self.repo
+            .checkout_tree(
+                new_tree.as_object(),
+                Some(git2::build::CheckoutBuilder::new().force()),
+            )
+            .map_err(CascadeError::Git)?;
+
         tracing::info!("Cherry-picked {} -> {}", commit_hash, new_commit_oid);
         Ok(new_commit_oid.to_string())
     }
