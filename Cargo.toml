@@ -59,3 +59,11 @@ path = "tests/rebase_safety_tests.rs"
 [[test]]
 name = "sync_command_tests"
 path = "tests/sync_command_tests.rs"
+
+[[test]]
+name = "rebase_conflict_recovery_tests"
+path = "tests/rebase_conflict_recovery_tests.rs"
+
+[[test]]
+name = "rebase_safety_tests_simple"
+path = "tests/rebase_safety_tests_simple.rs"
