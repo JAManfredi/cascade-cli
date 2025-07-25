@@ -1,21 +1,28 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 /// Integration tests for the `ca sync` command
 /// These tests ensure that sync operations work correctly and don't corrupt branches
 use std::process::{Command, Stdio};
 use tempfile::TempDir;
 
+// Include the test helpers module
+#[path = "integration/test_helpers.rs"]
+mod test_helpers;
+
+// Get the path to the cascade CLI binary
+fn get_binary_path() -> PathBuf {
+    test_helpers::get_binary_path()
+}
+
 // Skip tests if ca binary is not available
 fn ca_binary_exists() -> bool {
-    Command::new("ca")
-        .arg("--version")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    let binary_path = get_binary_path();
+    binary_path.exists()
 }
 
 /// Helper to run ca command and get output
 fn run_ca_command(args: &[&str], cwd: &Path) -> Result<(bool, String, String), String> {
-    let output = Command::new("ca")
+    let binary_path = get_binary_path();
+    let output = Command::new(&binary_path)
         .args(args)
         .current_dir(cwd)
         .stdin(Stdio::null())
