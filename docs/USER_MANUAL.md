@@ -763,6 +763,26 @@ ca version [OPTIONS]
 --verbose, -v         # Show detailed build information
 ```
 
+#### **`ca cleanup`** - Clean Up Temporary Branches
+Remove orphaned temporary branches created during rebase operations.
+
+```bash
+ca cleanup [OPTIONS]
+
+# Options:
+--execute            # Actually delete branches (default is dry-run)
+--force              # Force deletion even if branches have unmerged commits
+
+# Examples:
+ca cleanup                    # Dry-run: show what would be deleted
+ca cleanup --execute          # Actually delete temp branches
+ca cleanup --execute --force  # Force delete including unmerged branches
+```
+
+**When to use**: If a rebase operation is interrupted or fails, temporary branches 
+with names like `feature-temp-1234567890` may be left behind. This command helps 
+identify and remove them.
+
 ---
 
 ## Workflow Patterns

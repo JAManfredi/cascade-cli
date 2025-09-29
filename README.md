@@ -692,6 +692,8 @@ ca completions generate fish                # Generate completions for fish
 # System information
 ca version                                  # Show version information
 ca doctor                                   # Run system diagnostics
+ca cleanup                                  # Clean up orphaned temp branches (dry-run)
+ca cleanup --execute                        # Actually delete temp branches
 ```
 
 ---

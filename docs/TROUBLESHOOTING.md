@@ -802,20 +802,28 @@ ca config set stack.STACK_NAME.pr.INDEX PR_ID
 ca stacks submit INDEX --title "Updated after rebase"
 ```
 
-### **Versioned Branches Accumulating**
+### **Temporary Branches Accumulating**
 
-Clean up temporary rebase branches:
+If a rebase operation is interrupted, temporary branches may be left behind:
 
 ```bash
-# List versioned branches
-git branch | grep -E '.*-v[0-9]+$'
+# Check for orphaned temp branches (dry-run)
+ca cleanup
 
-# Clean up old versions (keep latest)
-git branch | grep -E '.*-v[1-9][0-9]*$' | xargs -n 1 git branch -D
+# Actually delete them
+ca cleanup --execute
 
-# Or use cascade cleanup
-ca stack cleanup --remove-versioned-branches
+# Force delete even if they have unmerged commits
+ca cleanup --execute --force
+
+# Or manually list and delete
+git branch | grep -E '.*-temp-[0-9]+$'
+git branch -D branch-temp-1234567890
 ```
+
+**Why this happens**: During rebase, Cascade creates temporary branches with 
+timestamps (e.g., `feature-temp-1234567890`). These are normally cleaned up 
+automatically, but may remain if the process is killed or errors occur.
 
 ### **Force Push Safety Concerns**
 
