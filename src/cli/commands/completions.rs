@@ -48,7 +48,7 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
 
         println!();
         Output::tip("Next steps:");
-        
+
         // Provide shell-specific setup instructions
         for (shell, path) in &installed {
             match shell {
@@ -73,7 +73,7 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
                 _ => {}
             }
         }
-        
+
         println!();
         Output::bullet("Try: ca <TAB><TAB>");
     }
@@ -350,7 +350,7 @@ pub fn show_completions_status() -> Result<()> {
     let all_installed = available_shells
         .iter()
         .all(|s| check_completion_installed(*s));
-    
+
     if !all_installed {
         println!();
         Output::tip("To install completions:");

@@ -294,9 +294,7 @@ impl HooksManager {
         }
 
         Output::success("Essential Cascade hooks installed successfully!");
-        Output::tip(
-            "Note: Post-commit auto-add hook available with 'ca hooks install --all'",
-        );
+        Output::tip("Note: Post-commit auto-add hook available with 'ca hooks install --all'");
         Output::section("Hooks installed");
         self.list_installed_hooks()?;
 
