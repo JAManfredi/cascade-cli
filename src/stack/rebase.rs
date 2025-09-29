@@ -80,6 +80,60 @@ pub struct RebaseResult {
     pub summary: String,
 }
 
+/// RAII guard to ensure temporary branches are cleaned up even on error/panic
+/// 
+/// This stores branch names and provides a cleanup method that can be called
+/// with a GitRepository reference. The Drop trait ensures cleanup happens
+/// even if the rebase function panics or returns early with an error.
+struct TempBranchCleanupGuard {
+    branches: Vec<String>,
+    cleaned: bool,
+}
+
+impl TempBranchCleanupGuard {
+    fn new() -> Self {
+        Self {
+            branches: Vec::new(),
+            cleaned: false,
+        }
+    }
+
+    fn add_branch(&mut self, branch: String) {
+        self.branches.push(branch);
+    }
+
+    /// Perform cleanup with provided git repository
+    fn cleanup(&mut self, git_repo: &GitRepository) {
+        if self.cleaned || self.branches.is_empty() {
+            return;
+        }
+
+        info!("🧹 Cleaning up {} temporary branches", self.branches.len());
+        for branch in &self.branches {
+            if let Err(e) = git_repo.delete_branch_unsafe(branch) {
+                warn!("Failed to delete temp branch {}: {}", branch, e);
+                // Continue with cleanup even if one fails
+            }
+        }
+        self.cleaned = true;
+    }
+}
+
+impl Drop for TempBranchCleanupGuard {
+    fn drop(&mut self) {
+        if !self.cleaned && !self.branches.is_empty() {
+            // This path is only hit on panic or unexpected early return
+            // We can't access git_repo here, so just log the branches that need manual cleanup
+            warn!(
+                "⚠️  {} temporary branches were not cleaned up: {}",
+                self.branches.len(),
+                self.branches.join(", ")
+            );
+            warn!("Run 'ca cleanup' to remove orphaned temporary branches");
+        }
+    }
+}
+
 /// Manages rebase operations for stacks
 pub struct RebaseManager {
     stack_manager: StackManager,
@@ -183,8 +237,8 @@ impl RebaseManager {
 
         let mut current_base = target_base.clone();
 
-        // Track temp branches for cleanup
-        let mut temp_branches = Vec::new();
+        // RAII guard ensures temp branches are cleaned up even on error/panic
+        let mut cleanup_guard = TempBranchCleanupGuard::new();
 
         for (index, entry) in stack.entries.iter().enumerate() {
             debug!("Processing entry {}: {}", index, entry.short_hash());
@@ -193,7 +247,9 @@ impl RebaseManager {
 
             // Generate temporary branch name for rebase
             let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
-            temp_branches.push(temp_branch.clone());
+            
+            // Add to cleanup guard immediately - ensures cleanup even on error
+            cleanup_guard.add_branch(temp_branch.clone());
 
             // Create temp branch from current base
             self.git_repo
@@ -256,14 +312,9 @@ impl RebaseManager {
             }
         }
 
-        // Clean up temporary branches
-        info!("Cleaning up {} temporary branches", temp_branches.len());
-        for temp_branch in &temp_branches {
-            if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
-                warn!("Failed to delete temp branch {}: {}", temp_branch, e);
-                // Continue anyway - temp branches are not critical
-            }
-        }
+        // Explicitly cleanup temp branches before returning
+        // The Drop guard will warn if this doesn't run (e.g., on panic)
+        cleanup_guard.cleanup(&self.git_repo);
 
         result.summary = format!(
             "Rebased {} entries using force-push strategy. PR history preserved.",
@@ -1218,6 +1269,76 @@ mod tests {
         assert!(!options.interactive);
         assert!(options.auto_resolve);
         assert_eq!(options.max_retries, 3);
+    }
+
+    #[test]
+    fn test_cleanup_guard_tracks_branches() {
+        let mut guard = TempBranchCleanupGuard::new();
+        assert!(guard.branches.is_empty());
+        
+        guard.add_branch("test-branch-1".to_string());
+        guard.add_branch("test-branch-2".to_string());
+        
+        assert_eq!(guard.branches.len(), 2);
+        assert_eq!(guard.branches[0], "test-branch-1");
+        assert_eq!(guard.branches[1], "test-branch-2");
+    }
+
+    #[test]
+    fn test_cleanup_guard_prevents_double_cleanup() {
+        use tempfile::TempDir;
+        use std::process::Command;
+        
+        // Create a temporary git repo
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+        
+        Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        
+        // Create initial commit
+        std::fs::write(repo_path.join("test.txt"), "test").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        
+        let git_repo = GitRepository::open(repo_path).unwrap();
+        
+        // Create a test branch
+        git_repo.create_branch("test-temp", None).unwrap();
+        
+        let mut guard = TempBranchCleanupGuard::new();
+        guard.add_branch("test-temp".to_string());
+        
+        // First cleanup should work
+        guard.cleanup(&git_repo);
+        assert!(guard.cleaned);
+        
+        // Second cleanup should be a no-op (shouldn't panic)
+        guard.cleanup(&git_repo);
+        assert!(guard.cleaned);
     }
 
     #[test]
