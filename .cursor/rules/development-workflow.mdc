@@ -16,7 +16,7 @@ alwaysApply: true
 ### What the Pre-Push Script Checks
 - **Code formatting**: `cargo fmt --check`
 - **Linting**: `cargo clippy --all-targets --all-features -- -D warnings`
-- **Unit tests**: All 65+ tests across modules
+- **Unit tests**: All 141 tests across modules
 - **Integration tests**: End-to-end functionality
 - **Build verification**: Release compilation
 - **Documentation**: `cargo doc` generation

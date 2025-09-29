@@ -242,6 +242,22 @@ Each hook type has a dedicated content generator:
 - **Template-based**: Hooks use shell script templates
 - **Binary path resolution**: Hooks find the cascade binary dynamically
 - **Error handling**: Hooks provide clear error messages
+- **Chaining support**: Hooks can call original hooks from `.git/hooks` to preserve existing functionality
+
+### Hook Installation Types
+[src/cli/commands/hooks.rs](mdc:src/cli/commands/hooks.rs) provides two installation modes:
+
+```rust
+// Essential hooks (default) - 4 hooks
+pub fn install_essential(&self) -> Result<()> {
+    // Installs: pre-push, commit-msg, prepare-commit-msg, pre-commit
+}
+
+// All hooks (--all flag) - 5 hooks  
+pub fn install_with_options(&self, options: &InstallOptions) -> Result<()> {
+    // Installs: post-commit, pre-push, commit-msg, prepare-commit-msg, pre-commit
+}
+```
 
 ## Performance Considerations
 
@@ -254,6 +270,44 @@ Each hook type has a dedicated content generator:
 - Temporary files use RAII with `tempfile::TempDir`
 - Git repository objects have explicit lifetime management
 - Network connections are pooled via `reqwest::Client`
+- Temporary branches use RAII cleanup guards to ensure deletion even on error/panic
+
+### RAII Cleanup Patterns
+For resources that must be cleaned up even on error:
+
+```rust
+/// RAII guard to ensure temporary branches are cleaned up
+struct TempBranchCleanupGuard {
+    branches: Vec<String>,
+    cleaned: bool,
+}
+
+impl Drop for TempBranchCleanupGuard {
+    fn drop(&mut self) {
+        if !self.cleaned {
+            // Log warning - can't access git_repo from Drop
+            eprintln!("Warning: Cleanup guard dropped without explicit cleanup");
+        }
+    }
+}
+
+// Usage:
+let mut cleanup_guard = TempBranchCleanupGuard::new();
+cleanup_guard.add_branch(temp_branch.clone());
+// ... operations that might fail or panic ...
+cleanup_guard.cleanup(&git_repo); // Explicit cleanup
+```
+
+### Atomic File Operations
+Use atomic file writes to prevent data corruption:
+
+```rust
+// ✅ CORRECT - Atomic write (write to temp file, then rename)
+crate::utils::atomic_file::write_string(&full_path, &content)?;
+
+// ❌ WRONG - Non-atomic write (can corrupt file on crash)
+std::fs::write(&full_path, &content)?;
+```
 
 ## Security Patterns
 

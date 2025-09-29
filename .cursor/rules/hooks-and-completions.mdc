@@ -1,0 +1,130 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Git Hooks and Shell Completions Guide
+
+## Git Hooks System
+
+### Hook Installation Strategy
+
+There are **5 total hooks** defined in `HookType` enum:
+
+#### Default Installation (`ca hooks install`)
+Installs **4 essential hooks**:
+- `pre-push` - Prevent force pushes, validate stack state
+- `commit-msg` - Validate commit message format  
+- `prepare-commit-msg` - Add helpful stack context to commit messages
+- `pre-commit` - Smart edit mode guidance
+
+#### Full Installation (`ca hooks install --all`)
+Installs **all 5 hooks**:
+- All 4 from default installation
+- `post-commit` - Auto-add new commits to active stack (power user feature)
+
+### Hook Installation Behavior
+
+**CRITICAL**: `ca hooks install --all` must install ALL 5 hooks. Past bugs included missing hooks in the `install_with_options()` function.
+
+```rust
+// In install_with_options() - must include ALL 5 HookType variants
+let hooks = vec![
+    HookType::PostCommit,
+    HookType::PrePush,
+    HookType::CommitMsg,
+    HookType::PrepareCommitMsg,
+    HookType::PreCommit,  // ← Don't forget this one!
+];
+```
+
+### Hook Status Messaging
+
+The `ca hooks status` command must clearly indicate:
+1. **Whether Cascade hooks are installed at all**
+2. **What the user should do to install them**
+3. **Where hooks are stored when installed**
+
+Good status output when NOT installed:
+```
+⚠️  Cascade hooks are NOT installed in this repository
+💡 To install Cascade hooks:
+  • Run: ca hooks install            (recommended: 4 essential hooks)
+  • Run: ca hooks install --all      (all 5 hooks + post-commit auto-add)
+  • Both options preserve existing hooks by chaining to them
+```
+
+### Hook Chaining
+
+Cascade hooks are designed to **wrap** existing hooks, not replace them:
+- Uses `core.hooksPath` to point to Cascade's hooks directory
+- Cascade hooks call original hooks from `.git/hooks`
+- Preserves existing hook functionality while adding Cascade features
+
+### prepare-commit-msg Hook
+
+This hook is **non-invasive and helpful** - should be in default installation:
+- Only adds **comments** (lines starting with `#`) to commit message template
+- Shows stack context: `# Stack: my-feature-stack`
+- Provides guidance in edit mode: `# [EDIT MODE] You're editing a stack entry`
+- Users can ignore or delete the comments
+- Improves UX without forcing behavior
+
+## Shell Completions System
+
+### Completions Installation is Two-Step
+
+**Common misconception**: `ca completions install` fully sets up completions.
+
+**Reality**: It only writes the completion file. Users must also:
+
+#### Zsh Example
+1. `ca completions install` → Writes `~/.zsh/completions/_cc`
+2. User must add to `~/.zshrc`:
+   ```bash
+   fpath=(~/.zsh/completions $fpath)
+   autoload -Uz compinit && compinit
+   ```
+3. User must run `source ~/.zshrc`
+
+### Status Messaging Must Be Clear
+
+```rust
+Output::warning("⚠️  Important: Just having the file installed doesn't mean it works!");
+Output::tip("For zsh users, you must also:");
+Output::bullet("Add 'fpath=(~/.zsh/completions $fpath)' to ~/.zshrc");
+Output::bullet("Add 'autoload -Uz compinit && compinit' to ~/.zshrc");
+Output::bullet("Then run 'source ~/.zshrc'");
+```
+
+### Shell-Specific Setup Instructions
+
+After installing, provide shell-specific setup instructions:
+
+```rust
+match shell {
+    Shell::Zsh => {
+        println!();
+        Output::warning("⚠️  Zsh requires additional setup:");
+        Output::bullet("Add this to your ~/.zshrc:");
+        println!("      fpath=(~/.zsh/completions $fpath)");
+        println!("      autoload -Uz compinit && compinit");
+        Output::bullet("Then reload: source ~/.zshrc");
+    }
+    Shell::Bash => {
+        // Bash typically sources from .bash_completion.d automatically
+    }
+    Shell::Fish => {
+        // Fish auto-loads from ~/.config/fish/completions/
+    }
+    // ... other shells
+}
+```
+
+## Documentation Updates
+
+When updating hooks or completions functionality, also update:
+- [docs/USER_MANUAL.md](mdc:docs/USER_MANUAL.md) - User-facing docs
+- [docs/HOOKS.md](mdc:docs/HOOKS.md) - Detailed hook system docs
+- [README.md](mdc:README.md) - Quick reference
+- Test badge counts when adding/removing tests

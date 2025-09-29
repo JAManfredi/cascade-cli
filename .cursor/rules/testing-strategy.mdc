@@ -8,7 +8,7 @@ alwaysApply: true
 ## Test Organization
 
 ### Unit Tests
-All unit tests are co-located with source files using `#[cfg(test)]` modules. Current coverage: **65+ passing tests**.
+All unit tests are co-located with source files using `#[cfg(test)]` modules. Current coverage: **141 passing tests** (as of 2025-09).
 
 ### Test Structure Pattern
 ```rust
@@ -60,9 +60,9 @@ Use conditional compilation for platform-specific functionality:
 ```
 
 ### Directory Handling in Tests
-**Issue**: Changing directories in tests can cause CI failures.
+**Issue**: Changing directories in tests can cause CI failures, especially with temporary directories.
 
-❌ **Avoid changing current directory:**
+❌ **Avoid changing current directory when possible:**
 ```rust
 // BAD - Unreliable in CI
 env::set_current_dir(&repo_path).unwrap();
@@ -74,6 +74,31 @@ run(None, false).await; // Depends on current directory
 // GOOD - Explicit path handling
 let result = some_function_with_path(&repo_path);
 ```
+
+#### When You Must Change Directories
+
+If tests require changing directories (e.g., for commands that use `env::current_dir()`), use **best-effort cleanup**:
+
+```rust
+#[tokio::test]
+async fn test_with_directory_change() {
+    let (_temp_dir, repo_path) = create_test_repo().await;
+    
+    let original_dir = env::current_dir().unwrap();
+    env::set_current_dir(&repo_path).unwrap();
+    
+    let result = run().await;
+    
+    // ✅ Best-effort restoration - don't panic if it fails
+    let _ = env::set_current_dir(&original_dir);
+    
+    assert!(result.is_ok());
+    
+    // _temp_dir dropped here automatically
+}
+```
+
+**Why best-effort?** On Linux/Ubuntu CI, temporary directory cleanup timing can vary. The temp directory might be deleted before we can `cd` back out, causing `.unwrap()` to panic. Using `let _ =` makes cleanup graceful.
 
 ## Test Helper Patterns
 
