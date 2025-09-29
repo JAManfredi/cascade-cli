@@ -42,13 +42,39 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
     // Report results
     if !installed.is_empty() {
         Output::success("Shell completions installed:");
-        for (shell, path) in installed {
+        for (shell, path) in &installed {
             Output::sub_item(format!("{:?}: {}", shell, path.display()));
         }
 
         println!();
         Output::tip("Next steps:");
-        Output::bullet("Restart your shell or run: source ~/.bashrc (or equivalent)");
+        
+        // Provide shell-specific setup instructions
+        for (shell, path) in &installed {
+            match shell {
+                Shell::Zsh => {
+                    if path.to_string_lossy().contains(".zsh/completions") {
+                        println!();
+                        Output::warning("⚠️  Zsh requires additional setup:");
+                        Output::bullet("Add this to your ~/.zshrc:");
+                        println!("      fpath=(~/.zsh/completions $fpath)");
+                        println!("      autoload -Uz compinit && compinit");
+                        Output::bullet("Then reload: source ~/.zshrc");
+                    }
+                }
+                Shell::Bash => {
+                    if path.to_string_lossy().contains(".bash_completion.d") {
+                        println!();
+                        Output::info("For bash completions to work:");
+                        Output::bullet("Ensure bash-completion is installed");
+                        Output::bullet("Then reload: source ~/.bashrc");
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        println!();
         Output::bullet("Try: ca <TAB><TAB>");
     }
 
@@ -321,10 +347,11 @@ pub fn show_completions_status() -> Result<()> {
         }
     }
 
-    if available_shells
+    let all_installed = available_shells
         .iter()
-        .any(|s| !check_completion_installed(*s))
-    {
+        .all(|s| check_completion_installed(*s));
+    
+    if !all_installed {
         println!();
         Output::tip("To install completions:");
         Output::command_example("ca completions install");
@@ -332,6 +359,12 @@ pub fn show_completions_status() -> Result<()> {
     } else {
         println!();
         Output::success("All available shells have completions installed!");
+        println!();
+        Output::warning("⚠️  Important: Just having the file installed doesn't mean it works!");
+        Output::tip("For zsh users, you must also:");
+        Output::bullet("Add 'fpath=(~/.zsh/completions $fpath)' to ~/.zshrc");
+        Output::bullet("Add 'autoload -Uz compinit && compinit' to ~/.zshrc");
+        Output::bullet("Then run 'source ~/.zshrc'");
     }
 
     println!();
