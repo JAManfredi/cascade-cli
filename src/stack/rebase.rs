@@ -175,6 +175,15 @@ impl RebaseManager {
             debug!("Skipping pull - already done by caller");
         }
 
+        // CRITICAL: Reset working directory and index to match HEAD
+        // After pulling (or if sync already pulled), the working directory may have
+        // staged changes from the pull operation that shouldn't carry into the rebase
+        debug!("Resetting working directory to clean state before rebase");
+        if let Err(e) = self.git_repo.reset_to_head() {
+            warn!("Failed to reset working directory: {}", e);
+            // Continue anyway - the staged file checks will catch any issues
+        }
+
         let mut current_base = target_base.clone();
 
         for (index, entry) in stack.entries.iter().enumerate() {

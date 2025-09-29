@@ -44,6 +44,16 @@ fn create_test_repo() -> TempDir {
     temp_dir
 }
 
+/// Helper to get the default branch name (environment-agnostic)
+fn get_default_branch(repo_path: &std::path::Path) -> String {
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
 /// Helper to get commits on a branch
 fn get_branch_commits(repo_path: &std::path::Path, branch: &str) -> Vec<String> {
     let output = Command::new("git")
@@ -105,8 +115,9 @@ fn test_git_cherry_pick_preserves_source_branch() {
         .to_string();
 
     // Create target branch and cherry-pick
+    let default_branch = get_default_branch(repo_path);
     Command::new("git")
-        .args(["checkout", "-b", "target", "main"])
+        .args(["checkout", "-b", "target", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -130,15 +141,18 @@ fn test_rebase_creates_new_branches_not_modifying_original() {
     let temp_dir = create_test_repo();
     let repo_path = temp_dir.path();
 
+    // Get default branch name before creating feature branches
+    let default_branch = get_default_branch(repo_path);
+
     // Create feature branch with commits
     create_branch_with_commit(repo_path, "feature", "feature1.txt");
     create_branch_with_commit(repo_path, "feature", "feature2.txt");
 
     let original_commits = get_branch_commits(repo_path, "feature");
 
-    // Add commit to main
+    // Add commit to default branch
     Command::new("git")
-        .args(["checkout", "main"])
+        .args(["checkout", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -158,7 +172,7 @@ fn test_rebase_creates_new_branches_not_modifying_original() {
 
     // Create new branch for rebased content (simulating version branch)
     Command::new("git")
-        .args(["checkout", "-b", "feature-v2", "main"])
+        .args(["checkout", "-b", "feature-v2", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -192,13 +206,16 @@ fn test_failed_rebase_does_not_modify_original() {
     let temp_dir = create_test_repo();
     let repo_path = temp_dir.path();
 
+    // Get default branch name before creating feature branches
+    let default_branch = get_default_branch(repo_path);
+
     // Create feature branch
     create_branch_with_commit(repo_path, "feature", "conflict.txt");
     let original_commits = get_branch_commits(repo_path, "feature");
 
-    // Create conflicting commit on main
+    // Create conflicting commit on default branch
     Command::new("git")
-        .args(["checkout", "main"])
+        .args(["checkout", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -224,7 +241,7 @@ fn test_failed_rebase_does_not_modify_original() {
         .unwrap();
 
     let rebase_output = Command::new("git")
-        .args(["rebase", "main"])
+        .args(["rebase", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -252,13 +269,16 @@ fn test_multiple_version_branches_independent() {
     let temp_dir = create_test_repo();
     let repo_path = temp_dir.path();
 
+    // Get default branch name before creating feature branches
+    let default_branch = get_default_branch(repo_path);
+
     // Create original feature branch
     create_branch_with_commit(repo_path, "feature", "file.txt");
     let original_commit = get_branch_commits(repo_path, "feature")[0].clone();
 
-    // Add a different commit to main to make the cherry-picks create different hashes
+    // Add a different commit to default branch to make the cherry-picks create different hashes
     Command::new("git")
-        .args(["checkout", "main"])
+        .args(["checkout", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -278,7 +298,7 @@ fn test_multiple_version_branches_independent() {
 
     // Create v2 by cherry-picking
     Command::new("git")
-        .args(["checkout", "-b", "feature-v2", "main"])
+        .args(["checkout", "-b", "feature-v2", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -311,7 +331,7 @@ fn test_multiple_version_branches_independent() {
 
     // Create v3 by cherry-picking again
     Command::new("git")
-        .args(["checkout", "-b", "feature-v3", "main"])
+        .args(["checkout", "-b", "feature-v3", &default_branch])
         .current_dir(repo_path)
         .output()
         .unwrap();

@@ -2511,6 +2511,31 @@ impl GitRepository {
         Ok(())
     }
 
+    /// Reset working directory and index to match HEAD (hard reset)
+    /// This clears all uncommitted changes and staged files
+    pub fn reset_to_head(&self) -> Result<()> {
+        tracing::debug!("Resetting working directory and index to HEAD");
+
+        let head = self.repo.head().map_err(CascadeError::Git)?;
+        let head_commit = head.peel_to_commit().map_err(CascadeError::Git)?;
+
+        // Hard reset: resets index and working tree
+        let mut checkout_builder = git2::build::CheckoutBuilder::new();
+        checkout_builder.force(); // Force checkout to overwrite any local changes
+        checkout_builder.remove_untracked(false); // Don't remove untracked files
+
+        self.repo
+            .reset(
+                head_commit.as_object(),
+                git2::ResetType::Hard,
+                Some(&mut checkout_builder),
+            )
+            .map_err(CascadeError::Git)?;
+
+        tracing::debug!("Successfully reset working directory to HEAD");
+        Ok(())
+    }
+
     /// Find which branch contains a specific commit
     pub fn find_branch_containing_commit(&self, commit_hash: &str) -> Result<String> {
         let oid = Oid::from_str(commit_hash).map_err(|e| {
@@ -3205,8 +3230,14 @@ mod tests {
 
         let cherry_commit = repo.get_head_commit_hash().unwrap();
 
-        // Switch to another branch
-        repo.checkout_branch("main").unwrap();
+        // Switch back to previous branch (where source was created from)
+        // Using `git checkout -` is environment-agnostic
+        Command::new("git")
+            .args(["checkout", "-"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         repo.create_branch("target", None).unwrap();
         repo.checkout_branch("target").unwrap();
 
@@ -3256,8 +3287,12 @@ mod tests {
 
         let original_commit = repo.get_head_commit_hash().unwrap();
 
-        // Cherry-pick to another branch
-        repo.checkout_branch("main").unwrap();
+        // Cherry-pick to another branch (use previous branch via git checkout -)
+        Command::new("git")
+            .args(["checkout", "-"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
         let new_commit = repo.cherry_pick(&original_commit).unwrap();
 
         // Get commit message of new commit
@@ -3313,7 +3348,12 @@ mod tests {
         let conflict_commit = repo.get_head_commit_hash().unwrap();
 
         // Try to cherry-pick (should fail due to conflict)
-        repo.checkout_branch("main").unwrap();
+        // Go back to previous branch
+        Command::new("git")
+            .args(["checkout", "-"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
         std::fs::write(repo_path.join("conflict.txt"), "Different").unwrap();
         Command::new("git")
             .args(["add", "."])
@@ -3330,6 +3370,104 @@ mod tests {
         // Cherry-pick should fail with conflict
         let result = repo.cherry_pick(&conflict_commit);
         assert!(result.is_err(), "Cherry-pick with conflict should fail");
+    }
+
+    #[test]
+    fn test_reset_to_head_clears_staged_files() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create and stage some files
+        std::fs::write(repo_path.join("staged1.txt"), "Content 1").unwrap();
+        std::fs::write(repo_path.join("staged2.txt"), "Content 2").unwrap();
+
+        Command::new("git")
+            .args(["add", "staged1.txt", "staged2.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Verify files are staged
+        let staged_before = repo.get_staged_files().unwrap();
+        assert_eq!(staged_before.len(), 2, "Should have 2 staged files");
+
+        // Reset to HEAD
+        repo.reset_to_head().unwrap();
+
+        // Verify no files are staged after reset
+        let staged_after = repo.get_staged_files().unwrap();
+        assert_eq!(
+            staged_after.len(),
+            0,
+            "Should have no staged files after reset"
+        );
+    }
+
+    #[test]
+    fn test_reset_to_head_clears_modified_files() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Modify an existing file
+        std::fs::write(repo_path.join("README.md"), "# Modified content").unwrap();
+
+        // Stage the modification
+        Command::new("git")
+            .args(["add", "README.md"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Verify file is modified and staged
+        assert!(repo.is_dirty().unwrap(), "Repo should be dirty");
+
+        // Reset to HEAD
+        repo.reset_to_head().unwrap();
+
+        // Verify repo is clean
+        assert!(
+            !repo.is_dirty().unwrap(),
+            "Repo should be clean after reset"
+        );
+
+        // Verify file content is restored
+        let content = std::fs::read_to_string(repo_path.join("README.md")).unwrap();
+        assert_eq!(
+            content, "# Test",
+            "File should be restored to original content"
+        );
+    }
+
+    #[test]
+    fn test_reset_to_head_preserves_untracked_files() {
+        let (_temp_dir, repo_path) = create_test_repo();
+        let repo = GitRepository::open(&repo_path).unwrap();
+
+        // Create untracked file
+        std::fs::write(repo_path.join("untracked.txt"), "Untracked content").unwrap();
+
+        // Stage some other file
+        std::fs::write(repo_path.join("staged.txt"), "Staged content").unwrap();
+        Command::new("git")
+            .args(["add", "staged.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Reset to HEAD
+        repo.reset_to_head().unwrap();
+
+        // Verify untracked file still exists
+        assert!(
+            repo_path.join("untracked.txt").exists(),
+            "Untracked file should be preserved"
+        );
+
+        // Verify staged file was removed (since it was never committed)
+        assert!(
+            !repo_path.join("staged.txt").exists(),
+            "Staged but uncommitted file should be removed"
+        );
     }
 
     #[test]
@@ -3373,7 +3511,12 @@ mod tests {
         let commits: Vec<&str> = source_state.lines().collect();
         let middle_commit = commits[1];
 
-        repo.checkout_branch("main").unwrap();
+        // Go back to previous branch
+        Command::new("git")
+            .args(["checkout", "-"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
         repo.create_branch("target", None).unwrap();
         repo.checkout_branch("target").unwrap();
 

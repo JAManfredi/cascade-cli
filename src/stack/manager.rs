@@ -1043,14 +1043,20 @@ impl StackManager {
 
                     // Show extra commit messages (first few only)
                     for (j, message) in extra_commit_messages.iter().enumerate() {
-                        if j < 3 {
-                            Output::sub_item(format!("     + {message}"));
-                        } else if j == 3 {
-                            Output::sub_item(format!(
-                                "     + ... and {} more",
-                                extra_commit_count - 3
-                            ));
-                            break;
+                        match j.cmp(&3) {
+                            std::cmp::Ordering::Less => {
+                                Output::sub_item(format!("     + {message}"));
+                            }
+                            std::cmp::Ordering::Equal => {
+                                Output::sub_item(format!(
+                                    "     + ... and {} more",
+                                    extra_commit_count - 3
+                                ));
+                                break;
+                            }
+                            std::cmp::Ordering::Greater => {
+                                break;
+                            }
                         }
                     }
                 }

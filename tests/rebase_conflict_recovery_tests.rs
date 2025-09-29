@@ -87,8 +87,12 @@ fn test_rebase_conflict_detection() {
         .output()
         .unwrap();
 
-    // Create conflicting change on main
-    git_repo.checkout_branch("main").unwrap();
+    // Create conflicting change on default branch (go back to previous branch)
+    Command::new("git")
+        .args(["checkout", "-"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
     std::fs::write(repo_path.join("file.txt"), "Master change\n").unwrap();
     Command::new("git")
         .args(["add", "."])
@@ -102,10 +106,20 @@ fn test_rebase_conflict_detection() {
         .output()
         .unwrap();
 
-    // Try to rebase feature onto main
+    // Try to rebase feature onto default branch
+    // First get the default branch name
+    let default_branch = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    let default_branch_name = String::from_utf8_lossy(&default_branch.stdout)
+        .trim()
+        .to_string();
+
     git_repo.checkout_branch("feature").unwrap();
     let output = Command::new("git")
-        .args(["rebase", "main"])
+        .args(["rebase", &default_branch_name])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -158,8 +172,12 @@ fn test_interrupted_rebase_recovery() {
 
     let original_head = get_head_commit(repo_path);
 
-    // Create change on main
-    git_repo.checkout_branch("main").unwrap();
+    // Create change on default branch (go back to previous branch)
+    Command::new("git")
+        .args(["checkout", "-"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
     std::fs::write(repo_path.join("main.txt"), "Main content\n").unwrap();
     Command::new("git")
         .args(["add", "."])
@@ -174,11 +192,21 @@ fn test_interrupted_rebase_recovery() {
         .unwrap();
 
     // Start interactive rebase
+    // Get default branch name first
+    let default_branch = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    let default_branch_name = String::from_utf8_lossy(&default_branch.stdout)
+        .trim()
+        .to_string();
+
     git_repo.checkout_branch("feature").unwrap();
 
     // Simulate interrupted rebase by starting it
     let _output = Command::new("git")
-        .args(["rebase", "main"])
+        .args(["rebase", &default_branch_name])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -225,8 +253,12 @@ fn test_rebase_continue_after_conflict_resolution() {
         .output()
         .unwrap();
 
-    // Create non-conflicting change on main
-    git_repo.checkout_branch("main").unwrap();
+    // Create non-conflicting change on default branch (go back to previous branch)
+    Command::new("git")
+        .args(["checkout", "-"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
     std::fs::write(repo_path.join("other.txt"), "Other content\n").unwrap();
     Command::new("git")
         .args(["add", "."])
@@ -241,9 +273,19 @@ fn test_rebase_continue_after_conflict_resolution() {
         .unwrap();
 
     // Rebase should succeed without conflicts
+    // Get default branch name first
+    let default_branch = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    let default_branch_name = String::from_utf8_lossy(&default_branch.stdout)
+        .trim()
+        .to_string();
+
     git_repo.checkout_branch("feature").unwrap();
     let output = Command::new("git")
-        .args(["rebase", "main"])
+        .args(["rebase", &default_branch_name])
         .current_dir(repo_path)
         .output()
         .unwrap();
@@ -327,8 +369,12 @@ fn test_rebase_preserves_commit_metadata() {
         .trim()
         .to_string();
 
-    // Create change on main
-    git_repo.checkout_branch("main").unwrap();
+    // Create change on default branch (go back to previous branch)
+    Command::new("git")
+        .args(["checkout", "-"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
     std::fs::write(repo_path.join("base.txt"), "Base content\n").unwrap();
     Command::new("git")
         .args(["add", "."])
@@ -343,9 +389,19 @@ fn test_rebase_preserves_commit_metadata() {
         .unwrap();
 
     // Rebase and check author is preserved
+    // Get default branch name first
+    let default_branch = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    let default_branch_name = String::from_utf8_lossy(&default_branch.stdout)
+        .trim()
+        .to_string();
+
     git_repo.checkout_branch("feature").unwrap();
     Command::new("git")
-        .args(["rebase", "main"])
+        .args(["rebase", &default_branch_name])
         .current_dir(repo_path)
         .output()
         .unwrap();
