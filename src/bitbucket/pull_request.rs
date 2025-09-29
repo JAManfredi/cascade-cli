@@ -342,20 +342,21 @@ impl PullRequestManager {
             }
         }
 
-        // Note: We use a heuristic for display purposes only.
-        // The REAL approval requirements are enforced by Bitbucket Server
-        // via the /merge endpoint (check_mergeable_detailed), which checks:
-        // - Repository approval requirements
+        // Note: required_approvals is kept for API compatibility but is not accurate.
+        // The REAL approval requirements are enforced by Bitbucket Server via the
+        // /merge endpoint (check_mergeable_detailed), which checks:
+        // - Repository approval requirements (configured in Bitbucket settings)
         // - Default reviewer approvals
         // - Build status requirements
         // - Branch permissions
-        // We estimate required approvals based on missing reviewers + 1,
-        // but this is just for display - server-side checks are authoritative.
-        let estimated_required = (missing_reviewers.len() + 1).max(1);
+        // - Task completion, Code Insights, custom merge checks
+        //
+        // We set this to 0 to indicate "unknown" - callers should rely on
+        // can_merge and the server's mergeable checks, not this field.
         let can_merge = current_approvals > 0 && needs_work_count == 0;
 
         Ok(ReviewStatus {
-            required_approvals: estimated_required,
+            required_approvals: 0, // Unknown - see comment above
             current_approvals,
             needs_work_count,
             can_merge,
@@ -813,20 +814,10 @@ impl PullRequestStatus {
 
         // 👥 Review Status Check (supplementary to server checks)
         if !self.review_status.can_merge {
-            if self.review_status.current_approvals < self.review_status.required_approvals {
-                reasons.push(format!(
-                    "👥 Review Status: Need {} more approval{} ({}/{})",
-                    self.review_status.required_approvals - self.review_status.current_approvals,
-                    if self.review_status.required_approvals - self.review_status.current_approvals
-                        == 1
-                    {
-                        ""
-                    } else {
-                        "s"
-                    },
-                    self.review_status.current_approvals,
-                    self.review_status.required_approvals
-                ));
+            // Don't show approval count requirement since we don't know the real number
+            // The server-side checks (above) already include approval requirements
+            if self.review_status.current_approvals == 0 {
+                reasons.push("👥 Review Status: No approvals yet".to_string());
             }
 
             if self.review_status.needs_work_count > 0 {
@@ -1220,8 +1211,8 @@ mod tests {
         // Check for build failure (actual format is "Build failed")
         assert!(blocking_reasons.iter().any(|r| r.contains("Build failed")));
 
-        // Check for approval requirement
-        assert!(blocking_reasons.iter().any(|r| r.contains("more approval")));
+        // Check for approval requirement (now shows "No approvals yet" instead of specific count)
+        assert!(blocking_reasons.iter().any(|r| r.contains("No approvals yet")));
     }
 
     #[test]

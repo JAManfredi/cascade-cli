@@ -964,11 +964,11 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                                 }
                             }
 
-                            // Show review details (estimate - server enforces real requirements)
+                            // Show review details (actual count from Bitbucket)
                             println!(
-                                "      Reviews: {}/{} approvals (estimated)",
+                                "      Reviews: {} approval{}",
                                 enhanced.review_status.current_approvals,
-                                enhanced.review_status.required_approvals
+                                if enhanced.review_status.current_approvals == 1 { "" } else { "s" }
                             );
 
                             if enhanced.review_status.needs_work_count > 0 {
