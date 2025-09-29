@@ -5,7 +5,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.82%2B-orange.svg)](https://rustup.rs/)
 [![CI](https://github.com/JAManfredi/cascade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/JAManfredi/cascade-cli/actions/workflows/ci.yml)
 [![Beta Release](https://img.shields.io/badge/status-beta-orange.svg)](./docs/DEVELOPMENT.md)
-[![Tests](https://img.shields.io/badge/tests-98%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-141%20passing-brightgreen.svg)](#testing)
 
 </div>
 
@@ -886,7 +886,7 @@ cargo test -- --test-threads=1
 # - Error handling and recovery
 ```
 
-**Test Coverage**: 98 tests passing ✅
+**Test Coverage**: 141 tests passing ✅
 
 ---
 

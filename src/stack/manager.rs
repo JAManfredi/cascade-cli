@@ -1222,7 +1222,8 @@ impl StackManager {
         entry_id: Uuid,
         branch: &str,
     ) -> Result<()> {
-        let stack = self.stacks.get_mut(stack_id).unwrap();
+        let stack = self.stacks.get_mut(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack not found: {}", stack_id)))?;
 
         if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == entry_id) {
             let new_head = self.repo.get_branch_head(branch)?;
@@ -1266,7 +1267,8 @@ impl StackManager {
 
     /// Split extra commits into a new stack entry
     fn split_extra_commits(&mut self, stack_id: &Uuid, entry_id: Uuid, branch: &str) -> Result<()> {
-        let stack = self.stacks.get_mut(stack_id).unwrap();
+        let stack = self.stacks.get_mut(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack not found: {}", stack_id)))?;
         let new_head = self.repo.get_branch_head(branch)?;
 
         // Find the position of the current entry

@@ -2042,10 +2042,12 @@ impl GitRepository {
 
             // Show details of unpushed commits
             for (i, commit_id) in safety_info.unpushed_commits.iter().take(5).enumerate() {
-                if let Ok(commit) = self.repo.find_commit(Oid::from_str(commit_id).unwrap()) {
-                    let short_hash = &commit_id[..8];
-                    let summary = commit.summary().unwrap_or("<no message>");
-                    println!("  {}. {} - {}", i + 1, short_hash, summary);
+                if let Ok(oid) = Oid::from_str(commit_id) {
+                    if let Ok(commit) = self.repo.find_commit(oid) {
+                        let short_hash = &commit_id[..8];
+                        let summary = commit.summary().unwrap_or("<no message>");
+                        println!("  {}. {} - {}", i + 1, short_hash, summary);
+                    }
                 }
             }
 
