@@ -113,33 +113,45 @@ async fn checkout_entry(
     let entry_short_hash = target_entry.short_hash();
     let entry_short_message = target_entry.short_message(50);
     let entry_pr_id = target_entry.pull_request_id.clone();
+    let entry_message = target_entry.message.clone();
 
-    // Check if already in edit mode
-    if manager.is_in_edit_mode() {
+    // Check if already in edit mode and get info before confirmation
+    let already_in_edit_mode = manager.is_in_edit_mode();
+    let edit_mode_display = if already_in_edit_mode {
         let edit_info = manager.get_edit_mode_info().unwrap();
+        
+        // Get the commit message for the current edit target
+        let commit_message = if let Some(target_entry_id) = &edit_info.target_entry_id {
+            if let Some(entry) = active_stack
+                .entries
+                .iter()
+                .find(|e| e.id == *target_entry_id)
+            {
+                entry.short_message(50)
+            } else {
+                "Unknown entry".to_string()
+            }
+        } else {
+            "Unknown target".to_string()
+        };
+        
+        Some((edit_info.original_commit_hash.clone(), commit_message))
+    } else {
+        None
+    };
+    
+    // Let the active_stack reference go out of scope before we potentially mutably borrow manager
+    let _ = active_stack;
+
+    // Handle edit mode exit if needed
+    if let Some((commit_hash, commit_message)) = edit_mode_display {
         warn!("Already in edit mode for entry in stack");
 
         if !skip_confirmation {
             Output::warning("Already in edit mode!");
-
-            // Try to get the commit message for the current edit target
-            let commit_message = if let Some(target_entry_id) = edit_info.target_entry_id {
-                if let Some(entry) = active_stack
-                    .entries
-                    .iter()
-                    .find(|e| e.id == target_entry_id)
-                {
-                    entry.short_message(50)
-                } else {
-                    "Unknown entry".to_string()
-                }
-            } else {
-                "Unknown target".to_string()
-            };
-
             Output::sub_item(format!(
                 "Current target: {} ({})",
-                &edit_info.original_commit_hash[..8],
+                &commit_hash[..8],
                 commit_message
             ));
 
@@ -158,9 +170,10 @@ async fn checkout_entry(
                 ));
             }
 
-            // TODO: Implement proper exit from edit mode
-            // For now, just warn that this isn't implemented yet
-            return Err(CascadeError::config("Exiting edit mode not yet implemented. Use 'ca entry status' and handle any pending changes manually."));
+            // Exit current edit mode before starting a new one
+            Output::info("Exiting current edit mode...");
+            manager.exit_edit_mode()?;
+            Output::success("✓ Exited previous edit mode");
         }
     }
 
@@ -177,7 +190,7 @@ async fn checkout_entry(
 
         // Display full commit message
         Output::sub_item("Commit Message:");
-        let lines: Vec<&str> = target_entry.message.lines().collect();
+        let lines: Vec<&str> = entry_message.lines().collect();
         for line in lines {
             Output::sub_item(format!("  {line}"));
         }

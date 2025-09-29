@@ -305,19 +305,17 @@ impl PullRequestManager {
     }
 
     /// Get conflict information for a PR
+    /// 
+    /// NOTE: Currently unimplemented - always returns empty list.
+    /// Proper implementation would parse diff for conflict markers or use
+    /// Bitbucket's merge API to detect conflicts. In practice, the `mergeable`
+    /// field from `check_mergeable_detailed()` is more reliable for detecting conflicts.
     pub async fn get_conflicts(&self, pr_id: u64) -> Result<Vec<String>> {
-        let path = format!("pull-requests/{pr_id}/diff");
-
-        // This is a simplified approach - in practice you'd parse the diff
-        // to find actual conflict markers or use specialized endpoints
-        match self.client.get::<DiffResponse>(&path).await {
-            Ok(_diff) => {
-                // TODO: Parse diff for conflict markers
-                // For now, return empty conflicts
-                Ok(Vec::new())
-            }
-            Err(_) => Ok(Vec::new()),
-        }
+        // Conflicts are detected via the mergeable API (check_mergeable_detailed)
+        // which provides server-side conflict detection. This function is kept
+        // for future enhancement but is not currently needed.
+        let _ = pr_id; // Avoid unused parameter warning
+        Ok(Vec::new())
     }
 
     /// Calculate review status based on participants

@@ -97,6 +97,17 @@ pub enum Commands {
         action: VizAction,
     },
 
+    /// Clean up orphaned temporary branches
+    Cleanup {
+        /// Actually delete branches (default is dry-run)
+        #[arg(long)]
+        execute: bool,
+        
+        /// Force deletion even if branches have unmerged commits
+        #[arg(long)]
+        force: bool,
+    },
+
     // Stack command shortcuts for commonly used operations
     /// Show current stack details
     Stack {
@@ -467,6 +478,10 @@ impl Cli {
             Commands::Setup { force } => commands::setup::run(force).await,
 
             Commands::Tui => commands::tui::run().await,
+
+            Commands::Cleanup { execute, force } => {
+                commands::cleanup::run(execute, force).await
+            }
 
             Commands::Hooks { action } => match action {
                 HooksAction::Install {
