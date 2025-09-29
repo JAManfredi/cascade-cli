@@ -312,13 +312,15 @@ impl HooksManager {
             self.confirm_installation()?;
         }
 
-        Output::progress("Installing Cascade Git hooks");
+        Output::progress("Installing all Cascade Git hooks");
 
+        // Install ALL hooks (all 5 HookType variants)
         let hooks = vec![
             HookType::PostCommit,
             HookType::PrePush,
             HookType::CommitMsg,
             HookType::PrepareCommitMsg,
+            HookType::PreCommit,
         ];
 
         for hook in hooks {
@@ -484,8 +486,9 @@ impl HooksManager {
         } else {
             Output::warning("⚠️  Cascade hooks are NOT installed in this repository");
             Output::tip("To install Cascade hooks:");
-            Output::bullet("Run: ca hooks install --all");
-            Output::bullet("This will preserve any existing hooks by chaining to them");
+            Output::bullet("Run: ca hooks install            (essential hooks: pre-push, commit-msg, pre-commit)");
+            Output::bullet("Run: ca hooks install --all      (all hooks including post-commit auto-add)");
+            Output::bullet("Both options preserve existing hooks by chaining to them");
             println!();
         }
 
