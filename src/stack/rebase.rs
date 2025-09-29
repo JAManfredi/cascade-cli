@@ -573,10 +573,8 @@ impl RebaseManager {
             let remaining_conflicts = self.parse_conflict_markers(&content)?;
 
             if remaining_conflicts.is_empty() {
-                // All conflicts resolved - write the file back
-                std::fs::write(&full_path, content).map_err(|e| {
-                    CascadeError::config(format!("Failed to write resolved file {file_path}: {e}"))
-                })?;
+                // All conflicts resolved - write the file back atomically
+                crate::utils::atomic_file::write_string(&full_path, &content)?;
 
                 return Ok(ConflictResolution::Resolved);
             } else {
@@ -712,10 +710,8 @@ impl RebaseManager {
             let remaining_conflicts = self.parse_conflict_markers(&resolved_content)?;
 
             if remaining_conflicts.is_empty() {
-                // All conflicts resolved - write the file back
-                std::fs::write(&full_path, resolved_content).map_err(|e| {
-                    CascadeError::config(format!("Failed to write resolved file {file_path}: {e}"))
-                })?;
+                // All conflicts resolved - write the file back atomically
+                crate::utils::atomic_file::write_string(&full_path, &resolved_content)?;
 
                 return Ok(ConflictResolution::Resolved);
             } else {

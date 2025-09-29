@@ -164,18 +164,9 @@ impl TuiApp {
             KeyCode::Enter => {
                 self.activate_selected_stack()?;
             }
-            KeyCode::Char('c') => {
-                // Create new stack (placeholder)
-                self.error_message = Some("Create stack: Not implemented yet".to_string());
-            }
-            KeyCode::Char('s') => {
-                // Submit selected entry (placeholder)
-                self.error_message = Some("Submit entry: Not implemented yet".to_string());
-            }
-            KeyCode::Char('p') => {
-                // Push to stack (placeholder)
-                self.error_message = Some("Push to stack: Not implemented yet".to_string());
-            }
+            // Note: Create (c), submit (s), and push (p) operations are available
+            // via CLI commands. Exit TUI (q/Esc) and use 'ca stack create',
+            // 'ca stack submit', or 'ca stack push' for these operations.
             _ => {}
         }
         Ok(())
@@ -417,7 +408,7 @@ impl TuiApp {
 
             f.render_widget(summary, area);
         } else {
-            let empty = Paragraph::new("No stacks available.\n\nPress 'c' to create a new stack.")
+            let empty = Paragraph::new("No stacks available.\n\nExit (q) and use 'ca stack create' to create a stack.")
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

@@ -3968,7 +3968,7 @@ mod tests {
             crate::bitbucket::pull_request::MergeStrategy::Squash => {
                 // Correct conversion
             }
-            _ => panic!("Expected Squash strategy"),
+            _ => unreachable!("SquashStrategyArg only has Squash variant"),
         }
 
         let merge_strategy = MergeStrategyArg::Merge;
@@ -3978,7 +3978,7 @@ mod tests {
             crate::bitbucket::pull_request::MergeStrategy::Merge => {
                 // Correct conversion
             }
-            _ => panic!("Expected Merge strategy"),
+            _ => unreachable!("MergeStrategyArg::Merge maps to MergeStrategy::Merge"),
         }
     }
 
