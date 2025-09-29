@@ -282,7 +282,12 @@ impl HooksManager {
     pub fn install_essential(&self) -> Result<()> {
         Output::progress("Installing essential Cascade Git hooks");
 
-        let essential_hooks = vec![HookType::PrePush, HookType::CommitMsg, HookType::PreCommit];
+        let essential_hooks = vec![
+            HookType::PrePush,
+            HookType::CommitMsg,
+            HookType::PrepareCommitMsg,
+            HookType::PreCommit,
+        ];
 
         for hook in essential_hooks {
             self.install_hook(&hook)?;
@@ -290,7 +295,7 @@ impl HooksManager {
 
         Output::success("Essential Cascade hooks installed successfully!");
         Output::tip(
-            "Note: Post-commit hook available separately with 'ca hooks install post-commit'",
+            "Note: Post-commit auto-add hook available with 'ca hooks install --all'",
         );
         Output::section("Hooks installed");
         self.list_installed_hooks()?;
@@ -486,8 +491,8 @@ impl HooksManager {
         } else {
             Output::warning("⚠️  Cascade hooks are NOT installed in this repository");
             Output::tip("To install Cascade hooks:");
-            Output::bullet("Run: ca hooks install            (essential hooks: pre-push, commit-msg, pre-commit)");
-            Output::bullet("Run: ca hooks install --all      (all hooks including post-commit auto-add)");
+            Output::bullet("Run: ca hooks install            (recommended: 4 essential hooks)");
+            Output::bullet("Run: ca hooks install --all      (all 5 hooks + post-commit auto-add)");
             Output::bullet("Both options preserve existing hooks by chaining to them");
             println!();
         }
