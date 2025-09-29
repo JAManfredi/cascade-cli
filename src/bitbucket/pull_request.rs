@@ -342,12 +342,20 @@ impl PullRequestManager {
             }
         }
 
-        // Minimum 1 approval required, no "needs work" votes
-        let required_approvals = 1; // This could be configurable
-        let can_merge = current_approvals >= required_approvals && needs_work_count == 0;
+        // Note: We use a heuristic for display purposes only.
+        // The REAL approval requirements are enforced by Bitbucket Server
+        // via the /merge endpoint (check_mergeable_detailed), which checks:
+        // - Repository approval requirements
+        // - Default reviewer approvals
+        // - Build status requirements
+        // - Branch permissions
+        // We estimate required approvals based on missing reviewers + 1,
+        // but this is just for display - server-side checks are authoritative.
+        let estimated_required = (missing_reviewers.len() + 1).max(1);
+        let can_merge = current_approvals > 0 && needs_work_count == 0;
 
         Ok(ReviewStatus {
-            required_approvals,
+            required_approvals: estimated_required,
             current_approvals,
             needs_work_count,
             can_merge,

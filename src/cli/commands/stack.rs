@@ -964,9 +964,9 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                                 }
                             }
 
-                            // Show review details
+                            // Show review details (estimate - server enforces real requirements)
                             println!(
-                                "      Reviews: {}/{} approvals",
+                                "      Reviews: {}/{} approvals (estimated)",
                                 enhanced.review_status.current_approvals,
                                 enhanced.review_status.required_approvals
                             );
