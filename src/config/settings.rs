@@ -46,13 +46,15 @@ pub struct GitConfig {
 pub struct CascadeSettings {
     pub api_port: u16,
     pub auto_cleanup: bool,
-    pub default_sync_strategy: String,
     pub max_stack_size: usize,
     pub enable_notifications: bool,
     /// Default PR description template (markdown supported)
     pub pr_description_template: Option<String>,
     /// Rebase-specific settings
     pub rebase: RebaseSettings,
+    /// DEPRECATED: Old sync strategy setting (ignored, kept for backward compatibility)
+    #[serde(default, skip_serializing)]
+    pub default_sync_strategy: Option<String>,
 }
 
 /// Settings specific to rebase operations
@@ -64,10 +66,11 @@ pub struct RebaseSettings {
     pub max_retry_attempts: usize,
     /// Whether to preserve merge commits during rebase
     pub preserve_merges: bool,
-    /// Default branch versioning suffix pattern
-    pub version_suffix_pattern: String,
-    /// Whether to backup branches before rebasing
+    /// Whether to backup branches before rebasing (creates backup-* branches)
     pub backup_before_rebase: bool,
+    /// DEPRECATED: Old version suffix pattern (ignored, kept for backward compatibility)
+    #[serde(default, skip_serializing)]
+    pub version_suffix_pattern: Option<String>,
 }
 
 impl Default for BitbucketConfig {
@@ -102,11 +105,11 @@ impl Default for CascadeSettings {
         Self {
             api_port: 8080,
             auto_cleanup: true,
-            default_sync_strategy: "branch-versioning".to_string(),
             max_stack_size: 20,
             enable_notifications: true,
             pr_description_template: None,
             rebase: RebaseSettings::default(),
+            default_sync_strategy: None, // Deprecated field
         }
     }
 }
@@ -117,8 +120,8 @@ impl Default for RebaseSettings {
             auto_resolve_conflicts: true,
             max_retry_attempts: 3,
             preserve_merges: true,
-            version_suffix_pattern: "v{}".to_string(),
             backup_before_rebase: true,
+            version_suffix_pattern: None, // Deprecated field
         }
     }
 }
@@ -199,9 +202,6 @@ impl Settings {
                     .parse()
                     .map_err(|_| CascadeError::config(format!("Invalid boolean value: {value}")))?;
             }
-            ("cascade", "default_sync_strategy") => {
-                self.cascade.default_sync_strategy = value.to_string();
-            }
             ("cascade", "max_stack_size") => {
                 self.cascade.max_stack_size = value
                     .parse()
@@ -233,9 +233,6 @@ impl Settings {
                 self.cascade.rebase.preserve_merges = value
                     .parse()
                     .map_err(|_| CascadeError::config(format!("Invalid boolean value: {value}")))?;
-            }
-            ("rebase", "version_suffix_pattern") => {
-                self.cascade.rebase.version_suffix_pattern = value.to_string();
             }
             ("rebase", "backup_before_rebase") => {
                 self.cascade.rebase.backup_before_rebase = value
@@ -280,7 +277,6 @@ impl Settings {
             ("git", "prefer_rebase") => return Ok(self.git.prefer_rebase.to_string()),
             ("cascade", "api_port") => return Ok(self.cascade.api_port.to_string()),
             ("cascade", "auto_cleanup") => return Ok(self.cascade.auto_cleanup.to_string()),
-            ("cascade", "default_sync_strategy") => &self.cascade.default_sync_strategy,
             ("cascade", "max_stack_size") => return Ok(self.cascade.max_stack_size.to_string()),
             ("cascade", "enable_notifications") => {
                 return Ok(self.cascade.enable_notifications.to_string())
@@ -299,7 +295,6 @@ impl Settings {
             ("rebase", "preserve_merges") => {
                 return Ok(self.cascade.rebase.preserve_merges.to_string())
             }
-            ("rebase", "version_suffix_pattern") => &self.cascade.rebase.version_suffix_pattern,
             ("rebase", "backup_before_rebase") => {
                 return Ok(self.cascade.rebase.backup_before_rebase.to_string())
             }
@@ -327,20 +322,129 @@ impl Settings {
         }
 
         // Validate sync strategy
-        let valid_strategies = [
-            "rebase",
-            "cherry-pick",
-            "branch-versioning",
-            "three-way-merge",
-        ];
-        if !valid_strategies.contains(&self.cascade.default_sync_strategy.as_str()) {
-            return Err(CascadeError::config(format!(
-                "Invalid sync strategy: {}. Valid options: {}",
-                self.cascade.default_sync_strategy,
-                valid_strategies.join(", ")
-            )));
-        }
-
+        // All rebase operations now use force-push strategy by default
+        // No validation needed for sync strategy
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_backward_compatibility_with_old_config_format() {
+        // Simulate an old config file with deprecated fields
+        let old_config_json = r#"{
+            "bitbucket": {
+                "url": "https://bitbucket.example.com",
+                "project": "TEST",
+                "repo": "test-repo",
+                "username": null,
+                "token": null,
+                "default_reviewers": [],
+                "accept_invalid_certs": null,
+                "ca_bundle_path": null
+            },
+            "git": {
+                "default_branch": "main",
+                "author_name": null,
+                "author_email": null,
+                "auto_cleanup_merged": true,
+                "prefer_rebase": true
+            },
+            "cascade": {
+                "api_port": 8080,
+                "auto_cleanup": true,
+                "default_sync_strategy": "branch-versioning",
+                "max_stack_size": 20,
+                "enable_notifications": true,
+                "pr_description_template": null,
+                "rebase": {
+                    "auto_resolve_conflicts": true,
+                    "max_retry_attempts": 3,
+                    "preserve_merges": true,
+                    "version_suffix_pattern": "v{}",
+                    "backup_before_rebase": true
+                }
+            }
+        }"#;
+
+        // Should successfully parse old config format
+        let settings: Settings = serde_json::from_str(old_config_json)
+            .expect("Failed to parse old config format - backward compatibility broken!");
+
+        // Verify main settings are preserved
+        assert_eq!(settings.cascade.api_port, 8080);
+        assert!(settings.cascade.auto_cleanup);
+        assert_eq!(settings.cascade.max_stack_size, 20);
+
+        // Verify deprecated fields were loaded but are ignored
+        assert_eq!(
+            settings.cascade.default_sync_strategy,
+            Some("branch-versioning".to_string())
+        );
+        assert_eq!(
+            settings.cascade.rebase.version_suffix_pattern,
+            Some("v{}".to_string())
+        );
+
+        // Verify that when saved, deprecated fields are NOT included
+        let new_json =
+            serde_json::to_string_pretty(&settings).expect("Failed to serialize settings");
+
+        assert!(
+            !new_json.contains("default_sync_strategy"),
+            "Deprecated field should not appear in new config files"
+        );
+        assert!(
+            !new_json.contains("version_suffix_pattern"),
+            "Deprecated field should not appear in new config files"
+        );
+    }
+
+    #[test]
+    fn test_new_config_format_without_deprecated_fields() {
+        // Simulate a new config file without deprecated fields
+        let new_config_json = r#"{
+            "bitbucket": {
+                "url": "https://bitbucket.example.com",
+                "project": "TEST",
+                "repo": "test-repo",
+                "username": null,
+                "token": null,
+                "default_reviewers": [],
+                "accept_invalid_certs": null,
+                "ca_bundle_path": null
+            },
+            "git": {
+                "default_branch": "main",
+                "author_name": null,
+                "author_email": null,
+                "auto_cleanup_merged": true,
+                "prefer_rebase": true
+            },
+            "cascade": {
+                "api_port": 8080,
+                "auto_cleanup": true,
+                "max_stack_size": 20,
+                "enable_notifications": true,
+                "pr_description_template": null,
+                "rebase": {
+                    "auto_resolve_conflicts": true,
+                    "max_retry_attempts": 3,
+                    "preserve_merges": true,
+                    "backup_before_rebase": true
+                }
+            }
+        }"#;
+
+        // Should successfully parse new config format
+        let settings: Settings =
+            serde_json::from_str(new_config_json).expect("Failed to parse new config format!");
+
+        // Verify deprecated fields default to None
+        assert_eq!(settings.cascade.default_sync_strategy, None);
+        assert_eq!(settings.cascade.rebase.version_suffix_pattern, None);
     }
 }

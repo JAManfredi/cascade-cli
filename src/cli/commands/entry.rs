@@ -248,7 +248,7 @@ async fn show_entry_picker(stack: &crate::stack::Stack) -> Result<usize> {
 
     let result = loop {
         terminal.draw(|f| {
-            let size = f.size();
+            let size = f.area();
 
             // Create layout
             let chunks = Layout::default()

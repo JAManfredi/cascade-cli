@@ -231,7 +231,7 @@ impl TuiApp {
     }
 
     fn draw(&mut self, f: &mut Frame) {
-        let size = f.size();
+        let size = f.area();
 
         // Main layout
         let chunks = Layout::default()
@@ -272,7 +272,7 @@ impl TuiApp {
 
     fn draw_body(&mut self, f: &mut Frame, area: Rect) {
         let tabs = ["📚 Stacks", "🔍 Details", "⚡ Actions"];
-        let tab_titles = tabs.iter().cloned().map(Line::from).collect();
+        let tab_titles: Vec<Line> = tabs.iter().cloned().map(Line::from).collect();
         let tabs_widget = Tabs::new(tab_titles)
             .block(Block::default().borders(Borders::ALL).title("Navigation"))
             .style(Style::default().fg(Color::White))

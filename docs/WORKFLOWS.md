@@ -215,9 +215,9 @@ ca push --auto-branch
 
 # Output:
 # 🚀 Auto-creating feature branch 'feature/my-feature-work'...
-# 🍒 Cherry-picking 2 commit(s) to new branch...
-#    ✅ Cherry-picked a1b2c3d4
-#    ✅ Cherry-picked e5f6g7h8
+# 🔄 Moving 2 commit(s) to new branch...
+#    ✅ Moved a1b2c3d4
+#    ✅ Moved e5f6g7h8
 # ✅ Successfully moved 2 commit(s) to 'feature/my-feature-work'
 ```
 
@@ -388,17 +388,16 @@ ca sync --check-conflicts
 🔄 Syncing stack: oauth-feature
    📋 Checking for conflicts with new main changes...
    ✅ No conflicts detected
-   📋 Branch mapping:
-      implement-oauth -> implement-oauth-v2
-      oauth-tests -> oauth-tests-v2
    
-   🔄 Preserved pull request history:
-      ✅ Force-pushed implement-oauth-v2 to implement-oauth (preserves PR #105)
-      ✅ Force-pushed oauth-tests-v2 to oauth-tests (preserves PR #106)
+   🔄 Rebasing using force-push strategy:
+      ✅ Force-pushed implement-oauth-temp to implement-oauth (preserves PR #105)
+      ✅ Force-pushed oauth-tests-temp to oauth-tests (preserves PR #106)
+   
+   🧹 Cleaned up 2 temporary branches
    
    ✅ Stack rebased on latest main
    ✅ All review comments and approvals preserved
-   ✅ Backup branches created: implement-oauth-v2, oauth-tests-v2
+   ✅ Branch names unchanged - PRs remain intact
 ```
 
 ### **Modifying Any Commit in Stack**

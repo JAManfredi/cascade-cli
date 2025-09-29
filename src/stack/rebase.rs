@@ -34,15 +34,12 @@ struct ConflictRegion {
     their_content: String,
 }
 
-/// Different strategies for rebasing stacks without force-pushing
+/// Strategy for rebasing stacks (force-push is the only valid approach for preserving PR history)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RebaseStrategy {
-    /// Create new branches with version suffixes (e.g., feature-v2, feature-v3)
-    BranchVersioning,
-    /// Use cherry-pick to apply commits on new base
-    CherryPick,
-    /// Create new commits that merge changes from base
-    ThreeWayMerge,
+    /// Force-push rebased commits to original branches (preserves PR history)
+    /// This is the industry standard used by Graphite, Phabricator, spr, etc.
+    ForcePush,
     /// Interactive rebase with conflict resolution
     Interactive,
 }
@@ -94,7 +91,7 @@ pub struct RebaseManager {
 impl Default for RebaseOptions {
     fn default() -> Self {
         Self {
-            strategy: RebaseStrategy::BranchVersioning,
+            strategy: RebaseStrategy::ForcePush,
             interactive: false,
             target_base: None,
             preserve_merges: true,
@@ -131,17 +128,17 @@ impl RebaseManager {
             .clone();
 
         match self.options.strategy {
-            RebaseStrategy::BranchVersioning => self.rebase_with_versioning(&stack),
-            RebaseStrategy::CherryPick => self.rebase_with_cherry_pick(&stack),
-            RebaseStrategy::ThreeWayMerge => self.rebase_with_three_way_merge(&stack),
+            RebaseStrategy::ForcePush => self.rebase_with_force_push(&stack),
             RebaseStrategy::Interactive => self.rebase_interactive(&stack),
         }
     }
 
-    /// Rebase using branch versioning strategy (no force-push needed)
-    fn rebase_with_versioning(&mut self, stack: &Stack) -> Result<RebaseResult> {
+    /// Rebase using force-push strategy (industry standard for stacked diffs)
+    /// This creates temporary branches, then force-pushes back to original branches
+    /// to preserve PR history - the approach used by Graphite, Phabricator, spr, etc.
+    fn rebase_with_force_push(&mut self, stack: &Stack) -> Result<RebaseResult> {
         info!(
-            "Rebasing stack '{}' using branch versioning strategy",
+            "Rebasing stack '{}' using force-push strategy (preserves PR history)",
             stack.name
         );
 
@@ -186,30 +183,52 @@ impl RebaseManager {
 
         let mut current_base = target_base.clone();
 
+        // Track temp branches for cleanup
+        let mut temp_branches = Vec::new();
+
         for (index, entry) in stack.entries.iter().enumerate() {
             debug!("Processing entry {}: {}", index, entry.short_hash());
 
-            // Generate new branch name with version
-            let new_branch = self.generate_versioned_branch_name(&entry.branch)?;
+            let original_branch = &entry.branch;
 
-            // Create new branch from current base
+            // Generate temporary branch name for rebase
+            let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
+            temp_branches.push(temp_branch.clone());
+
+            // Create temp branch from current base
             self.git_repo
-                .create_branch(&new_branch, Some(&current_base))?;
-            self.git_repo.checkout_branch(&new_branch)?;
+                .create_branch(&temp_branch, Some(&current_base))?;
+            self.git_repo.checkout_branch(&temp_branch)?;
 
-            // Cherry-pick the commit onto the new branch
+            // Cherry-pick the commit onto the temp branch
             match self.cherry_pick_commit(&entry.commit_hash) {
                 Ok(new_commit_hash) => {
                     result.new_commits.push(new_commit_hash.clone());
+
+                    // Force-push temp branch content back to original branch
+                    // This preserves the PR associated with the original branch
+                    info!(
+                        "Force-pushing {} content to {} to preserve PR history",
+                        temp_branch, original_branch
+                    );
+
+                    self.git_repo
+                        .force_push_branch(original_branch, &temp_branch)?;
+
                     result
                         .branch_mapping
-                        .insert(entry.branch.clone(), new_branch.clone());
+                        .insert(original_branch.clone(), original_branch.clone());
 
-                    // Update stack entry with new branch and commit hash
-                    self.update_stack_entry(stack.id, &entry.id, &new_branch, &new_commit_hash)?;
+                    // Update stack entry with new commit hash (branch name stays the same)
+                    self.update_stack_entry(
+                        stack.id,
+                        &entry.id,
+                        original_branch,
+                        &new_commit_hash,
+                    )?;
 
-                    // This branch becomes the base for the next entry
-                    current_base = new_branch;
+                    // Original branch (now updated) becomes the base for the next entry
+                    current_base = original_branch.clone();
                 }
                 Err(e) => {
                     warn!("Failed to cherry-pick {}: {}", entry.commit_hash, e);
@@ -237,105 +256,25 @@ impl RebaseManager {
             }
         }
 
+        // Clean up temporary branches
+        info!("Cleaning up {} temporary branches", temp_branches.len());
+        for temp_branch in &temp_branches {
+            if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
+                warn!("Failed to delete temp branch {}: {}", temp_branch, e);
+                // Continue anyway - temp branches are not critical
+            }
+        }
+
         result.summary = format!(
-            "Rebased {} entries using branch versioning. {} new branches created.",
-            stack.entries.len(),
-            result.branch_mapping.len()
+            "Rebased {} entries using force-push strategy. PR history preserved.",
+            stack.entries.len()
         );
 
         if result.success {
-            info!("✅ Rebase completed successfully");
+            info!("✅ Rebase completed successfully - all PRs updated");
         } else {
             warn!("❌ Rebase failed: {:?}", result.error);
         }
-
-        Ok(result)
-    }
-
-    /// Rebase using cherry-pick strategy
-    fn rebase_with_cherry_pick(&mut self, stack: &Stack) -> Result<RebaseResult> {
-        info!("Rebasing stack '{}' using cherry-pick strategy", stack.name);
-
-        let mut result = RebaseResult {
-            success: true,
-            branch_mapping: HashMap::new(),
-            conflicts: Vec::new(),
-            new_commits: Vec::new(),
-            error: None,
-            summary: String::new(),
-        };
-
-        let target_base = self
-            .options
-            .target_base
-            .as_ref()
-            .unwrap_or(&stack.base_branch);
-
-        // Create a temporary rebase branch
-        let rebase_branch = format!("{}-rebase-{}", stack.name, Utc::now().timestamp());
-        self.git_repo
-            .create_branch(&rebase_branch, Some(target_base))?;
-        self.git_repo.checkout_branch(&rebase_branch)?;
-
-        // Cherry-pick all commits in order
-        for entry in &stack.entries {
-            match self.cherry_pick_commit(&entry.commit_hash) {
-                Ok(new_commit_hash) => {
-                    result.new_commits.push(new_commit_hash);
-                }
-                Err(e) => {
-                    result.conflicts.push(entry.commit_hash.clone());
-                    if !self.auto_resolve_conflicts(&entry.commit_hash)? {
-                        result.success = false;
-                        result.error = Some(format!(
-                            "Unresolved conflict in {}: {}",
-                            entry.commit_hash, e
-                        ));
-                        break;
-                    }
-                }
-            }
-        }
-
-        if result.success {
-            // Replace the original branches with the rebased versions
-            for entry in &stack.entries {
-                let new_branch = format!("{}-rebased", entry.branch);
-                self.git_repo
-                    .create_branch(&new_branch, Some(&rebase_branch))?;
-                result
-                    .branch_mapping
-                    .insert(entry.branch.clone(), new_branch);
-            }
-        }
-
-        result.summary = format!(
-            "Cherry-picked {} commits onto new base. {} conflicts resolved.",
-            result.new_commits.len(),
-            result.conflicts.len()
-        );
-
-        Ok(result)
-    }
-
-    /// Rebase using three-way merge strategy
-    fn rebase_with_three_way_merge(&mut self, stack: &Stack) -> Result<RebaseResult> {
-        info!(
-            "Rebasing stack '{}' using three-way merge strategy",
-            stack.name
-        );
-
-        let mut result = RebaseResult {
-            success: true,
-            branch_mapping: HashMap::new(),
-            conflicts: Vec::new(),
-            new_commits: Vec::new(),
-            error: None,
-            summary: String::new(),
-        };
-
-        // Implementation for three-way merge strategy
-        result.summary = "Three-way merge strategy implemented".to_string();
 
         Ok(result)
     }
@@ -387,28 +326,6 @@ impl RebaseManager {
             stack.entries.len()
         );
         Ok(result)
-    }
-
-    /// Generate a versioned branch name
-    fn generate_versioned_branch_name(&self, original_branch: &str) -> Result<String> {
-        let mut version = 2;
-        let base_name = if original_branch.ends_with("-v1") {
-            original_branch.trim_end_matches("-v1")
-        } else {
-            original_branch
-        };
-
-        loop {
-            let candidate = format!("{base_name}-v{version}");
-            if !self.git_repo.branch_exists(&candidate) {
-                return Ok(candidate);
-            }
-            version += 1;
-
-            if version > 100 {
-                return Err(CascadeError::branch("Too many branch versions".to_string()));
-            }
-        }
     }
 
     /// Cherry-pick a commit onto the current branch
@@ -1294,19 +1211,14 @@ mod tests {
 
     #[test]
     fn test_rebase_strategies() {
-        assert_eq!(
-            RebaseStrategy::BranchVersioning,
-            RebaseStrategy::BranchVersioning
-        );
-        assert_eq!(RebaseStrategy::CherryPick, RebaseStrategy::CherryPick);
-        assert_eq!(RebaseStrategy::ThreeWayMerge, RebaseStrategy::ThreeWayMerge);
+        assert_eq!(RebaseStrategy::ForcePush, RebaseStrategy::ForcePush);
         assert_eq!(RebaseStrategy::Interactive, RebaseStrategy::Interactive);
     }
 
     #[test]
     fn test_rebase_options() {
         let options = RebaseOptions::default();
-        assert_eq!(options.strategy, RebaseStrategy::BranchVersioning);
+        assert_eq!(options.strategy, RebaseStrategy::ForcePush);
         assert!(!options.interactive);
         assert!(options.auto_resolve);
         assert_eq!(options.max_retries, 3);

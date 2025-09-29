@@ -120,7 +120,6 @@ async fn list_config_values(config_file: &std::path::Path) -> Result<()> {
     Output::section("Cascade");
     print_config_value(&settings, "  cascade.api_port")?;
     print_config_value(&settings, "  cascade.auto_cleanup")?;
-    print_config_value(&settings, "  cascade.default_sync_strategy")?;
     print_config_value(&settings, "  cascade.max_stack_size")?;
     print_config_value(&settings, "  cascade.enable_notifications")?;
 

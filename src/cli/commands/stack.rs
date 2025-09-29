@@ -12,13 +12,9 @@ use tracing::{debug, warn};
 /// CLI argument version of RebaseStrategy
 #[derive(ValueEnum, Clone, Debug)]
 pub enum RebaseStrategyArg {
-    /// Create new branches with version suffixes
-    BranchVersioning,
-    /// Use cherry-pick to apply commits
-    CherryPick,
-    /// Create merge commits
-    ThreeWayMerge,
-    /// Interactive rebase
+    /// Force-push rebased commits to original branches (preserves PR history)
+    ForcePush,
+    /// Interactive rebase with conflict resolution
     Interactive,
 }
 
@@ -2042,9 +2038,10 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
                             cascade: settings.cascade.clone(),
                         };
 
-                        // Use the existing rebase system
+                        // Use the existing rebase system with force-push strategy
+                        // This preserves PR history by force-pushing to original branches
                         let options = crate::stack::RebaseOptions {
-                            strategy: crate::stack::RebaseStrategy::BranchVersioning,
+                            strategy: crate::stack::RebaseStrategy::ForcePush,
                             interactive,
                             target_base: Some(base_branch.clone()),
                             preserve_merges: true,
@@ -2213,23 +2210,15 @@ async fn rebase_stack(
     Output::progress(format!("Rebasing stack: {}", active_stack.name));
     Output::sub_item(format!("Base: {}", active_stack.base_branch));
 
-    // Determine rebase strategy
+    // Determine rebase strategy (force-push is the industry standard for stacked diffs)
     let rebase_strategy = if let Some(cli_strategy) = strategy {
         match cli_strategy {
-            RebaseStrategyArg::BranchVersioning => crate::stack::RebaseStrategy::BranchVersioning,
-            RebaseStrategyArg::CherryPick => crate::stack::RebaseStrategy::CherryPick,
-            RebaseStrategyArg::ThreeWayMerge => crate::stack::RebaseStrategy::ThreeWayMerge,
+            RebaseStrategyArg::ForcePush => crate::stack::RebaseStrategy::ForcePush,
             RebaseStrategyArg::Interactive => crate::stack::RebaseStrategy::Interactive,
         }
     } else {
-        // Use strategy from config
-        match settings.cascade.default_sync_strategy.as_str() {
-            "branch-versioning" => crate::stack::RebaseStrategy::BranchVersioning,
-            "cherry-pick" => crate::stack::RebaseStrategy::CherryPick,
-            "three-way-merge" => crate::stack::RebaseStrategy::ThreeWayMerge,
-            "rebase" => crate::stack::RebaseStrategy::Interactive,
-            _ => crate::stack::RebaseStrategy::BranchVersioning, // default fallback
-        }
+        // Default to force-push (industry standard for preserving PR history)
+        crate::stack::RebaseStrategy::ForcePush
     };
 
     // Create rebase options
@@ -2318,19 +2307,13 @@ async fn rebase_stack(
             );
 
             // Show next steps
-            if matches!(
-                rebase_strategy,
-                crate::stack::RebaseStrategy::BranchVersioning
-            ) {
+            if matches!(rebase_strategy, crate::stack::RebaseStrategy::ForcePush) {
                 println!("\n📝 Next steps:");
                 if !result.branch_mapping.is_empty() {
-                    println!("   1. ✅ New versioned branches have been created");
-                    println!("   2. ✅ Pull requests have been updated automatically");
+                    println!("   1. ✅ Branches have been rebased and force-pushed");
+                    println!("   2. ✅ Pull requests updated automatically (history preserved)");
                     println!("   3. 🔍 Review the updated PRs in Bitbucket");
-                    println!("   4. 🧪 Test your changes on the new branches");
-                    println!(
-                        "   5. 🗑️  Old branches are preserved for safety (can be deleted later)"
-                    );
+                    println!("   4. 🧪 Test your changes");
                 } else {
                     println!("   1. Review the rebased stack");
                     println!("   2. Test your changes");
@@ -3056,7 +3039,7 @@ async fn land_stack(
                         StackManager::new(&repo_root)?,
                         git_repo,
                         crate::stack::RebaseOptions {
-                            strategy: crate::stack::RebaseStrategy::BranchVersioning,
+                            strategy: crate::stack::RebaseStrategy::ForcePush,
                             target_base: Some(base_branch.clone()),
                             ..Default::default()
                         },

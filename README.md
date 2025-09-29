@@ -643,9 +643,8 @@ ca rebase                                    # Rebase stack on latest base branc
 ca rebase --interactive                      # Interactive rebase mode
 ca rebase -i                                 # Short form
 ca rebase --onto <branch>                    # Rebase onto different target branch
-ca rebase --strategy cherry-pick             # Use specific rebase strategy
-ca rebase --strategy three-way-merge         # Alternative strategies available
-ca rebase --no-auto-resolve                  # Disable smart conflict resolution
+ca rebase --strategy force-push              # Industry standard (default)
+ca rebase --strategy interactive             # Manual conflict resolution mode
 
 # Rebase conflict resolution
 ca stacks continue-rebase                    # Continue after resolving conflicts

@@ -59,12 +59,15 @@ git push origin feature-branch --force
 
 ```rust
 // When rebasing creates new branch content:
-let new_branch = "feature-auth-v2";  // Temporary rebase branch
-let existing_branch = "feature-auth"; // Original PR branch
+let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
+let original_branch = "feature-auth"; // Original PR branch
 
-// Instead of creating new PR, we preserve the old one:
-git_repo.force_push_branch(&existing_branch, &new_branch)?;
-// This updates 'feature-auth' content with 'feature-auth-v2' content
+// Cherry-pick commits onto temp branch, then force-push back to original:
+git_repo.create_branch(&temp_branch, Some(&base_branch))?;
+git_repo.cherry_pick(commit_hash)?;
+git_repo.force_push_branch(&original_branch, &temp_branch)?;
+git_repo.delete_branch_unsafe(&temp_branch)?; // Clean up temp branch
+
 // The PR #123 still points to 'feature-auth' but now has updated content!
 ```
 
@@ -74,15 +77,15 @@ git_repo.force_push_branch(&existing_branch, &new_branch)?;
 $ ca stacks rebase
 
 🔄 Rebasing stack: authentication
-   📋 Branch mapping:
-      add-auth -> add-auth-v2      # Temporary rebase branches
-      add-tests -> add-tests-v2
+   📋 Rebasing 2 entries using force-push strategy
+   
+   🔄 Processing commits:
+      ✅ Force-pushed add-auth-temp content to add-auth (preserves PR #123)
+      ✅ Force-pushed add-tests-temp content to add-tests (preserves PR #124)
+   
+   🧹 Cleaned up 2 temporary branches
 
-   🔄 Preserved pull request history:
-      ✅ Force-pushed add-auth-v2 content to add-auth (preserves PR #123)
-      ✅ Force-pushed add-tests-v2 content to add-tests (preserves PR #124)
-
-   ✅ 2 commits successfully rebased
+   ✅ 2 commits successfully rebased - PR history preserved
 
 📝 Review workflow preserved:
    - PR #123: Still points to 'add-auth' branch with updated content

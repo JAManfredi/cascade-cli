@@ -22,7 +22,7 @@ clap = { version = "4.0", features = ["derive"] }
 clap_complete = "4.0"
 dialoguer = "0.11"
 indicatif = "0.17"
-ratatui = "0.25"
+ratatui = "0.29"  # Update to avoid unmaintained paste dependency
 crossterm = "0.27"
 git2 = { version = "0.20.2", default-features = false, features = ["vendored-libgit2", "vendored-openssl", "https", "ssh"] }
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
@@ -33,7 +33,7 @@ anyhow = "1.0"
 config = "0.14"
 console = "0.15"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = "0.3.20"  # Security: Fix RUSTSEC-2025-0055 (ANSI escape sequences)
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"

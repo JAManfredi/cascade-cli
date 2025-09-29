@@ -450,42 +450,42 @@ ca sync [OPTIONS]
 
 # Options:
 --force                 # Force sync even with conflicts
---strategy <STRATEGY>   # Sync strategy (merge, rebase, cherry-pick)
+--interactive           # Interactive mode for conflict resolution
 ```
 
 **Examples:**
 ```bash
-# Standard sync
+# Standard sync (uses force-push strategy to preserve PR history)
 ca sync
 
 # Force sync with conflicts
 ca sync --force
 
-# Use specific strategy
-ca sync --strategy rebase
+# Interactive mode for manual conflict resolution
+ca sync --interactive
 ```
 
 #### **`ca rebase`** - Rebase Stack
-Rebase all stack entries on latest base branch using smart force push strategy.
+Rebase all stack entries on latest base branch using smart force push strategy (industry standard).
 
 ```bash
 ca rebase [OPTIONS]
 
 # Options:
---interactive          # Interactive rebase mode
---strategy <STRATEGY>  # Rebase strategy (cherry-pick, merge)
+--interactive          # Interactive rebase mode for manual conflict resolution
 --continue            # Continue after resolving conflicts
 --abort               # Abort rebase operation
 ```
 
 **Smart Force Push Behavior:**
-When rebasing, Cascade CLI:
-1. Creates temporary versioned branches (`feature-v2`)
-2. Force pushes new content to original branches (`feature`)
-3. **Preserves ALL existing PRs** and review history
-4. Keeps versioned branches as backup for safety
+When rebasing, Cascade CLI uses the industry-standard approach:
+1. Creates temporary branches for rebasing (`feature-temp-123456`)
+2. Cherry-picks commits onto the new base
+3. Force-pushes temp content to original branches (`feature`)
+4. **Preserves ALL existing PRs** and review history
+5. Cleans up temporary branches automatically
 
-This approach follows industry standards (Graphite, Phabricator, GitHub CLI) and ensures reviewers never lose context, comments, or approval history.
+This approach follows industry standards (Graphite, Phabricator, spr, GitHub CLI) and ensures reviewers never lose context, comments, or approval history. Branch names stay the same, so PRs remain intact.
 
 **Examples:**
 ```bash
@@ -507,15 +507,15 @@ ca stacks rebase --abort
 $ ca stacks rebase
 
 🔄 Rebasing stack: authentication
-   📋 Branch mapping:
-      add-auth -> add-auth-v2      # Temporary rebase branches
-      add-tests -> add-tests-v2
+   📋 Rebasing 2 entries using force-push strategy
+   
+   🔄 Processing commits:
+      ✅ Force-pushed add-auth-temp content to add-auth (preserves PR #123)
+      ✅ Force-pushed add-tests-temp content to add-tests (preserves PR #124)
+   
+   🧹 Cleaned up 2 temporary branches
 
-   🔄 Preserved pull request history:
-      ✅ Force-pushed add-auth-v2 content to add-auth (preserves PR #123)
-      ✅ Force-pushed add-tests-v2 content to add-tests (preserves PR #124)
-
-   ✅ 2 commits successfully rebased
+   ✅ 2 commits successfully rebased - PR history preserved
 ```
 
 ### **📊 Status and Information**
@@ -942,8 +942,8 @@ token = "your-personal-access-token"
 
 [git]
 default_branch = "main"
-auto_sync = true
-conflict_strategy = "cherry-pick"
+auto_cleanup_merged = true
+prefer_rebase = true
 
 [workflow]
 auto_submit = false
