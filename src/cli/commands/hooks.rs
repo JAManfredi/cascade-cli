@@ -463,8 +463,9 @@ impl HooksManager {
                 == Some(cascade_hooks_dir.to_string_lossy().to_string());
 
         if using_cascade_hooks {
+            Output::success("✓ Cascade hooks are installed and active");
             Output::info(format!(
-                "Using Cascade hooks directory: {}",
+                "  Hooks directory: {}",
                 cascade_hooks_dir.display()
             ));
 
@@ -474,11 +475,18 @@ impl HooksManager {
             if original_path_file.exists() {
                 let original_path = fs::read_to_string(original_path_file).unwrap_or_default();
                 if !original_path.is_empty() {
-                    Output::info(format!("Original hooks path: {original_path}"));
+                    Output::info(format!("  Chaining to original hooks: {original_path}"));
                 } else {
-                    Output::info("Original hooks path: (default .git/hooks)");
+                    Output::info("  Chaining to original hooks: .git/hooks");
                 }
             }
+            println!();
+        } else {
+            Output::warning("⚠️  Cascade hooks are NOT installed in this repository");
+            Output::tip("To install Cascade hooks:");
+            Output::bullet("Run: ca hooks install --all");
+            Output::bullet("This will preserve any existing hooks by chaining to them");
+            println!();
         }
 
         for hook in hooks {
