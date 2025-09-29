@@ -102,7 +102,7 @@ pub enum Commands {
         /// Actually delete branches (default is dry-run)
         #[arg(long)]
         execute: bool,
-        
+
         /// Force deletion even if branches have unmerged commits
         #[arg(long)]
         force: bool,
@@ -479,9 +479,7 @@ impl Cli {
 
             Commands::Tui => commands::tui::run().await,
 
-            Commands::Cleanup { execute, force } => {
-                commands::cleanup::run(execute, force).await
-            }
+            Commands::Cleanup { execute, force } => commands::cleanup::run(execute, force).await,
 
             Commands::Hooks { action } => match action {
                 HooksAction::Install {

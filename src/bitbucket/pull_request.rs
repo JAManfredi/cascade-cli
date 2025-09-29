@@ -305,7 +305,7 @@ impl PullRequestManager {
     }
 
     /// Get conflict information for a PR
-    /// 
+    ///
     /// NOTE: Currently unimplemented - always returns empty list.
     /// Proper implementation would parse diff for conflict markers or use
     /// Bitbucket's merge API to detect conflicts. In practice, the `mergeable`
@@ -1212,7 +1212,9 @@ mod tests {
         assert!(blocking_reasons.iter().any(|r| r.contains("Build failed")));
 
         // Check for approval requirement (now shows "No approvals yet" instead of specific count)
-        assert!(blocking_reasons.iter().any(|r| r.contains("No approvals yet")));
+        assert!(blocking_reasons
+            .iter()
+            .any(|r| r.contains("No approvals yet")));
     }
 
     #[test]

@@ -81,7 +81,7 @@ pub struct RebaseResult {
 }
 
 /// RAII guard to ensure temporary branches are cleaned up even on error/panic
-/// 
+///
 /// This stores branch names and provides a cleanup method that can be called
 /// with a GitRepository reference. The Drop trait ensures cleanup happens
 /// even if the rebase function panics or returns early with an error.
@@ -247,7 +247,7 @@ impl RebaseManager {
 
             // Generate temporary branch name for rebase
             let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
-            
+
             // Add to cleanup guard immediately - ensures cleanup even on error
             cleanup_guard.add_branch(temp_branch.clone());
 
@@ -1275,10 +1275,10 @@ mod tests {
     fn test_cleanup_guard_tracks_branches() {
         let mut guard = TempBranchCleanupGuard::new();
         assert!(guard.branches.is_empty());
-        
+
         guard.add_branch("test-branch-1".to_string());
         guard.add_branch("test-branch-2".to_string());
-        
+
         assert_eq!(guard.branches.len(), 2);
         assert_eq!(guard.branches[0], "test-branch-1");
         assert_eq!(guard.branches[1], "test-branch-2");
@@ -1286,31 +1286,31 @@ mod tests {
 
     #[test]
     fn test_cleanup_guard_prevents_double_cleanup() {
-        use tempfile::TempDir;
         use std::process::Command;
-        
+        use tempfile::TempDir;
+
         // Create a temporary git repo
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path();
-        
+
         Command::new("git")
             .args(["init"])
             .current_dir(repo_path)
             .output()
             .unwrap();
-        
+
         Command::new("git")
             .args(["config", "user.name", "Test"])
             .current_dir(repo_path)
             .output()
             .unwrap();
-        
+
         Command::new("git")
             .args(["config", "user.email", "test@test.com"])
             .current_dir(repo_path)
             .output()
             .unwrap();
-        
+
         // Create initial commit
         std::fs::write(repo_path.join("test.txt"), "test").unwrap();
         Command::new("git")
@@ -1323,19 +1323,19 @@ mod tests {
             .current_dir(repo_path)
             .output()
             .unwrap();
-        
+
         let git_repo = GitRepository::open(repo_path).unwrap();
-        
+
         // Create a test branch
         git_repo.create_branch("test-temp", None).unwrap();
-        
+
         let mut guard = TempBranchCleanupGuard::new();
         guard.add_branch("test-temp".to_string());
-        
+
         // First cleanup should work
         guard.cleanup(&git_repo);
         assert!(guard.cleaned);
-        
+
         // Second cleanup should be a no-op (shouldn't panic)
         guard.cleanup(&git_repo);
         assert!(guard.cleaned);

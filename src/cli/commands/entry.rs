@@ -119,7 +119,7 @@ async fn checkout_entry(
     let already_in_edit_mode = manager.is_in_edit_mode();
     let edit_mode_display = if already_in_edit_mode {
         let edit_info = manager.get_edit_mode_info().unwrap();
-        
+
         // Get the commit message for the current edit target
         let commit_message = if let Some(target_entry_id) = &edit_info.target_entry_id {
             if let Some(entry) = active_stack
@@ -134,12 +134,12 @@ async fn checkout_entry(
         } else {
             "Unknown target".to_string()
         };
-        
+
         Some((edit_info.original_commit_hash.clone(), commit_message))
     } else {
         None
     };
-    
+
     // Let the active_stack reference go out of scope before we potentially mutably borrow manager
     let _ = active_stack;
 

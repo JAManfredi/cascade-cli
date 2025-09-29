@@ -408,13 +408,15 @@ impl TuiApp {
 
             f.render_widget(summary, area);
         } else {
-            let empty = Paragraph::new("No stacks available.\n\nExit (q) and use 'ca stack create' to create a stack.")
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("📊 Stack Info"),
-                )
-                .alignment(Alignment::Center);
+            let empty = Paragraph::new(
+                "No stacks available.\n\nExit (q) and use 'ca stack create' to create a stack.",
+            )
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("📊 Stack Info"),
+            )
+            .alignment(Alignment::Center);
             f.render_widget(empty, area);
         }
     }

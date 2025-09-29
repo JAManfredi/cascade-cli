@@ -6,9 +6,8 @@ use std::env;
 
 /// Run the cleanup command to remove orphaned temporary branches
 pub async fn run(execute: bool, force: bool) -> Result<()> {
-    let repo_path = env::current_dir().map_err(|e| {
-        CascadeError::config(format!("Failed to get current directory: {e}"))
-    })?;
+    let repo_path = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Failed to get current directory: {e}")))?;
 
     let git_repo = GitRepository::open(&repo_path)?;
 
@@ -32,7 +31,7 @@ pub async fn run(execute: bool, force: bool) -> Result<()> {
     // Analyze each temp branch
     for branch_name in &temp_branches {
         let branch_info = analyze_temp_branch(&git_repo, branch_name)?;
-        
+
         Output::sub_item(format!("  {} {}", branch_name, branch_info));
     }
 
@@ -46,7 +45,10 @@ pub async fn run(execute: bool, force: bool) -> Result<()> {
     }
 
     // Actually delete the branches
-    Output::section(format!("Deleting {} temporary branches...", temp_branches.len()));
+    Output::section(format!(
+        "Deleting {} temporary branches...",
+        temp_branches.len()
+    ));
 
     let mut deleted = 0;
     let mut failed = 0;
@@ -70,11 +72,11 @@ pub async fn run(execute: bool, force: bool) -> Result<()> {
     }
 
     println!(); // Blank line
-    
+
     if deleted > 0 {
         Output::success(format!("✓ Successfully deleted {} branches", deleted));
     }
-    
+
     if failed > 0 {
         Output::warning(format!("⚠️  {} branches could not be deleted", failed));
     }
@@ -86,13 +88,13 @@ pub async fn run(execute: bool, force: bool) -> Result<()> {
 fn analyze_temp_branch(git_repo: &GitRepository, branch_name: &str) -> Result<String> {
     // Try to extract timestamp from branch name (format: *-temp-1234567890)
     let parts: Vec<&str> = branch_name.split("-temp-").collect();
-    
+
     if parts.len() == 2 {
         if let Ok(timestamp) = parts[1].parse::<i64>() {
             if let Some(created_at) = DateTime::from_timestamp(timestamp, 0) {
                 let now = Utc::now();
                 let age = now.signed_duration_since(created_at);
-                
+
                 if age.num_days() > 0 {
                     return Ok(format!("(created {} days ago)", age.num_days()));
                 } else if age.num_hours() > 0 {

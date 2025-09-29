@@ -968,7 +968,11 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                             println!(
                                 "      Reviews: {} approval{}",
                                 enhanced.review_status.current_approvals,
-                                if enhanced.review_status.current_approvals == 1 { "" } else { "s" }
+                                if enhanced.review_status.current_approvals == 1 {
+                                    ""
+                                } else {
+                                    "s"
+                                }
                             );
 
                             if enhanced.review_status.needs_work_count > 0 {
