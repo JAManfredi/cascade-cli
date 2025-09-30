@@ -713,3 +713,38 @@ pub async fn create_temp_repo_with_commits(count: u32) -> (TempDir, PathBuf) {
     
     (temp_dir, repo_path)
 }
+
+/// Run a git commit with a message
+pub fn git_commit(repo_path: &Path, message: &str) {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["commit", "-m", message])
+        .output()
+        .expect("Failed to run git commit");
+    
+    assert!(output.status.success(), "git commit failed: {}", String::from_utf8_lossy(&output.stderr));
+}
+
+/// Run a git command
+pub fn git_command(repo_path: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(args)
+        .output()
+        .expect("Failed to run git command");
+    
+    assert!(output.status.success(), "git command failed: {}", String::from_utf8_lossy(&output.stderr));
+}
+
+/// Run ca command and return output (uses target/debug/ca binary)
+pub fn run_ca_command(repo_path: &Path, args: &[&str]) -> std::process::Output {
+    // Use the debug binary from cargo build
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let ca_binary = Path::new(manifest_dir).join("target/debug/ca");
+    
+    Command::new(&ca_binary)
+        .current_dir(repo_path)
+        .args(args)
+        .output()
+        .expect("Failed to run ca command - make sure 'cargo build' has been run")
+}
