@@ -502,8 +502,7 @@ impl BitbucketIntegration {
                                         "🔄 **Automatic rebase completed**\n\n\
                                         This PR has been automatically rebased onto the latest `{}`.\n\
                                         - Updated commit: `{}`\n\
-                                        - All review history and comments are preserved\n\n\
-                                        _Note: If you amended your commits, those changes are included in this update._",
+                                        - All review history and comments are preserved",
                                         stack.base_branch,
                                         &entry.commit_hash[..8]
                                     );
