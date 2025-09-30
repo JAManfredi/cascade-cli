@@ -225,6 +225,22 @@ impl StackManager {
             }
         }
 
+        // Clear edit mode when switching stacks or deactivating
+        // Edit mode is tied to a specific stack context
+        if self.is_in_edit_mode() {
+            if let Some(edit_info) = self.get_edit_mode_info() {
+                // If switching to a different stack, clear edit mode
+                if edit_info.target_stack_id != stack_id {
+                    tracing::debug!(
+                        "Clearing edit mode when switching from stack {:?} to {:?}",
+                        edit_info.target_stack_id,
+                        stack_id
+                    );
+                    self.exit_edit_mode()?;
+                }
+            }
+        }
+
         // Update active flag on stacks
         for stack in self.stacks.values_mut() {
             stack.set_active(Some(stack.id) == stack_id);
