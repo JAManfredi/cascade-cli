@@ -8,7 +8,7 @@ use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::info;
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// Types of branch modifications detected during Git integrity checks
@@ -609,7 +609,7 @@ impl StackManager {
         self.metadata.edit_mode = Some(edit_state);
         self.save_to_disk()?;
 
-        info!(
+        debug!(
             "Entered edit mode for entry {} in stack {}",
             entry_id, stack_id
         );

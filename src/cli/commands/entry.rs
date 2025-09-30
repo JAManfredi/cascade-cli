@@ -19,7 +19,7 @@ use ratatui::{
 };
 use std::env;
 use std::io;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Subcommand)]
 pub enum EntryAction {
@@ -228,19 +228,22 @@ async fn checkout_entry(
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
     let repo = crate::git::GitRepository::open(&repo_root)?;
 
-    info!("Checking out commit: {}", entry_commit_hash);
+    debug!("Checking out commit: {}", entry_commit_hash);
     repo.checkout_commit(&entry_commit_hash)?;
 
     Output::success(format!("Entered edit mode for entry #{target_entry_num}"));
     Output::sub_item(format!(
-        "You are now on commit: {entry_short_hash} ({entry_short_message})"
+        "You are now on commit: {} ({})",
+        entry_short_hash,
+        entry_short_message
     ));
     Output::sub_item(format!("Branch: {entry_branch}"));
 
     Output::section("Make your changes and commit normally");
     Output::bullet("Use 'ca entry status' to see edit mode info");
-    Output::bullet("Use 'git commit --amend' to modify this entry");
-    Output::bullet("Use 'git commit' to create a new entry on top");
+    Output::bullet("When you commit, the pre-commit hook will guide you:");
+    Output::sub_item("  → Press Enter (or 'A') to amend this entry");
+    Output::sub_item("  → Type 'n' to create new entry on top");
     Output::bullet("Run 'ca sync' after committing to update PRs");
 
     // Check if prepare-commit-msg hook is installed

@@ -451,10 +451,11 @@ impl StackEntry {
 
     /// Get a short version of the commit message
     pub fn short_message(&self, max_len: usize) -> String {
-        if self.message.len() > max_len {
-            format!("{}...", &self.message[..max_len])
+        let trimmed = self.message.trim();
+        if trimmed.len() > max_len {
+            format!("{}...", &trimmed[..max_len])
         } else {
-            self.message.clone()
+            trimmed.to_string()
         }
     }
 }
