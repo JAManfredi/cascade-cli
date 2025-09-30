@@ -153,7 +153,7 @@ impl PullRequestManager {
 
     /// Add a comment to a pull request explaining the branch update
     pub async fn add_comment(&self, pr_id: u64, comment: &str) -> Result<()> {
-        info!("Adding comment to PR #{}", pr_id);
+        debug!("Adding comment to PR #{}", pr_id);
 
         #[derive(Serialize)]
         struct CommentRequest {
@@ -167,7 +167,7 @@ impl PullRequestManager {
         let path = format!("pull-requests/{pr_id}/comments");
         let _: serde_json::Value = self.client.post(&path, &comment_body).await?;
 
-        info!("Added comment to PR #{}", pr_id);
+        debug!("Added comment to PR #{}", pr_id);
         Ok(())
     }
 

@@ -332,13 +332,31 @@ impl GitRepository {
 
     /// Force-push a single branch to remote (simpler version for when branch is already updated locally)
     pub fn force_push_single_branch(&self, branch_name: &str) -> Result<()> {
+        self.force_push_single_branch_with_options(branch_name, false)
+    }
+
+    /// Force push with option to skip user confirmation (for automated operations like sync)
+    pub fn force_push_single_branch_auto(&self, branch_name: &str) -> Result<()> {
+        self.force_push_single_branch_with_options(branch_name, true)
+    }
+
+    fn force_push_single_branch_with_options(
+        &self,
+        branch_name: &str,
+        auto_confirm: bool,
+    ) -> Result<()> {
         // Fetch first to ensure we have latest remote state for safety checks
         if let Err(e) = self.fetch() {
             tracing::warn!("Could not fetch before force push: {}", e);
         }
 
         // Check safety and create backup if needed
-        let safety_result = self.check_force_push_safety_enhanced(branch_name)?;
+        let safety_result = if auto_confirm {
+            self.check_force_push_safety_auto(branch_name)?
+        } else {
+            self.check_force_push_safety_enhanced(branch_name)?
+        };
+
         if let Some(backup_info) = safety_result {
             self.create_backup_branch(branch_name, &backup_info.remote_commit_id)?;
         }
@@ -1269,7 +1287,7 @@ impl GitRepository {
             )
             .map_err(CascadeError::Git)?;
 
-        tracing::info!("Cherry-picked {} -> {}", commit_hash, new_commit_oid);
+        tracing::debug!("Cherry-picked {} -> {}", commit_hash, new_commit_oid);
         Ok(new_commit_oid.to_string())
     }
 
@@ -1652,7 +1670,7 @@ impl GitRepository {
             .map_err(|e| CascadeError::branch(format!("Failed to execute git command: {e}")))?;
 
         if output.status.success() {
-            tracing::info!("✅ Git CLI force push succeeded for branch: {}", branch);
+            tracing::debug!("Git CLI force push succeeded for branch: {}", branch);
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1749,7 +1767,7 @@ impl GitRepository {
         source_branch: &str,
         force_unsafe: bool,
     ) -> Result<()> {
-        info!(
+        debug!(
             "Force pushing {} content to {} to preserve PR history",
             source_branch, target_branch
         );
@@ -1760,10 +1778,7 @@ impl GitRepository {
             if let Some(backup_info) = safety_result {
                 // Create backup branch before force push
                 self.create_backup_branch(target_branch, &backup_info.remote_commit_id)?;
-                info!(
-                    "✅ Created backup branch: {}",
-                    backup_info.backup_branch_name
-                );
+                debug!("Created backup branch: {}", backup_info.backup_branch_name);
             }
         }
 
@@ -1965,6 +1980,70 @@ impl GitRepository {
         Ok(None)
     }
 
+    /// Check force push safety without user confirmation (auto-creates backup)
+    /// Used for automated operations like sync where user already confirmed the operation
+    fn check_force_push_safety_auto(&self, target_branch: &str) -> Result<Option<ForceBackupInfo>> {
+        // First fetch latest remote changes to ensure we have up-to-date information
+        match self.fetch() {
+            Ok(_) => {}
+            Err(e) => {
+                warn!("Could not fetch latest changes for safety check: {}", e);
+            }
+        }
+
+        // Check if there are commits on the remote that would be lost
+        let remote_ref = format!("refs/remotes/origin/{target_branch}");
+        let local_ref = format!("refs/heads/{target_branch}");
+
+        // Try to find both local and remote references
+        let local_commit = match self.repo.find_reference(&local_ref) {
+            Ok(reference) => reference.peel_to_commit().ok(),
+            Err(_) => None,
+        };
+
+        let remote_commit = match self.repo.find_reference(&remote_ref) {
+            Ok(reference) => reference.peel_to_commit().ok(),
+            Err(_) => None,
+        };
+
+        // If we have both commits, check for divergence
+        if let (Some(local), Some(remote)) = (local_commit, remote_commit) {
+            if local.id() != remote.id() {
+                // Check if the remote has commits that the local doesn't have
+                let merge_base_oid = self
+                    .repo
+                    .merge_base(local.id(), remote.id())
+                    .map_err(|e| CascadeError::config(format!("Failed to find merge base: {e}")))?;
+
+                // If merge base != remote commit, remote has commits that would be lost
+                if merge_base_oid != remote.id() {
+                    let commits_to_lose = self.count_commits_between(
+                        &merge_base_oid.to_string(),
+                        &remote.id().to_string(),
+                    )?;
+
+                    // Create backup branch name with timestamp
+                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+                    let backup_branch_name = format!("{target_branch}_backup_{timestamp}");
+
+                    debug!(
+                        "Auto-creating backup for force push to '{}' (would overwrite {} commits)",
+                        target_branch, commits_to_lose
+                    );
+
+                    // Automatically create backup without confirmation
+                    return Ok(Some(ForceBackupInfo {
+                        backup_branch_name,
+                        remote_commit_id: remote.id().to_string(),
+                        commits_that_would_be_lost: commits_to_lose,
+                    }));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
     /// Create a backup branch pointing to the remote commit that would be lost
     fn create_backup_branch(&self, original_branch: &str, remote_commit_id: &str) -> Result<()> {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
@@ -1989,8 +2068,8 @@ impl GitRepository {
                 ))
             })?;
 
-        info!(
-            "✅ Created backup branch '{}' pointing to {}",
+        debug!(
+            "Created backup branch '{}' pointing to {}",
             backup_branch_name,
             &remote_commit_id[..8]
         );

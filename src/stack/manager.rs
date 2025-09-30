@@ -706,13 +706,13 @@ impl StackManager {
         // Update stack status based on sync needs
         if needs_sync {
             stack.update_status(StackStatus::NeedsSync);
-            info!(
+            debug!(
                 "Stack '{}' needs sync - new commits on base branch",
                 stack.name
             );
         } else {
             stack.update_status(StackStatus::Clean);
-            info!("Stack '{}' is clean", stack.name);
+            debug!("Stack '{}' is clean", stack.name);
         }
 
         // Update metadata

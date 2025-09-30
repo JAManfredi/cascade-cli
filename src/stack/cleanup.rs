@@ -117,7 +117,7 @@ impl CleanupManager {
 
     /// Find all branches that are candidates for cleanup
     pub fn find_cleanup_candidates(&self) -> Result<Vec<CleanupCandidate>> {
-        info!("Scanning for cleanup candidates...");
+        debug!("Scanning for cleanup candidates...");
 
         let mut candidates = Vec::new();
         let all_branches = self.git_repo.list_branches()?;
@@ -170,7 +170,7 @@ impl CleanupManager {
             }
         }
 
-        info!("Found {} cleanup candidates", candidates.len());
+        debug!("Found {} cleanup candidates", candidates.len());
         Ok(candidates)
     }
 

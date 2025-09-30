@@ -8,7 +8,7 @@ use crate::config::CascadeConfig;
 use crate::errors::{CascadeError, Result};
 use crate::stack::{Stack, StackEntry, StackManager};
 use std::collections::HashMap;
-use tracing::{error, info, warn};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 /// High-level integration between stacks and Bitbucket
@@ -446,7 +446,7 @@ impl BitbucketIntegration {
         stack_id: &Uuid,
         branch_mapping: &HashMap<String, String>,
     ) -> Result<Vec<String>> {
-        info!(
+        debug!(
             "Updating pull requests after rebase for stack {} using smart force push",
             stack_id
         );
@@ -465,7 +465,7 @@ impl BitbucketIntegration {
                 (&entry.pull_request_id, branch_mapping.get(&entry.branch))
             {
                 if let Ok(pr_id) = pr_id_str.parse::<u64>() {
-                    info!(
+                    debug!(
                         "Found existing PR #{} for entry {}, updating branch {} -> {}",
                         pr_id, entry.id, entry.branch, new_branch
                     );
@@ -492,8 +492,8 @@ impl BitbucketIntegration {
                                 .force_push_branch(&entry.branch, new_branch)
                             {
                                 Ok(_) => {
-                                    info!(
-                                        "✅ Successfully force-pushed {} to preserve PR #{}",
+                                    debug!(
+                                        "Successfully force-pushed {} to preserve PR #{}",
                                         entry.branch, pr_id
                                     );
 
@@ -550,7 +550,7 @@ impl BitbucketIntegration {
                 }
             } else if branch_mapping.contains_key(&entry.branch) {
                 // This entry was remapped but doesn't have a PR yet
-                info!(
+                debug!(
                     "Entry {} was remapped but has no PR - no action needed",
                     entry.id
                 );
@@ -558,7 +558,7 @@ impl BitbucketIntegration {
         }
 
         if !updated_branches.is_empty() {
-            info!(
+            debug!(
                 "Successfully updated {} PRs using smart force push strategy",
                 updated_branches.len()
             );

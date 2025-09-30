@@ -175,7 +175,7 @@ impl RebaseManager {
 
     /// Rebase an entire stack onto a new base
     pub fn rebase_stack(&mut self, stack_id: &Uuid) -> Result<RebaseResult> {
-        info!("Starting rebase for stack {}", stack_id);
+        debug!("Starting rebase for stack {}", stack_id);
 
         let stack = self
             .stack_manager
@@ -279,7 +279,9 @@ impl RebaseManager {
 
                         // NOW do the actual force-push to remote (git push --force origin <branch>)
                         // This updates the PR with the rebased commits
-                        self.git_repo.force_push_single_branch(original_branch)?;
+                        // Use auto-confirm version since user already confirmed sync operation
+                        self.git_repo
+                            .force_push_single_branch_auto(original_branch)?;
                         pushed_count += 1;
                     } else {
                         let tree_char = if index + 1 == entry_count {
