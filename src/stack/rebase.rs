@@ -254,11 +254,12 @@ impl RebaseManager {
                     // Get the commit that's now at HEAD (the cherry-picked commit)
                     let rebased_commit_id = self.git_repo.get_head_commit()?.id().to_string();
 
-                    // Update the original branch to point to this rebased commit
-                    // This updates the local branch ref - no network traffic
+                    // Update the local branch pointer to the rebased commit
+                    // This is LOCAL ONLY - just moves refs/heads/<branch> to new commit (like git branch -f)
+                    // No network traffic, no force-push yet
                     self.git_repo.update_branch_to_commit(original_branch, &rebased_commit_id)?;
 
-                    // Only force-push if this entry has a PR
+                    // Only force-push to REMOTE if this entry has a PR
                     if entry.pull_request_id.is_some() {
                         let pr_num = entry.pull_request_id.as_ref().unwrap();
                         Output::progress(&format!(
@@ -268,8 +269,8 @@ impl RebaseManager {
                             pr_num
                         ));
                         
-                        // Force-push the updated branch to remote to update the PR
-                        // Push original_branch (which now points to rebased commit) to remote
+                        // NOW do the actual force-push to remote (git push --force origin <branch>)
+                        // This updates the PR with the rebased commits
                         self.git_repo.force_push_single_branch(original_branch)?;
                         pushed_count += 1;
                     } else {
