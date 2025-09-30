@@ -500,11 +500,11 @@ impl BitbucketIntegration {
                                     // Add a comment explaining the rebase
                                     let rebase_comment = format!(
                                         "🔄 **Automatic rebase completed**\n\n\
-                                        This PR has been automatically rebased to incorporate the latest changes.\n\
-                                        - Original commits: `{}`\n\
-                                        - New base: Latest main branch\n\
+                                        This PR has been automatically rebased onto the latest `{}`.\n\
+                                        - Updated commit: `{}`\n\
                                         - All review history and comments are preserved\n\n\
-                                        The changes in this PR remain the same - only the base has been updated.",
+                                        _Note: If you amended your commits, those changes are included in this update._",
+                                        stack.base_branch,
                                         &entry.commit_hash[..8]
                                     );
 
