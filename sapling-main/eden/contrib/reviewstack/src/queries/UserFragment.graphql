@@ -1,5 +1,0 @@
-fragment UserFragment on User {
-  __typename
-  id
-  ...ActorFragment
-}

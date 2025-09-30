@@ -1,7 +1,0 @@
-node_modules
-isl-server/coverage
-shared/coverage/
-components/coverage/
-vscode-build/
-/*.tar.xz
-*/vite.config*.timestamp-*.mjs

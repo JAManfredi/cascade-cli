@@ -1,9 +1,0 @@
-# This is a TOML document.
-
-title = "Scm Daemon configuration example"
-
-[owner]
-authors = ["Source Control Team"]
-
-[commitcloud]
-polling_update_url = "https://example-endpoint.com/commit_cloud/updates/poll"

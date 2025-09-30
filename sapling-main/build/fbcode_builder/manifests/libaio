@@ -1,8 +1,0 @@
-[manifest]
-name = libaio
-
-[debs]
-libaio-dev
-
-[rpms.distro=centos_stream]
-libaio-devel
