@@ -617,6 +617,7 @@ ca submit --title <title>                    # Custom PR title
 ca submit -t <title>                         # Short form
 ca submit --description <desc>               # Custom PR description
 ca submit -d <desc>                          # Short form
+ca submit --draft                            # Create as draft PR (can be edited later)
 
 # Batch submission
 ca submit                                    # Submit all unsubmitted entries
