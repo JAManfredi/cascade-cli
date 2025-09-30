@@ -1385,62 +1385,49 @@ impl GitRepository {
         // Get current HEAD
         let head_commit = self.get_head_commit()?;
 
-        // Check if we need to merge
+        // Check if already up to date
         if head_commit.id() == remote_commit.id() {
             tracing::debug!("Already up to date");
             return Ok(());
         }
 
-        // Perform merge
-        let head_tree = head_commit.tree().map_err(CascadeError::Git)?;
-        let remote_tree = remote_commit.tree().map_err(CascadeError::Git)?;
-
-        // Find merge base
+        // Check if we can fast-forward (local is ancestor of remote)
         let merge_base_oid = self
             .repo
             .merge_base(head_commit.id(), remote_commit.id())
             .map_err(CascadeError::Git)?;
-        let merge_base_commit = self
-            .repo
-            .find_commit(merge_base_oid)
-            .map_err(CascadeError::Git)?;
-        let merge_base_tree = merge_base_commit.tree().map_err(CascadeError::Git)?;
 
-        // 3-way merge
-        let mut index = self
-            .repo
-            .merge_trees(&merge_base_tree, &head_tree, &remote_tree, None)
-            .map_err(CascadeError::Git)?;
-
-        if index.has_conflicts() {
-            return Err(CascadeError::branch(
-                "Pull has conflicts that need manual resolution".to_string(),
-            ));
+        if merge_base_oid == head_commit.id() {
+            // Fast-forward: local is direct ancestor of remote, just move pointer
+            tracing::debug!("Fast-forwarding {} to {}", branch, remote_commit.id());
+            
+            // Update the branch reference to point to remote commit
+            let refname = format!("refs/heads/{}", branch);
+            self.repo.reference(&refname, remote_oid, true, "pull: Fast-forward")
+                .map_err(CascadeError::Git)?;
+            
+            // Update HEAD to point to the new commit
+            self.repo.set_head(&refname).map_err(CascadeError::Git)?;
+            
+            // Checkout the new commit (update working directory)
+            self.repo.checkout_head(Some(
+                git2::build::CheckoutBuilder::new()
+                    .force()
+                    .remove_untracked(false)
+            )).map_err(CascadeError::Git)?;
+            
+            tracing::info!("Fast-forwarded to {}", remote_commit.id());
+            return Ok(());
         }
 
-        // Write merged tree and create merge commit
-        let merged_tree_oid = index.write_tree_to(&self.repo).map_err(CascadeError::Git)?;
-        let merged_tree = self
-            .repo
-            .find_tree(merged_tree_oid)
-            .map_err(CascadeError::Git)?;
-
-        let signature = self.get_signature()?;
-        let message = format!("Merge branch '{branch}' from origin");
-
-        self.repo
-            .commit(
-                Some("HEAD"),
-                &signature,
-                &signature,
-                &message,
-                &merged_tree,
-                &[&head_commit, &remote_commit],
-            )
-            .map_err(CascadeError::Git)?;
-
-        tracing::info!("Pull completed successfully");
-        Ok(())
+        // If we can't fast-forward, the local branch has diverged
+        // This should NOT happen on protected branches!
+        Err(CascadeError::branch(format!(
+            "Branch '{}' has diverged from remote. Local has commits not in remote. \
+             Protected branches should not have local commits. \
+             Try: git reset --hard origin/{}",
+            branch, branch
+        )))
     }
 
     /// Push current branch to remote
