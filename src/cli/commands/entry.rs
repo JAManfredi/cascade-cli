@@ -19,7 +19,7 @@ use ratatui::{
 };
 use std::env;
 use std::io;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 #[derive(Debug, Subcommand)]
 pub enum EntryAction {
@@ -115,7 +115,6 @@ async fn checkout_entry(
     // Clone the values we need before borrowing manager mutably
     let stack_id = active_stack.id;
     let entry_id = target_entry.id;
-    let entry_commit_hash = target_entry.commit_hash.clone();
     let entry_branch = target_entry.branch.clone();
     let entry_short_hash = target_entry.short_hash();
     let entry_short_message = target_entry.short_message(50);
@@ -220,7 +219,7 @@ async fn checkout_entry(
     // Enter edit mode
     manager.enter_edit_mode(stack_id, entry_id)?;
 
-    // Checkout the commit
+    // Checkout the branch (not the commit - we want to stay on the branch)
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -228,14 +227,13 @@ async fn checkout_entry(
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
     let repo = crate::git::GitRepository::open(&repo_root)?;
 
-    debug!("Checking out commit: {}", entry_commit_hash);
-    repo.checkout_commit(&entry_commit_hash)?;
+    debug!("Checking out branch: {}", entry_branch);
+    repo.checkout_branch(&entry_branch)?;
 
     Output::success(format!("Entered edit mode for entry #{target_entry_num}"));
     Output::sub_item(format!(
         "You are now on commit: {} ({})",
-        entry_short_hash,
-        entry_short_message
+        entry_short_hash, entry_short_message
     ));
     Output::sub_item(format!("Branch: {entry_branch}"));
 
