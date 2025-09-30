@@ -1,6 +1,7 @@
 use crate::errors::{CascadeError, Result};
 use crate::git::{ConflictAnalyzer, GitRepository};
 use crate::stack::{Stack, StackManager};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
@@ -209,19 +210,20 @@ impl RebaseManager {
             .options
             .target_base
             .as_ref()
-            .unwrap_or(&stack.base_branch);
+            .unwrap_or(&stack.base_branch)
+            .clone(); // Clone to avoid borrow issues
 
         // Save original working branch to restore later
         let original_branch = self.git_repo.get_current_branch().ok();
 
         // Ensure we're on the base branch
-        if self.git_repo.get_current_branch()? != *target_base {
-            self.git_repo.checkout_branch(target_base)?;
+        if self.git_repo.get_current_branch()? != target_base {
+            self.git_repo.checkout_branch(&target_base)?;
         }
 
         // Only pull if not already done by caller (like sync command)
         if !self.options.skip_pull.unwrap_or(false) {
-            if let Err(e) = self.pull_latest_changes(target_base) {
+            if let Err(e) = self.pull_latest_changes(&target_base) {
                 Output::warning(&format!("Could not pull latest changes: {}", e));
             }
         }
@@ -235,6 +237,7 @@ impl RebaseManager {
         let entry_count = stack.entries.len();
         let mut pushed_count = 0;
         let mut skipped_count = 0;
+        let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
 
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
@@ -243,12 +246,14 @@ impl RebaseManager {
         for (index, entry) in stack.entries.iter().enumerate() {
             let original_branch = &entry.branch;
 
-            // Checkout current base (where we'll apply the cherry-pick)
-            if self.git_repo.get_current_branch()? != current_base {
-                self.git_repo.checkout_branch(&current_base)?;
-            }
+            // Create a temporary branch from the current base
+            // This avoids committing directly to protected branches like develop/main
+            let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
+            temp_branches.push(temp_branch.clone()); // Track for cleanup
+            self.git_repo.create_branch(&temp_branch, Some(&current_base))?;
+            self.git_repo.checkout_branch(&temp_branch)?;
 
-            // Cherry-pick the commit onto the current branch
+            // Cherry-pick the commit onto the temp branch (NOT the protected base!)
             match self.cherry_pick_commit(&entry.commit_hash) {
                 Ok(new_commit_hash) => {
                     result.new_commits.push(new_commit_hash.clone());
@@ -256,9 +261,8 @@ impl RebaseManager {
                     // Get the commit that's now at HEAD (the cherry-picked commit)
                     let rebased_commit_id = self.git_repo.get_head_commit()?.id().to_string();
 
-                    // Update the local branch pointer to the rebased commit
-                    // This is LOCAL ONLY - just moves refs/heads/<branch> to new commit (like git branch -f)
-                    // No network traffic, no force-push yet
+                    // Update the original branch to point to this rebased commit
+                    // This is LOCAL ONLY - moves refs/heads/<branch> to the commit on temp branch
                     self.git_repo.update_branch_to_commit(original_branch, &rebased_commit_id)?;
 
                     // Only force-push to REMOTE if this entry has a PR
@@ -315,6 +319,22 @@ impl RebaseManager {
                             break;
                         }
                     }
+                }
+            }
+        }
+
+        // Cleanup temp branches before returning to original branch
+        // Must checkout away from temp branches first
+        if !temp_branches.is_empty() {
+            // Checkout base branch to allow temp branch deletion
+            if let Err(e) = self.git_repo.checkout_branch(&target_base) {
+                Output::warning(&format!("Could not checkout base for cleanup: {}", e));
+            }
+            
+            // Delete all temp branches
+            for temp_branch in &temp_branches {
+                if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
+                    debug!("Could not delete temp branch {}: {}", temp_branch, e);
                 }
             }
         }
