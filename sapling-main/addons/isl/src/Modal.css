@@ -1,0 +1,49 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.modal {
+  position: fixed;
+  width: calc(100vw / var(--zoom, 1));
+  height: calc(100vh / var(--zoom, 1));
+  background-color: rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  left: 0;
+  top: 0;
+}
+
+.dark-theme .modal,
+.vscode-dark .modal {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-contents {
+  background-color: var(--background);
+  --border-amt: calc(4 * var(--pad));
+  --padding-amt: calc(1 * var(--pad));
+  margin: var(--border-amt);
+  padding: var(--padding-amt);
+  padding-bottom: 0;
+  background-color: var(--background);
+  border-radius: 8px;
+  box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.3);
+  height: calc((100vh / var(--zoom, 1)) - 2 * var(--border-amt) - 2 * var(--padding-amt));
+  width: calc((100vw / var(--zoom, 1)) - 2 * var(--border-amt) - 2 * var(--padding-amt));
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.dismiss-modal {
+  display: flex;
+  position: absolute;
+  top: var(--pad);
+  right: var(--pad);
+  z-index: 10;
+}

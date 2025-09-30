@@ -1,0 +1,86 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+use cliparser::define_flags;
+
+define_flags! {
+    pub struct HgGlobalOpts {
+        /// repository root directory or name of overlay bundle file
+        #[short('R')]
+        repository: String,
+
+        /// change working directory
+        cwd: String,
+
+        /// do not prompt, automatically pick the first choice for all prompts
+        #[short('y')]
+        noninteractive: bool,
+
+        /// suppress output
+        #[short('q')]
+        quiet: bool,
+
+        /// enable additional output
+        #[short('v')]
+        verbose: bool,
+
+        /// when to colorize (boolean, always, auto, never, or debug)
+        color: String,
+
+        /// set/override config option (use 'section.name=value')
+        config: Vec<String>,
+
+        /// enables the given config file
+        configfile: Vec<String>,
+
+        /// enable debugging output
+        debug: bool,
+
+        /// start debugger
+        debugger: bool,
+
+        /// set the charset encoding
+        encoding: String,
+
+        /// set the charset encoding mode
+        encodingmode: String = "strict",
+
+        /// do not verify server certificate
+        insecure: bool,
+
+        /// always print a traceback on exception
+        traceback: bool,
+
+        /// enable more detailed tracing
+        trace: bool,
+
+        /// time how long the command takes
+        time: bool,
+
+        /// print command execution profile
+        profile: bool,
+
+        /// output version information and exit
+        version: bool,
+
+        /// display help and exit
+        #[short('h')]
+        help: bool,
+
+        /// consider hidden changesets
+        hidden: bool,
+
+        /// when to paginate (boolean, always, auto, or never)
+        pager: String = "auto",
+
+        /// why this runs, usually set by automation (ADVANCED)
+        reason: Vec<String>,
+
+        #[args]
+        args: Vec<String>,
+    }
+}

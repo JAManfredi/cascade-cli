@@ -1,0 +1,29 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.top-bar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--pad);
+  background-color: var(--background);
+  margin-left: var(--halfpad);
+  gap: var(--pad);
+  position: sticky;
+  top: 0;
+  /* Should > .changed-file z-index */
+  z-index: 11;
+}
+
+.top-bar .button-group {
+  display: flex;
+  gap: var(--pad);
+  align-items: center;
+  flex-grow: 1;
+}

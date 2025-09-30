@@ -1,0 +1,490 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This software may be used and distributed according to the terms of the
+ * GNU General Public License version 2.
+ */
+
+use anyhow::Result;
+use async_trait::async_trait;
+use bookmarks::BookmarkKey;
+use context::CoreContext;
+use mononoke_types::BonsaiChangeset;
+use regex::Regex;
+use serde::Deserialize;
+
+use crate::ChangesetHook;
+use crate::CrossRepoPushSource;
+use crate::HookConfig;
+use crate::HookExecution;
+use crate::HookRejectionInfo;
+use crate::HookRepo;
+use crate::PushAuthoredBy;
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LimitCommitSizeConfig {
+    /// The total number of bytes of added or modified files.
+    #[serde(default)]
+    commit_size_limit: Option<u64>,
+
+    /// The total number of changed files.
+    #[serde(default)]
+    changed_files_limit: Option<u64>,
+
+    /// Ignore paths.  These paths will be ignored for the purposes of
+    /// calculating the commit size or number of files.
+    #[serde(default, with = "serde_regex")]
+    ignore_path_regexes: Vec<Regex>,
+
+    /// Path-based overrides.  The limits can be increased if paths match
+    /// specific values.
+    #[serde(default)]
+    path_overrides: Vec<LimitCommitSizeOverride>,
+
+    /// Message to include in the hook rejection if the changed files limit is
+    /// exceeded, with the following replacements:
+    ///    ${limit} => the limit used
+    ///    ${count} => the number of changed files
+    too_many_files_message: String,
+
+    /// Message to include in the hook rejection if the commit size limit is
+    /// exceeded, with the following replacements:
+    ///    ${limit} => the limit used in bytes
+    ///    ${size} => the size of the commit in bytes
+    too_large_message: String,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct LimitCommitSizeOverride {
+    /// This override will increase the size limit if any path matches.
+    #[serde(with = "serde_regex")]
+    path_regex: Regex,
+
+    /// This override will increase the size limit to at least this value
+    /// (other overrides may increase it further).
+    #[serde(default)]
+    commit_size_limit: Option<u64>,
+}
+
+/// Hook to block commits that exceed a size limit, either in terms of bytes
+/// or number of files.
+#[derive(Clone, Debug)]
+pub struct LimitCommitSizeHook {
+    config: LimitCommitSizeConfig,
+}
+
+impl LimitCommitSizeHook {
+    pub fn new(config: &HookConfig) -> Result<Self> {
+        Self::with_config(config.parse_options()?)
+    }
+
+    pub fn with_config(config: LimitCommitSizeConfig) -> Result<Self> {
+        Ok(Self { config })
+    }
+}
+
+#[async_trait]
+impl ChangesetHook for LimitCommitSizeHook {
+    async fn run<'this: 'cs, 'ctx: 'this, 'cs, 'repo: 'cs>(
+        &'this self,
+        _ctx: &'ctx CoreContext,
+        _hook_repo: &'repo HookRepo,
+        _bookmark: &BookmarkKey,
+        changeset: &'cs BonsaiChangeset,
+        cross_repo_push_source: CrossRepoPushSource,
+        push_authored_by: PushAuthoredBy,
+    ) -> Result<HookExecution> {
+        if push_authored_by.service() {
+            return Ok(HookExecution::Accepted);
+        }
+        if cross_repo_push_source == CrossRepoPushSource::PushRedirected {
+            // For push-redirected commits, we rely on running source-repo hooks
+            return Ok(HookExecution::Accepted);
+        }
+
+        let mut commit_size_limit = self.config.commit_size_limit;
+        let mut commit_size = 0;
+        let mut changed_files = 0;
+
+        for (path, file_change) in changeset.file_changes() {
+            let path = path.to_string();
+
+            if let Some(override_commit_size_limit) = self
+                .config
+                .path_overrides
+                .iter()
+                .filter_map(|path_override| {
+                    path_override
+                        .commit_size_limit
+                        .filter(|_| path_override.path_regex.is_match(&path))
+                })
+                .max()
+            {
+                commit_size_limit = Some(
+                    commit_size_limit.map_or(override_commit_size_limit, |commit_size_limit| {
+                        u64::max(commit_size_limit, override_commit_size_limit)
+                    }),
+                );
+            }
+
+            if self
+                .config
+                .ignore_path_regexes
+                .iter()
+                .any(|regex| regex.is_match(&path))
+            {
+                continue;
+            }
+
+            changed_files += 1;
+            commit_size += file_change.size().unwrap_or(0);
+        }
+
+        if let Some(changed_files_limit) = self.config.changed_files_limit {
+            if changed_files > changed_files_limit {
+                return Ok(HookExecution::Rejected(HookRejectionInfo::new_long(
+                    "Commit too large",
+                    self.config
+                        .too_many_files_message
+                        .replace("${count}", &changed_files.to_string())
+                        .replace("${limit}", &changed_files_limit.to_string()),
+                )));
+            }
+        }
+
+        if let Some(commit_size_limit) = commit_size_limit {
+            if commit_size > commit_size_limit {
+                return Ok(HookExecution::Rejected(HookRejectionInfo::new_long(
+                    "Commit too large",
+                    self.config
+                        .too_large_message
+                        .replace("${size}", &commit_size.to_string())
+                        .replace("${limit}", &commit_size_limit.to_string()),
+                )));
+            }
+        }
+
+        Ok(HookExecution::Accepted)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Error;
+    use anyhow::anyhow;
+    use blobstore::Loadable;
+    use borrowed::borrowed;
+    use fbinit::FacebookInit;
+    use hook_manager::HookRepo;
+    use hook_manager_testlib::HookTestRepo;
+    use mononoke_macros::mononoke;
+    use tests_utils::CreateCommitContext;
+
+    use super::*;
+
+    /// Create default test config that each test can customize.
+    fn make_test_config() -> LimitCommitSizeConfig {
+        LimitCommitSizeConfig {
+            commit_size_limit: None,
+            changed_files_limit: None,
+            ignore_path_regexes: Vec::new(),
+            path_overrides: Vec::new(),
+            too_many_files_message: String::from("Too many files: ${count} > ${limit}."),
+            too_large_message: String::from("Commit too large: ${size} > ${limit}."),
+        }
+    }
+
+    #[mononoke::fbinit_test]
+    async fn test_limit_commit_size(fb: FacebookInit) -> Result<(), Error> {
+        let ctx = CoreContext::test_mock(fb);
+        let repo: HookTestRepo = test_repo_factory::build_empty(ctx.fb).await?;
+        borrowed!(ctx, repo);
+
+        let cs_id = CreateCommitContext::new_root(ctx, repo)
+            .add_file("dir/a", "a")
+            .add_file("dir/b", "b")
+            .add_file("dir/c", "c")
+            .commit()
+            .await?;
+
+        let bcs = cs_id.load(ctx, &repo.repo_blobstore).await?;
+
+        let hook_repo = HookRepo::build_from(&repo);
+
+        let config = make_test_config();
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        assert_eq!(hook_execution, HookExecution::Accepted);
+
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(3);
+        config.changed_files_limit = Some(3);
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        assert_eq!(hook_execution, HookExecution::Accepted);
+
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(3);
+        config.changed_files_limit = Some(1);
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        match hook_execution {
+            HookExecution::Rejected(info) => {
+                assert_eq!(info.long_description, "Too many files: 3 > 1.");
+            }
+            HookExecution::Accepted => {
+                return Err(anyhow!("should be rejected"));
+            }
+        };
+
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(1);
+        config.changed_files_limit = Some(3);
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        match hook_execution {
+            HookExecution::Rejected(info) => {
+                assert_eq!(info.long_description, "Commit too large: 3 > 1.");
+            }
+            HookExecution::Accepted => {
+                return Err(anyhow!("should be rejected"));
+            }
+        };
+        Ok(())
+    }
+
+    #[mononoke::fbinit_test]
+    async fn test_limit_commit_size_removed_files(fb: FacebookInit) -> Result<(), Error> {
+        let ctx = CoreContext::test_mock(fb);
+        let repo: HookTestRepo = test_repo_factory::build_empty(ctx.fb).await?;
+        borrowed!(ctx, repo);
+
+        let parent_cs_id = CreateCommitContext::new_root(ctx, repo)
+            .add_file("dir/a", "a")
+            .add_file("dir/b", "b")
+            .commit()
+            .await?;
+
+        let cs_id = CreateCommitContext::new(ctx, repo, vec![parent_cs_id])
+            .delete_file("dir/a")
+            .delete_file("dir/b")
+            .commit()
+            .await?;
+
+        let bcs = cs_id.load(ctx, &repo.repo_blobstore).await?;
+
+        let hook_repo = HookRepo::build_from(&repo);
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(100);
+        config.changed_files_limit = Some(2);
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        assert_eq!(hook_execution, HookExecution::Accepted);
+
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(100);
+        config.changed_files_limit = Some(1);
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        match hook_execution {
+            HookExecution::Rejected(info) => {
+                assert_eq!(info.long_description, "Too many files: 2 > 1.");
+            }
+            HookExecution::Accepted => {
+                return Err(anyhow!("should be rejected"));
+            }
+        };
+        Ok(())
+    }
+
+    #[mononoke::fbinit_test]
+    async fn test_limit_commit_size_override(fb: FacebookInit) -> Result<(), Error> {
+        let ctx = CoreContext::test_mock(fb);
+        let repo: HookTestRepo = test_repo_factory::build_empty(ctx.fb).await?;
+        borrowed!(ctx, repo);
+
+        let cs_id = CreateCommitContext::new_root(ctx, repo)
+            .add_file("dir/a", "a")
+            .add_file("dir/b", "b")
+            .add_file("odir/c", "c")
+            .commit()
+            .await?;
+
+        let bcs = cs_id.load(ctx, &repo.repo_blobstore).await?;
+
+        let hook_repo = HookRepo::build_from(&repo);
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(1);
+        config.changed_files_limit = Some(3);
+        config.path_overrides.push(LimitCommitSizeOverride {
+            path_regex: Regex::new("^dir/.*$")?,
+            commit_size_limit: Some(3),
+        });
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        // override max size is 3 bytes which is enough for 3 bytes commit
+        assert_eq!(hook_execution, HookExecution::Accepted);
+
+        Ok(())
+    }
+
+    #[mononoke::fbinit_test]
+    async fn test_limit_commit_size_override_hits_limit(fb: FacebookInit) -> Result<(), Error> {
+        let ctx = CoreContext::test_mock(fb);
+        let repo: HookTestRepo = test_repo_factory::build_empty(ctx.fb).await?;
+        borrowed!(ctx, repo);
+
+        let cs_id = CreateCommitContext::new_root(ctx, repo)
+            .add_file("dir/a", "a")
+            .add_file("dir/b", "b")
+            .add_file("odir/c", "c")
+            .commit()
+            .await?;
+
+        let bcs = cs_id.load(ctx, &repo.repo_blobstore).await?;
+
+        let hook_repo = HookRepo::build_from(&repo);
+
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(1);
+        config.changed_files_limit = Some(3);
+        config.path_overrides.push(LimitCommitSizeOverride {
+            path_regex: Regex::new("^odir/.*$")?,
+            commit_size_limit: Some(2),
+        });
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+        // override max size is 2 bytes, but commit has 3 in total
+        match hook_execution {
+            HookExecution::Rejected(info) => {
+                assert_eq!(info.long_description, "Commit too large: 3 > 2.");
+            }
+            HookExecution::Accepted => {
+                return Err(anyhow!("should be rejected"));
+            }
+        };
+
+        Ok(())
+    }
+
+    #[mononoke::fbinit_test]
+    async fn test_limit_commit_size_ignored_files(fb: FacebookInit) -> Result<(), Error> {
+        let ctx = CoreContext::test_mock(fb);
+        let repo: HookTestRepo = test_repo_factory::build_empty(ctx.fb).await?;
+        borrowed!(ctx, repo);
+
+        let cs_id = CreateCommitContext::new_root(ctx, repo)
+            .add_file("dir/a", "a")
+            .add_file("dir/b", "b")
+            .add_file("ignored_dir/project/c", "c")
+            .add_file("something/ignored_dir/project/d", "d")
+            .add_file("test_ignored_dir/schemas/e", "e")
+            .add_file("ignored_dir/schemas/f", "f")
+            .commit()
+            .await?;
+
+        let bcs = cs_id.load(ctx, &repo.repo_blobstore).await?;
+
+        let hook_repo = HookRepo::build_from(&repo);
+        let mut config = make_test_config();
+        config.commit_size_limit = Some(2);
+        config.changed_files_limit = Some(2);
+        config
+            .ignore_path_regexes
+            .push(Regex::new(r"(^|/)(test_)?ignored_dir/(project|schemas)")?);
+        let hook = LimitCommitSizeHook::with_config(config)?;
+        let hook_execution = hook
+            .run(
+                ctx,
+                &hook_repo,
+                &BookmarkKey::new("book")?,
+                &bcs,
+                CrossRepoPushSource::NativeToThisRepo,
+                PushAuthoredBy::User,
+            )
+            .await?;
+
+        match hook_execution {
+            HookExecution::Rejected(_) => {
+                return Err(anyhow!(
+                    "files in ignored_dir should not count towards limit"
+                ));
+            }
+            HookExecution::Accepted => {}
+        };
+
+        Ok(())
+    }
+}

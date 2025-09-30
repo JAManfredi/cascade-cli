@@ -1,0 +1,86 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+@stylex stylesheet;
+
+/**
+ * We don't assume we're rendered directly into <body>,
+ * so we don't put any styles on <body> itself.
+ */
+.isl-root {
+  /**
+   * These CSS variables come from the VS Code webview UI toolkit:
+   * https://github.com/microsoft/vscode-webview-ui-toolkit/blob/main/src/design-tokens.ts
+   */
+  background-color: var(--background);
+  color: var(--foreground);
+
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+
+  --pad: 10px;
+  --halfpad: 5px;
+
+  --vscode-button-height: 26px; /* height of vscode-button */
+  --vscode-icon-button-height: 22px; /* height of vscode-button with appearance="icon" */
+
+  --monospace-fontFamily: var(
+    --vscode-editor-font-family,
+    source-code-pro,
+    SFMono-Regular,
+    Consolas,
+    'Liberation Mono',
+    Menlo,
+    Courier,
+    monospace
+  );
+
+  --editor-font-size: var(--vscode-editor-font-size, 12px);
+
+  height: calc(100vh / var(--zoom, 1));
+  max-height: calc(100vh / var(--zoom, 1));
+  display: flex;
+  flex-direction: column;
+
+  zoom: var(--zoom, 1);
+}
+
+.main-content-area {
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+code {
+  font-family: var(--monospace-fontFamily);
+}
+
+.empty-app-state {
+  display: flex;
+  flex-direction: column;
+  padding: calc(4 * var(--pad));
+  width: calc(100% - 8 * var(--pad));
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+vscode-button::part(content) {
+  white-space: nowrap;
+  align-items: center;
+}
+vscode-button::part(control) {
+  margin: 0;
+}
+
+vscode-button[appearance='icon'] {
+  border: 1px solid var(--subtle-hover-darken);
+}
+vscode-button[appearance='icon']:not(:hover) {
+  background-color: var(--subtle-hover-darken);
+}

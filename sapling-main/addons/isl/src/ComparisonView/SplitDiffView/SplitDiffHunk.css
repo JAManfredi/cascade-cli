@@ -1,0 +1,225 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.split-diff-view {
+  border: 1px solid var(--tooltip-border);
+  border-radius: 2px;
+  color: var(--diffEditor-foreground);
+  font-family: var(--monospace-fontFamily);
+  tab-size: var(--tab-size);
+}
+
+.split-diff-view-hunk-table {
+  font-family: var(--monospace-fontFamily);
+}
+
+.split-diff-view-file-header {
+  display: flex;
+  align-items: center;
+  color: var(--diffEditor-foreground);
+  background-color: var(--tooltip-background);
+  padding: var(--halfpad) var(--pad);
+  line-height: 2em;
+
+  position: sticky;
+  top: 0;
+  margin-left: -1px;
+  margin-right: -1px;
+  border: 1px solid var(--panel-view-border);
+  gap: var(--halfpad);
+  z-index: 1;
+}
+
+.split-diff-view-file-header-toggle-open {
+  padding-right: 2px;
+  cursor: pointer;
+}
+
+.split-diff-view-file-header.file-header-collapsed {
+  border-bottom-width: 0;
+}
+
+.split-diff-view-file-header-open-button {
+  color: var(--foreground);
+}
+
+.split-diff-view-file-path-parts {
+  display: flex;
+  flex-grow: 1;
+  flex-shrink: 1;
+  font-size: 12px;
+  flex-wrap: wrap;
+  line-height: 1em;
+}
+
+.split-diff-view-file-preamble {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.split-diff-view-file-status-banner {
+  background-color: var(--background);
+  color: var(--foreground);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--halfpad);
+}
+
+.split-diff-view-banner-added {
+  background-color: var(--diffEditor-insertedLineHighlightBackground);
+  color: var(--diffEditor-foreground);
+}
+.split-diff-view-banner-removed {
+  background-color: var(--diffEditor-removedLineHighlightBackground);
+  color: var(--diffEditor-foreground);
+}
+.split-diff-view-banner-modified {
+  background-color: var(--diffEditor-modifiedLineHighlightBackground);
+  color: var(--diffEditor-foreground);
+}
+
+.split-diff-view-file-status-banner .separator > div {
+  padding: 1px;
+}
+
+.split-diff-view-hunk-separator {
+  display: inline-block;
+  padding: 0 var(--pad);
+  cursor: pointer;
+}
+.split-diff-view-hunk-separator:hover {
+  color: var(--highlight-foreground);
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.split-diff-view-inline-row-button {
+  display: inline-block;
+  padding: 2px var(--pad);
+  cursor: pointer;
+}
+.split-diff-view-inline-row-button .codicon {
+  vertical-align: sub;
+}
+.split-diff-view-inline-row-button .inline-row-button-label {
+  margin: 0 calc(2 * var(--pad));
+}
+.split-diff-view-inline-row-button:hover {
+  color: var(--highlight-foreground);
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.split-diff-view-loading-row,
+.split-diff-view-error-row {
+  padding: 2px var(--pad);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--pad);
+}
+
+.split-diff-view-hunk-table {
+  border-spacing: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.split-diff-view-hunk-table tbody {
+  vertical-align: top;
+}
+
+.split-diff-view-hunk-table td,
+.split-diff-view-file-preamble {
+  font-size: var(--editor-font-size);
+  line-height: 16px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.split-diff-view-hunk-table td {
+  padding: 2px 0 2px 6px;
+}
+
+.split-diff-view-hunk-table td.lineNumber {
+  padding-left: 10px;
+  padding-right: 10px;
+  text-align: right;
+  white-space: nowrap;
+  background-color: var(--subtle-hover-darken);
+}
+
+.split-diff-view-hunk-table.display-split td:nth-child(3) {
+  border-left: 1px solid var(--tooltip-border);
+}
+
+.split-diff-view-hunk-table.display-unified td:nth-child(1) {
+  border-right: 1px solid var(--hover-darken);
+}
+
+.split-diff-view-hunk-table tr.separator-row {
+  background-color: var(--tooltip-background);
+  height: 12px;
+}
+
+.split-diff-view-hunk-table td.separator {
+  line-height: 20px;
+  padding: 0;
+  text-align: center;
+}
+
+.split-diff-view-show-deleted {
+  display: inline-block;
+  padding: var(--pad);
+  cursor: pointer;
+}
+.split-diff-view-show-deleted:hover {
+  color: var(--highlight-foreground);
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.patch-word-begin {
+  border-top-left-radius: 0.2em;
+  border-bottom-left-radius: 0.2em;
+}
+
+.patch-word-end {
+  border-top-right-radius: 0.2em;
+  border-bottom-right-radius: 0.2em;
+}
+
+.patch-add-line {
+  background-color: var(--diffEditor-insertedLineBackground);
+}
+
+td.lineNumber.patch-add-line-number,
+.patch-add-word {
+  background-color: var(--diffEditor-insertedLineHighlightBackground);
+}
+
+.patch-remove-line {
+  background-color: var(--diffEditor-removedLineBackground);
+}
+
+td.lineNumber.patch-remove-line-number,
+.patch-remove-word {
+  background-color: var(--diffEditor-removedLineHighlightBackground);
+}
+
+td.lineNumber.patch-expanded-number {
+  color: var(--foreground);
+}
+
+.lineNumber.clickable {
+  cursor: pointer;
+}
+
+.lineNumber.clickable:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,46 @@
+fragment CommentParts on Comment {
+  bodyHTML
+  author {
+    login
+    avatarUrl
+  }
+  createdAt
+}
+
+fragment ReactionParts on Reactable {
+  reactions(first: 100) {
+    nodes {
+      content
+      user {
+        login
+      }
+    }
+  }
+}
+
+query PullRequestCommentsQuery($url: URI!, $numToFetch: Int!) {
+  resource(url: $url) {
+    __typename
+    ... on PullRequest {
+      comments(first: $numToFetch) {
+        totalCount
+        nodes {
+          ...CommentParts
+          ...ReactionParts
+        }
+      }
+      reviews(first: $numToFetch) {
+        nodes {
+          comments(first: 50) {
+            nodes {
+              ...CommentParts
+              ...ReactionParts
+              line
+              path
+            }
+          }
+        }
+      }
+    }
+  }
+}

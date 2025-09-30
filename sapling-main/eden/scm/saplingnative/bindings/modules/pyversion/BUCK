@@ -1,0 +1,12 @@
+load("//eden/scm:targets.bzl", "rust_python_library")
+
+oncall("sapling")
+
+rust_python_library(
+    name = "pyversion",
+    srcs = glob(["src/**/*.rs"]),
+    crate_root = "src/lib.rs",
+    deps = [
+        "//eden/scm/lib/version:rust_version",
+    ],
+)

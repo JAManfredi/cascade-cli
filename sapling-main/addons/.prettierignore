@@ -1,0 +1,17 @@
+._*
+.vscode/
+/isl/build/
+/isl/coverage/
+/isl/public/generated
+/isl-server/dist/
+/isl-server/coverage/
+/isl-server/src/facebook/phabricator/generated/
+/isl-server/src/github/generated/
+/vscode/coverage/
+/vscode/dist/
+/vscode-build
+/vscode/extension/dist
+/textmate/dist/
+/shared/third-party/github/schema.docs.graphql
+/shared/coverage
+/components/coverage

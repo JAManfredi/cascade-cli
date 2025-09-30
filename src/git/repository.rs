@@ -373,7 +373,7 @@ impl GitRepository {
 
     /// Internal branch checkout implementation with safety options
     fn checkout_branch_with_options(&self, name: &str, force_unsafe: bool) -> Result<()> {
-        info!("Attempting to checkout branch: {}", name);
+        debug!("Attempting to checkout branch: {}", name);
 
         // Enhanced safety check: Detect uncommitted work before checkout
         if !force_unsafe {
@@ -423,7 +423,7 @@ impl GitRepository {
 
     /// Internal commit checkout implementation with safety options
     fn checkout_commit_with_options(&self, commit_hash: &str, force_unsafe: bool) -> Result<()> {
-        info!("Attempting to checkout commit: {}", commit_hash);
+        debug!("Attempting to checkout commit: {}", commit_hash);
 
         // Enhanced safety check: Detect uncommitted work before checkout
         if !force_unsafe {
@@ -1678,7 +1678,7 @@ impl GitRepository {
 
     /// Internal branch deletion implementation with safety options
     fn delete_branch_with_options(&self, name: &str, force_unsafe: bool) -> Result<()> {
-        info!("Attempting to delete branch: {}", name);
+        debug!("Attempting to delete branch: {}", name);
 
         // Enhanced safety check: Detect unpushed commits before deletion
         if !force_unsafe {
@@ -1698,7 +1698,7 @@ impl GitRepository {
             .delete()
             .map_err(|e| CascadeError::branch(format!("Could not delete branch '{name}': {e}")))?;
 
-        info!("Successfully deleted branch '{}'", name);
+        debug!("Successfully deleted branch '{}'", name);
         Ok(())
     }
 

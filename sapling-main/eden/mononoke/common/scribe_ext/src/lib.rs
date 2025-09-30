@@ -1,0 +1,90 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This software may be used and distributed according to the terms of the
+ * GNU General Public License version 2.
+ */
+
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use anyhow::Error;
+use anyhow::anyhow;
+use fbinit::FacebookInit;
+#[cfg(fbcode_build)]
+use scribe::ScribeClient; // oss uses anyhow
+
+#[cfg(not(fbcode_build))]
+mod oss;
+
+#[cfg(not(fbcode_build))]
+pub use oss::ScribeClientImplementation;
+#[cfg(not(fbcode_build))]
+pub use oss::new_scribe_client;
+#[cfg(fbcode_build)]
+pub use scuba::ScribeClientImplementation;
+#[cfg(fbcode_build)]
+pub use scuba::new_scribe_client;
+
+#[derive(Clone)]
+pub enum Scribe {
+    Client(Arc<ScribeClientImplementation>),
+    LogToFile(Arc<Mutex<PathBuf>>),
+}
+
+impl ::std::fmt::Debug for Scribe {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match self {
+            Self::Client(_) => f.debug_struct("Scribe::Client").finish(),
+            Self::LogToFile(_) => f.debug_struct("Scribe::LogToFile").finish(),
+        }
+    }
+}
+
+impl Scribe {
+    pub fn new(fb: FacebookInit) -> Self {
+        Self::Client(Arc::new(new_scribe_client(fb)))
+    }
+
+    pub fn new_to_file(dir_path: PathBuf) -> Self {
+        Self::LogToFile(Arc::new(Mutex::new(dir_path)))
+    }
+
+    pub fn offer(&self, category: &str, sample: &str) -> Result<(), Error> {
+        use Scribe::*;
+
+        match self {
+            Client(client) => {
+                #[cfg(fbcode_build)]
+                let res = client.offer(category, sample.as_bytes());
+
+                #[cfg(not(fbcode_build))]
+                let res = {
+                    let _ = client;
+                    Ok(())
+                };
+
+                res
+            }
+            LogToFile(dir_path) => {
+                let dir_path = dir_path.lock().unwrap();
+                let is_valid_category = category
+                    .chars()
+                    .all(|c| char::is_alphanumeric(c) || c == '-' || c == '_');
+                if !is_valid_category {
+                    return Err(anyhow!("invalid category: {}", category));
+                }
+                let filename = dir_path.join(category);
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(filename)?;
+                ::std::writeln!(file, "{}", sample)?;
+                Ok(())
+            }
+        }
+    }
+}

@@ -1,0 +1,27 @@
+{
+  "private": true,
+  "workspaces": [
+    "shared",
+    "reviewstack",
+    "reviewstack.dev",
+    "textmate"
+  ],
+  "devDependencies": {
+    "@babel/runtime": "^7.21.0",
+    "@typescript-eslint/eslint-plugin": "^5.15.0",
+    "@typescript-eslint/parser": "^5.15.0",
+    "eslint": "^8.11.0",
+    "eslint-plugin-import": "^2.25.4",
+    "eslint-plugin-react-hooks": "^4.3.0",
+    "eslint-plugin-rulesdir": "^0.2.1",
+    "prettier": "2.8.8"
+  },
+  "scripts": {
+    "prettier-check": "prettier --check .",
+    "prettier-fix": "prettier --write ."
+  },
+  "resolutions": {
+    "rollup": "3.29.5"
+  },
+  "dependencies": {}
+}

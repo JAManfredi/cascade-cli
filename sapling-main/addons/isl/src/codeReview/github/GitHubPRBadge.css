@@ -1,0 +1,73 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.github-diff-status-OPEN {
+  background-color: var(--github-open-bg);
+}
+.github-diff-status-MERGED {
+  background-color: var(--github-merged-bg);
+}
+.github-diff-status-CLOSED {
+  background-color: var(--github-closed-bg);
+}
+.github-diff-status-none {
+  background-color: var(--github-neutral-bg);
+}
+.github-diff-status-ERROR {
+  background-color: var(--github-closed-bg);
+}
+.github-diff-status-DRAFT {
+  background-color: var(--github-neutral-bg);
+}
+.github-diff-status-MERGE_QUEUED {
+  background-color: #966600;
+}
+
+.github-diff-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--halfpad);
+}
+
+.github-diff-status {
+  font-weight: bold;
+  border-radius: 10px;
+  padding: 3px 8px;
+  font-size: 70%;
+  white-space: nowrap;
+}
+.github-diff-info a {
+  color: white;
+}
+.github-diff-badge-icon.codicon {
+  font-size: 100%;
+  margin-right: var(--halfpad);
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.github-diff-status .tooltip-creator {
+  align-items: center;
+}
+
+.github-review-decision {
+  border-radius: 10px;
+  padding: 3px 8px;
+  font-size: 70%;
+  white-space: nowrap;
+}
+
+.github-review-decision-APPROVED {
+  background-color: var(--github-open-bg);
+}
+.github-review-decision-CHANGES_REQUESTED {
+  background-color: var(--github-closed-bg);
+}
+.github-review-decision-REVIEW_REQUIRED {
+  background-color: var(--github-neutral-bg);
+}

@@ -1980,6 +1980,9 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     let base_branch = active_stack.base_branch.clone();
     let stack_name = active_stack.name.clone();
 
+    // Save the original working branch before any checkouts
+    let original_branch = git_repo.get_current_branch().ok();
+
     // Single progress message for the entire sync operation
     println!("Syncing stack '{stack_name}' with remote...");
 
@@ -2159,6 +2162,18 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
             }
             Err(e) => {
                 Output::warning(format!("Branch cleanup failed: {e}"));
+            }
+        }
+    }
+
+    // Return to original working branch
+    if let Some(orig_branch) = original_branch {
+        if orig_branch != base_branch {
+            if let Err(e) = git_repo.checkout_branch(&orig_branch) {
+                Output::warning(format!(
+                    "Could not return to original branch '{}': {}",
+                    orig_branch, e
+                ));
             }
         }
     }

@@ -1,0 +1,176 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.partial-file-selection-scroll-y {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.partial-file-selection-scroll-x {
+  max-width: 500px;
+  overflow-x: auto;
+  scrollbar-width: none; /* not yet in Chrome (https://bugs.chromium.org/p/chromium/issues/detail?id=891944) */
+}
+
+.partial-file-selection-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.partial-file-selection-border {
+  border-left: 1px solid var(--tooltip-border);
+  width: fit-content;
+}
+
+.partial-file-selection-width-min-content {
+  width: min-content;
+}
+
+.partial-file-selection {
+  border-left: 1px solid var(--tooltip-border);
+  font-family: var(--monospace-fontFamily);
+  font-size: 12px;
+  border-spacing: 0;
+  table-layout: fixed;
+  margin-bottom: var(--pad);
+  user-select: none;
+}
+
+.partial-file-selection .line {
+  user-select: text;
+  padding-inline: var(--halfpad) var(--pad);
+  max-width: 1200px;
+  white-space: pre-wrap;
+}
+
+.partial-file-selection .column-a-number,
+.partial-file-selection .column-b-number {
+  background-color: var(--subtle-hover-darken);
+  vertical-align: top;
+}
+
+.partial-file-selection tr {
+  white-space: pre;
+}
+.partial-file-selection td {
+  padding: 0;
+}
+.partial-file-selection td {
+  padding: 0;
+}
+
+.partial-file-selection pre {
+  padding: 0;
+  margin: 0;
+  /* This ensures the green or red background for added or deleted lines extends horizontally for long lines */
+  width: fit-content;
+  /* Set line-height explicitly to avoid dynamic line heights based on (different) fonts decided by text content. */
+  line-height: 1.2;
+  font-family: var(--monospace-fontFamily);
+  font-size: 12px;
+}
+
+.partial-file-selection .line-context {
+  user-select: none;
+  text-align: center;
+}
+
+.partial-file-selection .line-context {
+  height: var(--pad);
+}
+
+.partial-file-selection .column-unified {
+  min-width: 100%;
+}
+
+.partial-file-selection .column-a-number,
+.partial-file-selection .column-b-number {
+  min-width: 3em;
+}
+
+.partial-file-selection.checkboxes .line.line-context,
+.partial-file-selection .column-m .line.line-context {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 20'%3E%3Cpath d='M0 10 Q10 15 20 10 Q30 5 40 10' stroke='grey' fill='transparent' /%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+}
+
+.partial-file-selection .column-m .line.line-context {
+  cursor: pointer;
+}
+
+.partial-file-selection .line-number {
+  padding-left: var(--halfpad);
+  padding-right: var(--halfpad);
+}
+
+.partial-file-selection .selectable.line-number {
+  cursor: pointer;
+}
+
+.partial-file-selection.free-form .readonly {
+  background: var(--tooltip-background);
+}
+
+.partial-file-selection.free-form .column-m-number {
+  border-left: 1px solid var(--tooltip-border);
+}
+.partial-file-selection.free-form .column-b-number {
+  border-left: 1px solid var(--tooltip-border);
+}
+
+.partial-file-selection .column-a-number,
+.partial-file-selection .column-b-number,
+.partial-file-selection .column-m-number {
+  text-align: right;
+  color: grey;
+  user-select: none;
+}
+
+.partial-file-selection .column-a .region-same,
+.partial-file-selection .column-b .region-same {
+  opacity: 0.3;
+}
+
+.partial-file-selection .line.line-unique {
+  background: rgba(234, 92, 0, 0.2);
+}
+
+.partial-file-selection .column-unified .line-add,
+.partial-file-selection .column-b .line-add {
+  background: var(--diffEditor-insertedLineBackground);
+}
+
+.partial-file-selection .column-unified .line-del,
+.partial-file-selection .column-a .line-del {
+  background: var(--diffEditor-removedLineBackground);
+}
+
+.partial-file-selection .line-number.selectable {
+  cursor: pointer;
+  background: var(--hover-darken);
+}
+
+.partial-file-selection .line-number.selectable.selected {
+  color: var(--list-active-selection-foreground);
+  background: var(--list-active-selection-background);
+}
+
+.partial-file-selection .column-checkbox {
+  min-width: 40px;
+}
+
+.partial-file-selection .checkbox-anchor {
+  position: relative;
+  height: 14px;
+  display: block;
+  width: 40px;
+}
+
+.partial-file-selection .checkbox-container {
+  position: absolute;
+  padding-left: var(--pad);
+  top: calc(10px - 1em);
+}

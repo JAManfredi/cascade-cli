@@ -1,0 +1,288 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.head-commit-info {
+  margin-left: var(--halfpad);
+}
+.you-are-here-container {
+  display: flex;
+  gap: var(--pad);
+  align-items: center;
+}
+
+.uncommitted-changes {
+  padding: var(--halfpad) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--halfpad);
+}
+.conflicts-header {
+  display: flex;
+  flex-direction: column;
+  margin: var(--pad) 0;
+}
+.file-tree {
+  margin-top: 4px;
+}
+.file-tree-section {
+  margin-top: 4px;
+}
+.file-tree-level {
+  --file-tree-indent: calc(2 * var(--pad));
+  margin-left: var(--file-tree-indent);
+  position: relative;
+}
+.changed-files > .file-tree > .file-tree-level {
+  /* Override the top-level to not have indent */
+  margin-left: 0;
+}
+.file-tree-level > .changed-file {
+  margin-left: var(--halfpad);
+}
+.file-tree-folder-path {
+  display: flex;
+  align-items: center;
+  gap: var(--halfpad);
+}
+.file-tree-folder-path vscode-button::part(control) {
+  font-size: initial;
+  max-width: unset;
+}
+
+.changed-files-pages-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--halfpad);
+}
+
+.file-tree-level .file-tree-level:before {
+  content: '';
+  position: absolute;
+  left: calc(var(--file-tree-indent) / -2);
+  height: 100%;
+  top: 0;
+  border-left: 1px solid var(--divider-background);
+}
+.file-tree-level:hover > .file-tree-level:before {
+  border-left: 1px solid var(--foreground);
+}
+
+.changed-files {
+  display: flex;
+  flex-direction: column;
+}
+.changed-files .changed-file {
+  display: flex;
+  align-items: center;
+  gap: var(--halfpad);
+  margin-right: var(--halfpad);
+  transition: color 0.1s;
+  line-height: 25px;
+  /* when files are expanded with chunk selection, use position sticky to keep showing path at the top */
+  position: sticky;
+  top: 0;
+  background-color: var(--changed-files-overflow-color, var(--background));
+  z-index: 10;
+}
+
+.changed-files-list .changed-file:nth-child(n + 15):last-child {
+  margin-bottom: 10px;
+}
+
+.changed-files .banner {
+  padding: var(--pad);
+  margin: var(--pad) 0;
+  max-width: 500px;
+}
+
+.changed-files-list-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-y: hidden;
+}
+
+.changed-files-list {
+  --changed-files-list-height: 500px;
+  --changed-files-overflow-color: var(--background);
+  overflow-y: scroll;
+  max-height: var(--changed-files-list-height);
+}
+
+.changed-file:focus-visible {
+  outline: var(--focus-border) 1px auto;
+  outline-offset: -1px;
+}
+
+.changed-files-list .collapsable {
+  margin: var(--pad) 0;
+}
+.changed-files-list .collapsable-title {
+  user-select: none;
+
+  font-weight: 500;
+  opacity: 0.9;
+  font-variant: all-small-caps;
+}
+.changed-files-list .collapsable-contents {
+  margin-left: calc(2 * var(--pad));
+}
+
+.changed-files-list:after {
+  --overflow-gradient-height: 20px;
+  display: block;
+  content: ' ';
+  width: 100%;
+  height: var(--overflow-gradient-height);
+  background: linear-gradient(transparent, var(--changed-files-overflow-color));
+  z-index: 10;
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  top: calc(var(--changed-files-list-height) - var(--overflow-gradient-height));
+  pointer-events: none;
+}
+
+.changed-file-path {
+  display: flex;
+  align-items: center;
+  gap: var(--halfpad);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.changed-file-path-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* ellipsis dots on the start of the file path rather than the end */
+  direction: rtl;
+  text-align: left;
+}
+.changed-file-path .tooltip-creator {
+  overflow: hidden;
+}
+
+.changed-file-path:hover {
+  color: var(--highlight-foreground);
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--halfpad);
+}
+
+.file-actions .tooltip-creator {
+  display: inline-flex;
+}
+
+.file-added {
+  color: var(--scm-added-foreground);
+}
+.file-modified {
+  color: var(--scm-modified-foreground);
+}
+.file-removed {
+  color: var(--scm-removed-foreground);
+}
+.file-missing {
+  color: var(--scm-missing-foreground);
+}
+.file-unresolved {
+  color: var(--scm-modified-foreground);
+}
+.file-resolved {
+  color: var(--scm-added-foreground);
+}
+.file-ignored {
+  opacity: 0.9;
+}
+
+.file-generated {
+  opacity: 0.5;
+}
+.file-partial {
+  opacity: 0.8;
+}
+
+.show-on-hover,
+.file-show-on-hover {
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.show-on-hover:focus-within,
+.file-show-on-hover:focus-within {
+  opacity: 1;
+}
+.uncommitted-changes:hover .show-on-hover {
+  opacity: 1;
+}
+.changed-file:hover .file-show-on-hover {
+  opacity: 1;
+}
+.uncommitted-changes:hover vscode-button:disabled.show-on-hover {
+  opacity: 0.4;
+}
+
+.changed-file-list .button-rows,
+.uncommitted-changes .button-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--halfpad);
+}
+
+.changed-file-list .button-row,
+.uncommitted-changes .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--halfpad) var(--pad);
+  align-items: center;
+}
+
+.changed-file-list .button-row {
+  padding-bottom: var(--halfpad);
+}
+
+.quick-commit-inputs input[type='text'] {
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 1;
+}
+.uncommitted-changes:hover input[type='text'],
+.uncommitted-changes input[type='text']:focus-within,
+.quick-commit-inputs input[type='text']:not(:placeholder-shown) {
+  opacity: 1;
+}
+
+.quick-commit-inputs {
+  transition: background-color 0.1s;
+  display: flex;
+  gap: var(--pad);
+  align-items: center;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 4px;
+  position: relative;
+}
+.quick-commit-inputs:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 100%;
+  width: 100%;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+}
+.quick-commit-inputs:hover:before {
+  background-color: var(--button-icon-hover-background);
+  transition: opacity 0.3s;
+  opacity: 0.5;
+}

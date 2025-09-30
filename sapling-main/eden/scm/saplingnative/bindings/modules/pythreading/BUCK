@@ -1,0 +1,12 @@
+load("//eden/scm:targets.bzl", "rust_python_library")
+
+oncall("sapling")
+
+rust_python_library(
+    name = "pythreading",
+    srcs = glob(["src/**/*.rs"]),
+    crate_root = "src/lib.rs",
+    deps = [
+        "fbsource//third-party/rust:rand",
+    ],
+)

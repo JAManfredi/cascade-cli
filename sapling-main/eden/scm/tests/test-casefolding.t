@@ -1,0 +1,161 @@
+#require icasefs no-eden
+
+  $ setconfig checkout.use-rust=true
+  $ hg debugfsinfo | grep 'case-sensitive:'
+  case-sensitive: no
+
+test file addition with bad case
+
+  $ setconfig devel.segmented-changelog-rev-compat=True
+  $ newclientrepo
+  $ echo a > a
+  $ hg add A
+  adding a
+  $ hg st
+  A a
+  $ hg ci -m adda
+  $ hg manifest
+  a
+  $ cd ..
+
+test case collision on rename (issue750)
+
+  $ newclientrepo
+  $ echo a > a
+  $ hg --debug ci -Am adda
+  adding a
+  committing files:
+  a
+  committing manifest
+  committing changelog
+  committed 07f4944404050f47db2e5c5071e0e84e7a27bba9
+
+Case-changing renames should work:
+
+  $ hg mv a A
+  $ hg mv A a
+  $ hg st
+
+addremove after case-changing rename has no effect (issue4590)
+
+  $ hg mv a A
+  $ hg addremove
+  $ hg revert --all
+  forgetting A
+  undeleting a
+
+test changing case of path components
+
+  $ mkdir D
+  $ echo b > D/b
+  $ hg ci -Am addb D/b
+  $ hg mv D/b d/b
+  D/b: not overwriting - file already committed
+  (use 'hg rename --amend --mark' to amend the current commit)
+  $ hg mv D/b d/c
+  $ hg st
+  A D/c
+  R D/b
+  $ mv D temp
+  $ mv temp d
+  $ hg st
+  A D/c
+  R D/b
+  $ hg revert -aq
+  $ rm d/c
+  $ echo c > D/c
+  $ hg add "glob:**/c"
+  adding D/c
+  $ hg st
+  A D/c
+  $ hg ci -m addc "glob:**/c"
+  $ hg mv d/b d/e
+  moving D/b to D/e
+  $ hg st
+  A D/e
+  R D/b
+  $ hg revert -aq
+  $ rm d/e
+  $ hg mv d/b D/B
+  moving D/b to D/B
+  $ hg st
+  A D/B
+  R D/b
+  $ cd ..
+
+test case collision between revisions (issue912)
+
+  $ newclientrepo
+  $ echo a > a
+  $ hg ci -Am adda
+  adding a
+  $ hg rm a
+  $ hg ci -Am removea
+  $ echo B > B
+  $ echo A > A
+
+on linux hfs keeps the old case stored, force it
+
+  $ mv a aa
+  $ mv aa A
+  $ hg ci -Am addA
+  adding A
+  adding B
+
+used to fail under case insensitive fs
+
+  $ hg up -C 0
+  1 files updated, 0 files merged, 2 files removed, 0 files unresolved
+  $ hg up -C tip
+  2 files updated, 0 files merged, 1 files removed, 0 files unresolved
+
+no clobbering of untracked files with wrong casing
+
+  $ hg up -r 0
+  1 files updated, 0 files merged, 2 files removed, 0 files unresolved
+  $ echo gold > b
+  $ hg up tip
+  abort: 1 conflicting file changes:
+   B
+  (commit, shelve, goto --clean to discard all your changes, or goto --merge to merge them)
+  [255]
+  $ cat b
+  gold
+  $ rm b
+
+  $ cd ..
+
+issue 3342: file in nested directory causes unexpected abort
+
+  $ newclientrepo
+
+  $ mkdir -p a/B/c/D
+  $ echo e > a/B/c/D/e
+  $ hg add a/B/c/D/e
+  $ hg ci -m 'add e'
+
+issue 4481: revert across case only renames
+  $ hg mv a/B/c/D/e a/B/c/d/E
+  $ hg ci -m "uppercase E"
+  $ echo 'foo' > a/B/c/D/E
+  $ hg ci -m 'e content change'
+  $ hg revert --all -r .~2
+  removing a/B/c/D/E
+  adding a/B/c/D/e
+  $ find . | sort
+  a
+  a/B
+  a/B/c
+  a/B/c/D
+  a/B/c/D/e
+  a/B/c/D/e.orig
+
+Make sure we can keep removed and untracked file separate.
+  $ newclientrepo
+  $ touch foo
+  $ hg commit -Aqm a
+  $ hg rm foo
+  $ touch FOO
+  $ hg st
+  R foo
+  ? FOO

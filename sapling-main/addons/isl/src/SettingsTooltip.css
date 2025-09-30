@@ -1,0 +1,36 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.setting-description {
+  padding-bottom: var(--halfpad);
+  font-size: 13px;
+}
+
+.multiple-settings {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  max-width: 500px;
+  gap: var(--pad);
+}
+
+.setting-inline-dropdown {
+  display: flex;
+  flex-direction: row;
+  gap: var(--pad);
+  align-items: center;
+}
+
+.zoom-setting {
+  display: flex;
+  align-items: center;
+  gap: var(--halfpad);
+}
+
+.zoom-setting label {
+  font-size: 80%;
+}

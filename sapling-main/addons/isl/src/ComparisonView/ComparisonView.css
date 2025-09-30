@@ -1,0 +1,87 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.comparison-view-file {
+  width: 100%;
+}
+
+.comparison-view-base-styles,
+.comparison-view-container,
+.comparison-view {
+  display: contents;
+}
+
+.comparison-view-header {
+  padding: var(--pad) 0 var(--halfpad) 0;
+  margin-bottom: var(--pad);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.comparison-view-header-group {
+  display: flex;
+  gap: var(--pad);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.comparison-view-header vscode-dropdown {
+  z-index: 2;
+}
+
+.comparison-view-details {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  padding-bottom: var(--pad);
+  align-items: center;
+  /* height: calc(100% - 41px); */
+}
+
+.comparison-view .split-diff-view {
+  border-top-width: 0;
+  border-radius: 0;
+}
+
+.file-header-copyable-path {
+  cursor: pointer;
+  display: inherit;
+  white-space: nowrap;
+}
+
+.file-header-copyfrom-path {
+  cursor: default;
+  opacity: 0.5;
+  color: grey;
+  padding: 0 0.5em;
+}
+
+.file-header-copyable-path:hover,
+.file-header-copyable-path:hover ~ .file-header-copyable-path {
+  text-decoration-line: underline;
+}
+
+.file-header-copyable-path-hover {
+  font-size: 90%;
+}
+
+.comparison-view-modal {
+  --border-amt: calc(2 * var(--pad));
+}
+
+.comparison-view-root {
+  padding-inline: var(--pad);
+  max-height: calc(100vh / var(--zoom, 1));
+  max-width: calc(100vw / var(--zoom, 1));
+  height: calc((100vh / var(--zoom, 1)));
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}

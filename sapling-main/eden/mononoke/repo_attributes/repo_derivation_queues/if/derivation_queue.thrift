@@ -1,0 +1,19 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This software may be used and distributed according to the terms of the
+ * GNU General Public License version 2.
+ */
+
+include "eden/mononoke/mononoke_types/serialization/id.thrift"
+include "eden/mononoke/mononoke_types/serialization/time.thrift"
+include "thrift/annotation/rust.thrift"
+
+@rust.Exhaustive
+struct DagItemInfo {
+  1: id.ChangesetId head_cs_id;
+  2: optional time.Timestamp enqueue_timestamp;
+  3: optional string client_info;
+  4: optional i64 bubble_id;
+  5: optional i64 retry_count;
+}

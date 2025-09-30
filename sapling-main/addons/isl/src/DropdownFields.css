@@ -1,0 +1,41 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+.dropdown-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--halfpad);
+  height: 100%;
+}
+
+.dropdown-fields-header {
+  display: flex;
+  flex-direction: row;
+  gap: var(--halfpad);
+  align-items: center;
+  margin: var(--halfpad);
+}
+
+.dropdown-fields-content {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--pad));
+  margin: calc(-1 * var(--pad));
+  padding: calc(2 * var(--pad));
+  overflow-y: scroll;
+  height: 100%;
+}
+
+.dropdown-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--halfpad);
+}
+
+.dropdown-field strong {
+  font-size: 90%;
+}

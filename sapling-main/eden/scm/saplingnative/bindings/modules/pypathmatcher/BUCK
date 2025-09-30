@@ -1,0 +1,17 @@
+load("//eden/scm:targets.bzl", "rust_python_library")
+
+oncall("sapling")
+
+rust_python_library(
+    name = "pypathmatcher",
+    srcs = glob(["src/**/*.rs"]),
+    crate_root = "src/lib.rs",
+    deps = [
+        "fbsource//third-party/rust:anyhow",
+        "fbsource//third-party/rust:tracing",
+        "//eden/scm/lib/cpython-ext:cpython-ext",
+        "//eden/scm/lib/io:io",
+        "//eden/scm/lib/pathmatcher:pathmatcher",
+        "//eden/scm/lib/types:types",
+    ],
+)

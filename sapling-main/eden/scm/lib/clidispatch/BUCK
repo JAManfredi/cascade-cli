@@ -1,0 +1,69 @@
+load("@fbcode//eden/scm:targets.bzl", "fetch_as_eden")
+load("@fbcode_macros//build_defs/lib:rust_oss.bzl", "rust_oss")
+load("@fbsource//tools/build_defs:rust_library.bzl", "rust_library")
+
+oncall("sapling")
+
+rust_library(
+    name = "clidispatch",
+    srcs = glob(["src/**/*.rs"]),
+    autocargo = {"cargo_toml_config": {
+        "dependencies_override": {"dependencies": {
+            "sapling-indexedlog": {"features": ["configurable"]},
+            "sapling-repo": {"features": ["wdir"]},
+            "sapling-thrift-types": {"optional": True},
+        }},
+        "features": {
+            "eden": [
+                "sapling-workingcopy/eden",
+                "sapling-thrift-types",
+            ],
+            "sl_oss": ["sapling-identity/sl_oss"],
+        },
+        "lib": {"name": "clidispatch"},
+        "package": {
+            "authors": ["Meta Source Control Team <sourcecontrol-dev@meta.com>"],
+            "homepage": "https://sapling-scm.com/",
+            "license": "MIT",
+            "name": "sapling-clidispatch",
+            "repository": "https://github.com/facebook/sapling",
+        },
+    }},
+    features = [
+        "eden",
+    ] + select({
+        "DEFAULT": [],
+        "ovr_config//os:linux": [] if rust_oss.is_oss_build() else ["cas"],
+    }),
+    named_deps = select({
+        "DEFAULT": {},
+        "ovr_config//os:linux": {} if rust_oss.is_oss_build() else ({"cas_client": "//eden/scm/lib/cas-client/rich-client:rich-cas-client"} if fetch_as_eden() else {"cas_client": "//eden/scm/lib/cas-client/thin-client:thin-cas-client"}),
+    }),
+    deps = [
+        "fbsource//third-party/rust:anyhow",
+        "fbsource//third-party/rust:erased-serde",
+        "fbsource//third-party/rust:thiserror",
+        "fbsource//third-party/rust:tracing",
+        "//common/rust/shed/hostname:hostname",
+        "//eden/scm/lib/blackbox:blackbox",
+        "//eden/scm/lib/cliparser:cliparser",
+        "//eden/scm/lib/config/loader:configloader",
+        "//eden/scm/lib/config/model:configmodel",
+        "//eden/scm/lib/context:context",
+        "//eden/scm/lib/doctor/network:network-doctor",
+        "//eden/scm/lib/gitcompat:gitcompat",
+        "//eden/scm/lib/hgtime:hgtime",
+        "//eden/scm/lib/hook:hook",
+        "//eden/scm/lib/identity:identity",
+        "//eden/scm/lib/indexedlog:indexedlog",
+        "//eden/scm/lib/io:io",
+        "//eden/scm/lib/io/term/logger:termlogger",
+        "//eden/scm/lib/repo:repo",
+        "//eden/scm/lib/sampling:sampling",
+        "//eden/scm/lib/thrift-types:thrift-types",
+        "//eden/scm/lib/types:types",
+        "//eden/scm/lib/util:util",
+        "//eden/scm/lib/util/hgplain:hgplain",
+        "//eden/scm/lib/workingcopy:workingcopy",
+    ],
+)

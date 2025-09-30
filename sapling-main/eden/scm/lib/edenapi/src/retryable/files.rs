@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+use std::collections::HashMap;
+
+use async_trait::async_trait;
+use types::FetchContext;
+use types::Key;
+
+use super::RetryableStreamRequest;
+use crate::client::Client;
+use crate::errors::SaplingRemoteApiError;
+use crate::response::Response;
+use crate::types::FileResponse;
+use crate::types::FileSpec;
+
+pub(crate) struct RetryableFileAttrs {
+    reqs: HashMap<Key, FileSpec>,
+    fctx: FetchContext,
+}
+
+impl RetryableFileAttrs {
+    pub(crate) fn new(fctx: FetchContext, reqs: impl IntoIterator<Item = FileSpec>) -> Self {
+        let reqs = reqs.into_iter().map(|req| (req.key.clone(), req)).collect();
+        Self { fctx, reqs }
+    }
+}
+
+#[async_trait]
+impl RetryableStreamRequest for RetryableFileAttrs {
+    type Item = FileResponse;
+
+    async fn perform(&self, client: Client) -> Result<Response<Self::Item>, SaplingRemoteApiError> {
+        let reqs = self.reqs.values().cloned().collect();
+        client.fetch_files_attrs(self.fctx.clone(), reqs).await
+    }
+
+    fn received_item(&mut self, item: &Self::Item) {
+        self.reqs.remove(&item.key);
+    }
+}

@@ -1,0 +1,216 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This software may be used and distributed according to the terms of the
+ * GNU General Public License version 2.
+ */
+
+use std::collections::HashMap;
+
+use anyhow::Error;
+use anyhow::Result;
+use anyhow::anyhow;
+use async_trait::async_trait;
+use blobstore::Blobstore;
+use context::CoreContext;
+use derived_data_manager::BonsaiDerivable;
+use derived_data_manager::DerivableType;
+use derived_data_manager::DerivationContext;
+use derived_data_manager::dependencies;
+use derived_data_service_if as thrift;
+use mononoke_types::BonsaiChangeset;
+use mononoke_types::ChangesetId;
+
+use crate::ChangesetInfo;
+
+pub fn format_key(derivation_ctx: &DerivationContext, changeset_id: ChangesetId) -> String {
+    let root_prefix = "changeset_info.blake2.";
+    let key_prefix = derivation_ctx.mapping_key_prefix::<ChangesetInfo>();
+    format!("{}{}{}", root_prefix, key_prefix, changeset_id)
+}
+
+#[async_trait]
+impl BonsaiDerivable for ChangesetInfo {
+    const VARIANT: DerivableType = DerivableType::ChangesetInfo;
+
+    type Dependencies = dependencies![];
+    type PredecessorDependencies = dependencies![];
+
+    async fn derive_single(
+        _ctx: &CoreContext,
+        _derivation_ctx: &DerivationContext,
+        bonsai: BonsaiChangeset,
+        _parents: Vec<Self>,
+        _known: Option<&HashMap<ChangesetId, Self>>,
+    ) -> Result<Self, Error> {
+        Ok(ChangesetInfo::new(bonsai.get_changeset_id(), bonsai))
+    }
+
+    async fn derive_batch(
+        _ctx: &CoreContext,
+        _derivation_ctx: &DerivationContext,
+        bonsais: Vec<BonsaiChangeset>,
+    ) -> Result<HashMap<ChangesetId, Self>> {
+        // Derivation with gaps doesn't make much sense for changeset info, so
+        // ignore the gap size.
+        Ok(bonsais
+            .into_iter()
+            .map(|bonsai| {
+                let csid = bonsai.get_changeset_id();
+                (csid, ChangesetInfo::new(csid, bonsai))
+            })
+            .collect())
+    }
+
+    async fn store_mapping(
+        self,
+        ctx: &CoreContext,
+        derivation_ctx: &DerivationContext,
+        changeset_id: ChangesetId,
+    ) -> Result<()> {
+        let key = format_key(derivation_ctx, changeset_id);
+        derivation_ctx.blobstore().put(ctx, key, self.into()).await
+    }
+
+    async fn fetch(
+        ctx: &CoreContext,
+        derivation_ctx: &DerivationContext,
+        changeset_id: ChangesetId,
+    ) -> Result<Option<Self>> {
+        let key = format_key(derivation_ctx, changeset_id);
+        Ok(derivation_ctx
+            .blobstore()
+            .get(ctx, &key)
+            .await?
+            .map(TryInto::try_into)
+            .transpose()?)
+    }
+
+    fn from_thrift(data: thrift::DerivedData) -> Result<Self> {
+        if let thrift::DerivedData::changeset_info(
+            thrift::DerivedDataChangesetInfo::changeset_info(data),
+        ) = data
+        {
+            Self::from_thrift(data)
+        } else {
+            Err(anyhow!(
+                "Can't convert {} from provided thrift::DerivedData",
+                Self::NAME.to_string(),
+            ))
+        }
+    }
+
+    fn into_thrift(data: Self) -> Result<thrift::DerivedData> {
+        Ok(thrift::DerivedData::changeset_info(
+            thrift::DerivedDataChangesetInfo::changeset_info(data.into_thrift()),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::BTreeMap;
+    use std::str::FromStr;
+
+    use blobstore::Loadable;
+    use bonsai_hg_mapping::BonsaiHgMapping;
+    use bonsai_hg_mapping::BonsaiHgMappingRef;
+    use bookmarks::Bookmarks;
+    use commit_graph::CommitGraph;
+    use commit_graph::CommitGraphRef;
+    use commit_graph::CommitGraphWriter;
+    use fbinit::FacebookInit;
+    use filestore::FilestoreConfig;
+    use fixtures::Linear;
+    use fixtures::TestRepoFixture;
+    use mercurial_types::HgChangesetId;
+    use mononoke_macros::mononoke;
+    use mononoke_types::BonsaiChangeset;
+    use repo_blobstore::RepoBlobstore;
+    use repo_blobstore::RepoBlobstoreRef;
+    use repo_derived_data::RepoDerivedData;
+    use repo_derived_data::RepoDerivedDataRef;
+    use repo_identity::RepoIdentity;
+    use tests_utils::resolve_cs_id;
+
+    use super::*;
+
+    #[facet::container]
+    struct Repo(
+        dyn BonsaiHgMapping,
+        dyn Bookmarks,
+        RepoBlobstore,
+        RepoDerivedData,
+        RepoIdentity,
+        CommitGraph,
+        dyn CommitGraphWriter,
+        FilestoreConfig,
+    );
+
+    #[mononoke::fbinit_test]
+    async fn derive_info_test(fb: FacebookInit) -> Result<(), Error> {
+        let repo: Repo = Linear::get_repo(fb).await;
+        let ctx = CoreContext::test_mock(fb);
+        let manager = repo.repo_derived_data().manager();
+
+        let hg_cs_id = HgChangesetId::from_str("3c15267ebf11807f3d772eb891272b911ec68759").unwrap();
+        let bcs_id = repo
+            .bonsai_hg_mapping()
+            .get_bonsai_from_hg(&ctx, hg_cs_id)
+            .await?
+            .unwrap();
+        let bcs = bcs_id.load(&ctx, repo.repo_blobstore()).await?;
+        // Make sure that the changeset info was saved in the blobstore
+        let info = manager.derive(&ctx, bcs_id, None).await?;
+
+        check_info(&info, &bcs);
+        Ok(())
+    }
+
+    fn check_info(info: &ChangesetInfo, bcs: &BonsaiChangeset) {
+        assert_eq!(*info.changeset_id(), bcs.get_changeset_id());
+        assert_eq!(info.message(), bcs.message());
+        assert_eq!(
+            info.parents().collect::<Vec<_>>(),
+            bcs.parents().collect::<Vec<_>>()
+        );
+        assert_eq!(info.author(), bcs.author());
+        assert_eq!(info.author_date(), bcs.author_date());
+        assert_eq!(info.committer(), bcs.committer());
+        assert_eq!(info.committer_date(), bcs.committer_date());
+        assert_eq!(
+            info.hg_extra().collect::<BTreeMap<_, _>>(),
+            bcs.hg_extra().collect::<BTreeMap<_, _>>()
+        );
+    }
+
+    #[mononoke::fbinit_test]
+    async fn batch_derive(fb: FacebookInit) -> Result<(), Error> {
+        let ctx = CoreContext::test_mock(fb);
+        let repo: Repo = Linear::get_repo(fb).await;
+        let master_cs_id = resolve_cs_id(&ctx, &repo, "master").await?;
+        let manager = repo.repo_derived_data().manager();
+
+        let mut cs_ids = repo
+            .commit_graph()
+            .ancestors_difference(&ctx, vec![master_cs_id], vec![])
+            .await?;
+        cs_ids.reverse();
+        manager
+            .derive_exactly_batch::<ChangesetInfo>(&ctx, cs_ids.clone(), None)
+            .await?;
+        let cs_infos = manager
+            .fetch_derived_batch(&ctx, cs_ids.clone(), None)
+            .await?;
+
+        for cs_id in cs_ids {
+            let bonsai = cs_id.load(&ctx, repo.repo_blobstore()).await?;
+            let cs_info = cs_infos
+                .get(&cs_id)
+                .expect("ChangesetInfo should have been derived");
+            check_info(cs_info, &bonsai);
+        }
+
+        Ok(())
+    }
+}
