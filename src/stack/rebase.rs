@@ -388,6 +388,9 @@ impl RebaseManager {
             Output::error(format!("Rebase failed: {:?}", result.error));
         }
 
+        // Save the updated stack metadata to disk
+        self.stack_manager.save_to_disk()?;
+
         Ok(result)
     }
 
