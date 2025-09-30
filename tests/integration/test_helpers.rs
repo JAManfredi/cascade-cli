@@ -548,91 +548,6 @@ pub async fn run_cc_with_timeout_in_dir(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_fixture_creation() {
-        let fixture = TestFixture::new().await;
-
-        // Test that fixture is properly initialized
-        assert!(fixture.repo_path.exists());
-        assert!(fixture.binary_path.exists());
-
-        // Test git is properly configured
-        let output = Command::new("git")
-            .args(["config", "user.name"])
-            .current_dir(&fixture.repo_path)
-            .output()
-            .unwrap();
-
-        let username = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        assert_eq!(username, "Test User");
-
-        // Test initial commit exists
-        let output = Command::new("git")
-            .args(["log", "--oneline"])
-            .current_dir(&fixture.repo_path)
-            .output()
-            .unwrap();
-
-        assert!(!output.stdout.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_timeout_wrapper() {
-        let fixture = TestFixture::new().await;
-
-        // Test successful command
-        let result = run_cli_with_timeout(
-            &fixture.binary_path,
-            &["--help"],
-            &fixture.repo_path,
-            Duration::from_secs(5),
-        )
-        .await;
-
-        assert!(result.is_ok(), "Help command should succeed");
-
-        // Test timeout (using a command that should timeout)
-        let result = run_cli_with_timeout(
-            &fixture.binary_path,
-            &["stacks", "list"], // This might hang without proper setup
-            &fixture.repo_path,
-            Duration::from_millis(10), // Very short timeout
-        )
-        .await;
-
-        // Should either succeed quickly or timeout
-        if let Err(error_msg) = result {
-            assert!(error_msg.contains("timed out"));
-        }
-    }
-
-    #[tokio::test]
-    async fn test_parallel_operations() {
-        let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0..3)
-            .map(|i| {
-                let closure: Box<dyn FnOnce() -> Result<String, String> + Send> =
-                    Box::new(move || {
-                        std::thread::sleep(Duration::from_millis(10));
-                        Ok(format!("result-{i}"))
-                    });
-                closure
-            })
-            .collect();
-
-        let results = run_parallel_operations(operations, "test_parallel".to_string()).await;
-
-        assert_eq!(results.len(), 3);
-        for (i, result) in results.iter().enumerate() {
-            assert!(result.is_ok(), "Operation {i} should succeed");
-            assert_eq!(result.as_ref().unwrap(), &format!("result-{i}"));
-        }
-    }
-}
-
 /// Initialize Cascade in a repository
 pub fn run_cascade_init(repo_path: &Path) {
     let output = Command::new("ca")
@@ -763,4 +678,89 @@ pub fn run_ca_command(repo_path: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .output()
         .expect("Failed to run ca command - make sure 'cargo build' has been run")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_fixture_creation() {
+        let fixture = TestFixture::new().await;
+
+        // Test that fixture is properly initialized
+        assert!(fixture.repo_path.exists());
+        assert!(fixture.binary_path.exists());
+
+        // Test git is properly configured
+        let output = Command::new("git")
+            .args(["config", "user.name"])
+            .current_dir(&fixture.repo_path)
+            .output()
+            .unwrap();
+
+        let username = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert_eq!(username, "Test User");
+
+        // Test initial commit exists
+        let output = Command::new("git")
+            .args(["log", "--oneline"])
+            .current_dir(&fixture.repo_path)
+            .output()
+            .unwrap();
+
+        assert!(!output.stdout.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_timeout_wrapper() {
+        let fixture = TestFixture::new().await;
+
+        // Test successful command
+        let result = run_cli_with_timeout(
+            &fixture.binary_path,
+            &["--help"],
+            &fixture.repo_path,
+            Duration::from_secs(5),
+        )
+        .await;
+
+        assert!(result.is_ok(), "Help command should succeed");
+
+        // Test timeout (using a command that should timeout)
+        let result = run_cli_with_timeout(
+            &fixture.binary_path,
+            &["stacks", "list"], // This might hang without proper setup
+            &fixture.repo_path,
+            Duration::from_millis(10), // Very short timeout
+        )
+        .await;
+
+        // Should either succeed quickly or timeout
+        if let Err(error_msg) = result {
+            assert!(error_msg.contains("timed out"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parallel_operations() {
+        let operations: Vec<Box<dyn FnOnce() -> Result<String, String> + Send>> = (0..3)
+            .map(|i| {
+                let closure: Box<dyn FnOnce() -> Result<String, String> + Send> =
+                    Box::new(move || {
+                        std::thread::sleep(Duration::from_millis(10));
+                        Ok(format!("result-{i}"))
+                    });
+                closure
+            })
+            .collect();
+
+        let results = run_parallel_operations(operations, "test_parallel".to_string()).await;
+
+        assert_eq!(results.len(), 3);
+        for (i, result) in results.iter().enumerate() {
+            assert!(result.is_ok(), "Operation {i} should succeed");
+            assert_eq!(result.as_ref().unwrap(), &format!("result-{i}"));
+        }
+    }
 }

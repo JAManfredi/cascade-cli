@@ -22,7 +22,7 @@ async fn test_amend_command_exists() {
     let ca_binary = std::path::Path::new(manifest_dir).join("target/debug/ca");
 
     let output = std::process::Command::new(&ca_binary)
-        .args(&["entry", "amend", "--help"])
+        .args(["entry", "amend", "--help"])
         .output()
         .expect("Failed to run ca");
 
@@ -46,7 +46,7 @@ async fn test_entry_clear_command_exists() {
     let ca_binary = std::path::Path::new(manifest_dir).join("target/debug/ca");
 
     let output = std::process::Command::new(&ca_binary)
-        .args(&["entry", "clear", "--help"])
+        .args(["entry", "clear", "--help"])
         .output()
         .expect("Failed to run ca");
 
