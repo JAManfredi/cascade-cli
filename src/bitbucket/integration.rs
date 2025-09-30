@@ -133,9 +133,11 @@ impl BitbucketIntegration {
 
         if needs_force_push {
             // Force push for existing PRs or branches already on remote
-            git_repo
-                .force_push_single_branch(&entry.branch)
-                .map_err(|e| CascadeError::bitbucket(e.to_string()))?;
+            // Set env var to skip interactive confirmation during submit (user already confirmed submit action)
+            std::env::set_var("FORCE_PUSH_NO_CONFIRM", "1");
+            let result = git_repo.force_push_single_branch(&entry.branch);
+            std::env::remove_var("FORCE_PUSH_NO_CONFIRM");
+            result.map_err(|e| CascadeError::bitbucket(e.to_string()))?;
         } else {
             // Regular push for brand new submissions
             git_repo

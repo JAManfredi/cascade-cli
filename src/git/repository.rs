@@ -1306,7 +1306,7 @@ impl GitRepository {
 
     /// Fetch from remote origin
     pub fn fetch(&self) -> Result<()> {
-        tracing::info!("Fetching from origin");
+        tracing::debug!("Fetching from origin");
 
         let mut remote = self
             .repo
@@ -1580,7 +1580,7 @@ impl GitRepository {
     /// Fallback fetch method using git CLI instead of git2
     /// This is used when git2 has TLS/SSL issues but git CLI works fine
     fn fetch_with_git_cli(&self) -> Result<()> {
-        tracing::info!("Using git CLI fallback for fetch operation");
+        tracing::debug!("Using git CLI fallback for fetch operation");
 
         let output = std::process::Command::new("git")
             .args(["fetch", "origin"])
@@ -1593,7 +1593,7 @@ impl GitRepository {
             })?;
 
         if output.status.success() {
-            tracing::info!("✅ Git CLI fetch succeeded");
+            tracing::debug!("Git CLI fetch succeeded");
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1610,7 +1610,7 @@ impl GitRepository {
     /// Fallback pull method using git CLI instead of git2
     /// This is used when git2 has TLS/SSL issues but git CLI works fine
     fn pull_with_git_cli(&self, branch: &str) -> Result<()> {
-        tracing::info!("Using git CLI fallback for pull operation: {}", branch);
+        tracing::debug!("Using git CLI fallback for pull operation: {}", branch);
 
         let output = std::process::Command::new("git")
             .args(["pull", "origin", branch])
@@ -1640,7 +1640,7 @@ impl GitRepository {
     /// Fallback force push method using git CLI instead of git2
     /// This is used when git2 has TLS/SSL issues but git CLI works fine
     fn force_push_with_git_cli(&self, branch: &str) -> Result<()> {
-        tracing::info!(
+        tracing::debug!(
             "Using git CLI fallback for force push operation: {}",
             branch
         );
@@ -1894,8 +1894,8 @@ impl GitRepository {
                     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
                     let backup_branch_name = format!("{target_branch}_backup_{timestamp}");
 
-                    warn!(
-                        "⚠️  Force push to '{}' would overwrite {} commits on remote",
+                    debug!(
+                        "Force push to '{}' would overwrite {} commits on remote",
                         target_branch, commits_to_lose
                     );
 
