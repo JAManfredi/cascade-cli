@@ -36,50 +36,78 @@ info!("Force-pushing initial-commit-temp-1759190884 content to initial-commit to
 
 ## ✅ Professional Output Patterns
 
-### Use the Output Module
+### Use the Output Module (src/cli/output.rs)
+
+The Output module provides consistent formatting methods. **CRITICAL**: Don't put emojis in strings - the Output methods add them automatically!
+
 ```rust
 use crate::cli::output::Output;
 
-// ✅ GOOD - Professional, user-friendly
-Output::section("Rebasing stack: my-feature");
-Output::info("📋 Rebasing 2 entries");
-Output::progress("   ├─ add-auth (PR #123)");
-Output::progress("   └─ add-tests (not submitted)");
-Output::success("✅ 2 entries rebased (1 PR updated, 1 not yet submitted)");
+// ✅ CORRECT - Output methods add icons automatically
+Output::section("Rebasing stack: my-feature");  // Bold underlined
+println!(); // Spacing
+println!("📋 Rebasing 2 entries");  // Visual tree header
+println!("   ├─ add-auth (PR #123)");  // Tree items
+println!("   └─ add-tests (not submitted)");
+println!(); // Spacing
+Output::success("2 entries rebased (1 PR updated, 1 not yet submitted)");  // ✓ added automatically
+
+// ❌ WRONG - Don't duplicate emojis!
+Output::success("✅ Stack rebased");  // Output::success already adds ✓
+Output::info("📋 Processing");  // Output::info already adds ℹ
 ```
 
-### Visual Hierarchy
+### Output Module Methods
+
 ```rust
-// Section headers for major operations
+Output::section(title)    // Bold underlined header
+Output::success(msg)       // ✓ Green checkmark + message
+Output::error(msg)         // ✗ Red X + message  
+Output::warning(msg)       // ⚠ Yellow warning + message
+Output::info(msg)          // ℹ Cyan info + message
+Output::sub_item(msg)      // → Dimmed arrow + message
+Output::bullet(msg)        // • Bullet point
+Output::tip(msg)           // 💡 Bright tip icon
+Output::numbered_item(n, msg)  // Numbered list item
+```
+
+### Visual Hierarchy - When to Use What
+
+```rust
+// 1. Section headers for major operations
 Output::section(&format!("Syncing stack: {}", stack_name));
 
-// Tree structure for related items
-Output::info("📋 Processing entries:");
+// 2. Visual tree structures - use plain println!()
+println!(); // Spacing before tree
+println!("📋 Rebasing {} entries", count);  // Tree header with emoji
 for (i, entry) in entries.iter().enumerate() {
-    let prefix = if i == entries.len() - 1 { "└─" } else { "├─" };
-    Output::progress(&format!("   {} {}", prefix, entry.name));
+    let tree_char = if i == entries.len() - 1 { "└─" } else { "├─" };
+    println!("   {} {} (PR #{})", tree_char, entry.name, pr_num);
 }
+println!(); // Spacing after tree
 
-// Summary at the end
-Output::success(&format!("✅ {} entries processed", count));
+// 3. Summary/result with Output methods
+Output::success(&format!("{} entries processed", count));  // Adds ✓
+
+// 4. Sub-items for hierarchical info
+Output::sub_item(format!("Branch: {}", branch));  // Adds →
+Output::sub_item(format!("PR: #{}", pr_id));
 ```
 
-### Icons and Status Indicators
+### Tree Structures - Use Plain println!()
+
+For visual tree structures, **don't use Output methods** - they add unwanted prefixes:
+
 ```rust
-// ✅ Success states
-Output::success("✅ Stack rebased successfully");
+// ✅ CORRECT - Plain println for trees
+println!("📋 Processing entries:");
+println!("   ├─ feature-1");
+println!("   ├─ feature-2");
+println!("   └─ feature-3");
 
-// ⚠️  Warnings (non-fatal)
-Output::warning("⚠️  Branch has uncommitted changes");
-
-// 📋 Informational
-Output::info("📋 Found 3 stacks");
-
-// 🔄 Processing/progress
-Output::progress("🔄 Updating branches...");
-
-// ❌ Errors
-Output::error("❌ Rebase failed: conflicts detected");
+// ❌ WRONG - Output methods add extra icons
+Output::info("📋 Processing entries:");  // Shows: ℹ 📋 Processing entries:
+Output::progress("   ├─ feature-1");     // Shows: → ├─ feature-1 (wrong!)
 ```
 
 ## Logging vs User Output
@@ -176,13 +204,27 @@ INFO Attempting to checkout branch: initial-commit-temp-1759190884
 
 **AFTER (professional):**
 ```
-🔄 Syncing stack: create-base-component
+Rebasing stack: create-base-component
+────────────────────────────────────────
 
 📋 Rebasing 2 entries
    ├─ add-auth (PR #123)
    └─ add-tests (not submitted)
 
-✅ 2 entries rebased (1 PR updated, 1 not yet submitted)
+✓ 2 entries rebased (1 PR updated, 1 not yet submitted)
+```
+
+**Code that produces AFTER output:**
+```rust
+Output::section(&format!("Rebasing stack: {}", stack.name));
+println!();
+println!("📋 Rebasing {} entries", entry_count);
+for (i, entry) in stack.entries.iter().enumerate() {
+    let tree_char = if i + 1 == entry_count { "└─" } else { "├─" };
+    println!("   {} {} (PR #{})", tree_char, entry.branch, pr_num);
+}
+println!();
+Output::success("2 entries rebased (1 PR updated, 1 not yet submitted)");
 ```
 
 ### Submit Command Output
