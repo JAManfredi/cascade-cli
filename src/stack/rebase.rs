@@ -216,11 +216,7 @@ impl RebaseManager {
         // Save original working branch to restore later
         let original_branch = self.git_repo.get_current_branch().ok();
 
-        // Ensure we're on the base branch
-        if self.git_repo.get_current_branch()? != target_base {
-            self.git_repo.checkout_branch(&target_base)?;
-        }
-
+        // Note: Caller (sync_stack) has already checked out base branch when skip_pull=true
         // Only pull if not already done by caller (like sync command)
         if !self.options.skip_pull.unwrap_or(false) {
             if let Err(e) = self.pull_latest_changes(&target_base) {

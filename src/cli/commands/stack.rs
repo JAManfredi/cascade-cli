@@ -3547,6 +3547,16 @@ async fn perform_cleanup(
     // If not force and not dry run, ask for confirmation
     if !force && !dry_run && !candidates.is_empty() {
         Output::warning(format!("About to delete {} branches", candidates.len()));
+        
+        // Show first few branch names for context
+        let preview_count = 5.min(candidates.len());
+        for candidate in candidates.iter().take(preview_count) {
+            println!("  • {}", candidate.branch_name);
+        }
+        if candidates.len() > preview_count {
+            println!("  ... and {} more", candidates.len() - preview_count);
+        }
+        println!(); // Spacing before prompt
 
         // Interactive confirmation to proceed with cleanup
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
