@@ -640,8 +640,12 @@ pub fn run_cascade_init(repo_path: &Path) {
         .args(["init", "--bitbucket-url", "https://test.bitbucket.com"])
         .output()
         .expect("Failed to run ca init");
-    
-    assert!(output.status.success(), "ca init failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    assert!(
+        output.status.success(),
+        "ca init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 /// Get current branch name
@@ -651,7 +655,7 @@ pub fn git_current_branch(repo_path: &Path) -> String {
         .args(["branch", "--show-current"])
         .output()
         .expect("Failed to get current branch");
-    
+
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
@@ -662,7 +666,7 @@ pub fn git_head_hash(repo_path: &Path) -> String {
         .args(["rev-parse", "HEAD"])
         .output()
         .expect("Failed to get HEAD hash");
-    
+
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
@@ -673,7 +677,7 @@ pub fn git_branch_hash(repo_path: &Path, branch: &str) -> String {
         .args(["rev-parse", branch])
         .output()
         .expect("Failed to get branch hash");
-    
+
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
@@ -690,27 +694,31 @@ pub fn git_add_all(repo_path: &Path) {
         .args(["add", "-A"])
         .output()
         .expect("Failed to git add");
-    
+
     assert!(output.status.success(), "git add failed");
 }
 
 /// Create a test repo with N commits and return temp dir + path
 pub async fn create_temp_repo_with_commits(count: u32) -> (TempDir, PathBuf) {
     let (temp_dir, repo_path) = create_test_git_repo().await;
-    
+
     for i in 1..=count {
-        create_file(&repo_path, &format!("file{}.txt", i), &format!("content {}", i));
+        create_file(
+            &repo_path,
+            &format!("file{}.txt", i),
+            &format!("content {}", i),
+        );
         git_add_all(&repo_path);
-        
+
         let output = Command::new("git")
             .current_dir(&repo_path)
             .args(["commit", "-m", &format!("Commit {}", i)])
             .output()
             .expect("Failed to commit");
-        
+
         assert!(output.status.success(), "Failed to create commit {}", i);
     }
-    
+
     (temp_dir, repo_path)
 }
 
@@ -721,8 +729,12 @@ pub fn git_commit(repo_path: &Path, message: &str) {
         .args(["commit", "-m", message])
         .output()
         .expect("Failed to run git commit");
-    
-    assert!(output.status.success(), "git commit failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    assert!(
+        output.status.success(),
+        "git commit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 /// Run a git command
@@ -732,8 +744,12 @@ pub fn git_command(repo_path: &Path, args: &[&str]) {
         .args(args)
         .output()
         .expect("Failed to run git command");
-    
-    assert!(output.status.success(), "git command failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    assert!(
+        output.status.success(),
+        "git command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 /// Run ca command and return output (uses target/debug/ca binary)
@@ -741,7 +757,7 @@ pub fn run_ca_command(repo_path: &Path, args: &[&str]) -> std::process::Output {
     // Use the debug binary from cargo build
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let ca_binary = Path::new(manifest_dir).join("target/debug/ca");
-    
+
     Command::new(&ca_binary)
         .current_dir(repo_path)
         .args(args)
