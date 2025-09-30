@@ -236,7 +236,9 @@ impl RebaseManager {
         let mut pushed_count = 0;
         let mut skipped_count = 0;
 
-        Output::info(&format!("📋 Rebasing {} entries", entry_count));
+        println!(); // Spacing before tree
+        let plural = if entry_count == 1 { "entry" } else { "entries" };
+        println!("📋 Rebasing {} {}", entry_count, plural);
 
         for (index, entry) in stack.entries.iter().enumerate() {
             let original_branch = &entry.branch;
@@ -262,23 +264,16 @@ impl RebaseManager {
                     // Only force-push to REMOTE if this entry has a PR
                     if entry.pull_request_id.is_some() {
                         let pr_num = entry.pull_request_id.as_ref().unwrap();
-                        Output::progress(&format!(
-                            "   {} {} (PR #{})",
-                            if index + 1 == entry_count { "└─" } else { "├─" },
-                            original_branch,
-                            pr_num
-                        ));
+                        let tree_char = if index + 1 == entry_count { "└─" } else { "├─" };
+                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
                         
                         // NOW do the actual force-push to remote (git push --force origin <branch>)
                         // This updates the PR with the rebased commits
                         self.git_repo.force_push_single_branch(original_branch)?;
                         pushed_count += 1;
                     } else {
-                        Output::progress(&format!(
-                            "   {} {} (not submitted)",
-                            if index + 1 == entry_count { "└─" } else { "├─" },
-                            original_branch
-                        ));
+                        let tree_char = if index + 1 == entry_count { "└─" } else { "├─" };
+                        println!("   {} {} (not submitted)", tree_char, original_branch);
                         skipped_count += 1;
                     }
 
@@ -298,7 +293,8 @@ impl RebaseManager {
                     current_base = original_branch.clone();
                 }
                 Err(e) => {
-                    Output::error(&format!("Conflict in {}: {}", entry.commit_hash, e));
+                    println!(); // Spacing before error
+                    Output::error(&format!("Conflict in {}: {}", &entry.commit_hash[..8], e));
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
@@ -310,7 +306,7 @@ impl RebaseManager {
                     // Try to resolve automatically
                     match self.auto_resolve_conflicts(&entry.commit_hash) {
                         Ok(_) => {
-                            Output::success("   Auto-resolved conflicts");
+                            Output::success("Auto-resolved conflicts");
                         }
                         Err(resolve_err) => {
                             result.success = false;
@@ -330,22 +326,29 @@ impl RebaseManager {
             }
         }
 
+        // Build summary message
         result.summary = if pushed_count > 0 {
-            format!(
-                "✅ {} entries rebased ({} PR{} updated{})",
-                entry_count,
-                pushed_count,
-                if pushed_count == 1 { "" } else { "s" },
-                if skipped_count > 0 {
-                    format!(", {} not yet submitted", skipped_count)
-                } else {
-                    String::new()
-                }
-            )
+            let pr_plural = if pushed_count == 1 { "" } else { "s" };
+            let entry_plural = if entry_count == 1 { "entry" } else { "entries" };
+            
+            if skipped_count > 0 {
+                format!(
+                    "{} {} rebased ({} PR{} updated, {} not yet submitted)",
+                    entry_count, entry_plural, pushed_count, pr_plural, skipped_count
+                )
+            } else {
+                format!(
+                    "{} {} rebased ({} PR{} updated)",
+                    entry_count, entry_plural, pushed_count, pr_plural
+                )
+            }
         } else {
-            format!("✅ {} entries rebased (no PRs to update yet)", entry_count)
+            let plural = if entry_count == 1 { "entry" } else { "entries" };
+            format!("{} {} rebased (no PRs to update yet)", entry_count, plural)
         };
 
+        // Display result with proper formatting
+        println!(); // Spacing after tree
         if result.success {
             Output::success(&result.summary);
         } else {
