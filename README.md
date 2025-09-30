@@ -533,6 +533,7 @@ ca switch <name>                        # Switch to different stack
 ca entry checkout [number]              # Interactive checkout for editing entries
 ca entry status                         # Show current edit mode status  
 ca entry list                           # List all entries with edit indicators
+ca entry clear                          # Clear/exit edit mode (useful for recovery)
 
 # Repository Overview
 ca repo                                 # Show all stacks and repository status
@@ -582,6 +583,10 @@ ca entry status                             # Show current edit mode info
 ca entry status --quiet                     # Brief status only
 ca entry list                               # List all entries with edit status
 ca entry list --verbose                     # Show detailed entry information
+
+# Clear edit mode
+ca entry clear                              # Clear/exit edit mode (with confirmation)
+ca entry clear --yes                        # Clear without confirmation (for corrupted state)
 ```
 
 ### **Adding Commits to Stack**
