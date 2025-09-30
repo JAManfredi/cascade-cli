@@ -1,0 +1,276 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Professional Output and Logging Guide
+
+## Output Philosophy
+
+Cascade CLI is a **professional development tool**. All user-facing output must be:
+1. **Clear and actionable** - Tell users what's happening and what they can do
+2. **Visually organized** - Use formatting, icons, and whitespace effectively
+3. **Technically sound but not overwhelming** - Hide debug details, show what matters
+
+## ❌ What NOT to Do
+
+### Avoid Technical Logging in User Output
+```rust
+// ❌ BAD - Exposes internal implementation details
+info!("Attempting to checkout branch: develop");
+info!("Fetching from origin");
+info!("Using git CLI fallback for fetch operation");
+info!("✅ Git CLI fetch succeeded");
+info!("Pull completed successfully");
+info!("Cherry-picked 222565602e6965633565b24732502fbbd5383219 -> a56efcf26cf6b8f4a62d1a86f3fcc507a0528a5f");
+info!("✅ Cherry-picked 222565602e6965633565b24732502fbbd5383219 -> a56efcf26cf6b8f4a62d1a86f3fcc507a0528a5f");
+info!("Force-pushing initial-commit-temp-1759190884 content to initial-commit to preserve PR history");
+```
+
+**Problems:**
+- Uses generic INFO/WARN/DEBUG prefixes
+- Shows internal temp branch names
+- Duplicate messages (cherry-pick shown twice)
+- Too verbose - 10+ lines for simple operations
+- Technical jargon (OIDs, "fallback", "fetch succeeded")
+
+## ✅ Professional Output Patterns
+
+### Use the Output Module
+```rust
+use crate::cli::output::Output;
+
+// ✅ GOOD - Professional, user-friendly
+Output::section("Rebasing stack: my-feature");
+Output::info("📋 Rebasing 2 entries");
+Output::progress("   ├─ add-auth (PR #123)");
+Output::progress("   └─ add-tests (not submitted)");
+Output::success("✅ 2 entries rebased (1 PR updated, 1 not yet submitted)");
+```
+
+### Visual Hierarchy
+```rust
+// Section headers for major operations
+Output::section(&format!("Syncing stack: {}", stack_name));
+
+// Tree structure for related items
+Output::info("📋 Processing entries:");
+for (i, entry) in entries.iter().enumerate() {
+    let prefix = if i == entries.len() - 1 { "└─" } else { "├─" };
+    Output::progress(&format!("   {} {}", prefix, entry.name));
+}
+
+// Summary at the end
+Output::success(&format!("✅ {} entries processed", count));
+```
+
+### Icons and Status Indicators
+```rust
+// ✅ Success states
+Output::success("✅ Stack rebased successfully");
+
+// ⚠️  Warnings (non-fatal)
+Output::warning("⚠️  Branch has uncommitted changes");
+
+// 📋 Informational
+Output::info("📋 Found 3 stacks");
+
+// 🔄 Processing/progress
+Output::progress("🔄 Updating branches...");
+
+// ❌ Errors
+Output::error("❌ Rebase failed: conflicts detected");
+```
+
+## Logging vs User Output
+
+### Use `tracing` for Technical Logs
+```rust
+// Technical details go to logs (debug/trace level)
+debug!("Cherry-picking commit {}", commit_hash);
+debug!("Resolved {} conflicts automatically", count);
+trace!("Full diff: {}", diff_output);
+
+// Critical errors go to warn/error
+warn!("Failed to delete temp branch {}: {}", name, err);
+error!("Repository corruption detected: {}", details);
+```
+
+### Use `Output` for User Messages
+```rust
+// User sees clean, actionable information
+Output::info("Applying changes...");
+Output::success("✓ Changes applied");
+```
+
+## Contextual Output
+
+### Show What Matters in Context
+```rust
+// ✅ GOOD - For submitted PRs, show PR number
+if let Some(pr_id) = entry.pull_request_id {
+    Output::progress(&format!("   ├─ {} (PR #{})", branch, pr_id));
+} else {
+    Output::progress(&format!("   ├─ {} (not submitted)", branch));
+}
+
+// ❌ BAD - Always show internal IDs
+Output::progress(&format!("Processing entry {}", entry.id)); // UUIDs not helpful
+```
+
+### Progressive Disclosure
+```rust
+// Start with summary, allow drilling down
+Output::section("Stack Status");
+Output::info(&format!("3 entries, 2 with PRs"));
+
+// Only show details if user requests (--verbose flag)
+if verbose {
+    for entry in entries {
+        println!("  {} - {} - {}", entry.hash[..8], entry.branch, entry.message);
+    }
+}
+```
+
+## Error Messaging
+
+### Actionable Error Messages
+```rust
+// ❌ BAD - Technical, no guidance
+return Err(CascadeError::git("cherry-pick failed"));
+
+// ✅ GOOD - Explains problem and solution
+return Err(CascadeError::git(
+    "Cherry-pick failed due to conflicts. Run 'ca conflicts' to see details, \
+     or 'ca rebase --interactive' to resolve manually"
+));
+```
+
+### Error Context
+```rust
+// ✅ GOOD - Show what failed and why
+Output::error(&format!(
+    "Could not rebase '{}': conflicts with base branch",
+    branch_name
+));
+Output::tip("Resolve conflicts manually or run 'ca conflicts analyze'");
+```
+
+## Real-World Examples
+
+### Sync Command Output
+
+**BEFORE (unprofessional):**
+```
+INFO Attempting to checkout branch: develop
+✓ Switched to branch 'develop'
+INFO Pulling branch: develop
+INFO Fetching from origin
+INFO Using git CLI fallback for fetch operation
+INFO ✅ Git CLI fetch succeeded
+INFO Pull completed successfully
+INFO Starting rebase for stack 4cb8c214-afff-4dfd-9072-932ec0ec2847
+INFO Attempting to checkout branch: initial-commit-temp-1759190884
+...15 more INFO lines...
+```
+
+**AFTER (professional):**
+```
+🔄 Syncing stack: create-base-component
+
+📋 Rebasing 2 entries
+   ├─ add-auth (PR #123)
+   └─ add-tests (not submitted)
+
+✅ 2 entries rebased (1 PR updated, 1 not yet submitted)
+```
+
+### Submit Command Output
+
+**GOOD:**
+```
+📤 Submitting stack entries to Bitbucket
+
+✓ Created PR #123: add-auth → develop
+✓ Created PR #124: add-tests → add-auth
+
+📋 Summary: 2 PRs created
+   View in browser: https://bitbucket.org/project/repo/pull-requests/123
+```
+
+## Configuration
+
+### Output Verbosity Levels
+```rust
+// Normal: Show high-level progress and results
+Output::info("Rebasing stack...");
+Output::success("✓ Done");
+
+// Verbose (-v): Show operation details
+if verbose {
+    Output::progress("   Updating branch: feature-1");
+    Output::progress("   Updating branch: feature-2");
+}
+
+// Quiet (-q): Show only errors and critical info
+if !quiet {
+    Output::success("✓ Stack synced");
+}
+```
+
+## Testing Output
+
+### Capture and Verify Output in Tests
+```rust
+#[test]
+fn test_sync_output() {
+    let output = capture_output(|| {
+        sync_stack(&stack).unwrap();
+    });
+    
+    // Verify professional output format
+    assert!(output.contains("📋 Rebasing"));
+    assert!(!output.contains("INFO")); // No technical prefixes
+    assert!(!output.contains("-temp-")); // No temp branch names
+}
+```
+
+## Common Anti-Patterns
+
+### ❌ Implementation Details Leaking
+```rust
+// BAD - User doesn't care about temp branches
+println!("Force-pushing feature-temp-1234567890 to feature");
+
+// GOOD - Focus on user's branch
+Output::progress("   └─ feature (PR #123)");
+```
+
+### ❌ Duplicate Messages
+```rust
+// BAD - Same info twice
+info!("Cherry-picking commit abc123");
+info!("✅ Cherry-picked abc123 -> def456");
+
+// GOOD - One clear message
+debug!("Cherry-picked {} -> {}", old_hash, new_hash); // Logs only
+```
+
+### ❌ Technical Jargon
+```rust
+// BAD
+println!("OID mismatch detected in refs/heads/feature");
+
+// GOOD
+Output::warning("Branch 'feature' has diverged from remote");
+Output::tip("Run 'ca sync' to update");
+```
+
+## Summary
+
+**Golden Rules:**
+1. **User output** = Professional, clear, actionable (use `Output`)
+2. **Technical logs** = Debug details for troubleshooting (use `tracing`)
+3. **Visual hierarchy** = Sections, trees, icons, consistent formatting
+4. **Context matters** = Show PR numbers for submitted work, hide UUIDs
+5. **Progressive disclosure** = Summary by default, details on request
