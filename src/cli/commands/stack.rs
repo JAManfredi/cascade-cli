@@ -5,7 +5,7 @@ use crate::git::{find_repository_root, GitRepository};
 use crate::stack::{CleanupManager, CleanupOptions, CleanupResult, StackManager, StackStatus};
 use clap::{Subcommand, ValueEnum};
 use dialoguer::{theme::ColorfulTheme, Confirm};
-use indicatif::{ProgressBar, ProgressStyle};
+// Progress bars removed - using professional Output module instead
 use std::env;
 use tracing::{debug, warn};
 
@@ -1642,25 +1642,18 @@ async fn submit_entry(
         return Ok(());
     }
 
-    // Create progress bar for the submission process
-    let total_operations = entries_to_submit.len() + 2; // +2 for setup steps
-    let pb = ProgressBar::new(total_operations as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("📤 {msg} [{bar:40.cyan/blue}] {pos}/{len}")
-            .map_err(|e| CascadeError::config(format!("Progress bar template error: {e}")))?,
-    );
-
-    pb.set_message("Connecting to Bitbucket");
-    pb.inc(1);
+    // Professional output for submission
+    Output::section(format!(
+        "Submitting {} {}",
+        entries_to_submit.len(),
+        if entries_to_submit.len() == 1 { "entry" } else { "entries" }
+    ));
+    println!();
 
     // Create a new StackManager for the integration (since the original was moved)
     let integration_stack_manager = StackManager::new(&repo_root)?;
     let mut integration =
         BitbucketIntegration::new(integration_stack_manager, cascade_config.clone())?;
-
-    pb.set_message("Starting batch submission");
-    pb.inc(1);
 
     // Submit each entry
     let mut submitted_count = 0;
@@ -1668,7 +1661,16 @@ async fn submit_entry(
     let total_entries = entries_to_submit.len();
 
     for (entry_num, entry_to_submit) in &entries_to_submit {
-        pb.set_message(format!("Submitting entry {entry_num}..."));
+        // Show what we're submitting
+        let tree_char = if entries_to_submit.len() == 1 {
+            "→"
+        } else if entry_num == &entries_to_submit.len() {
+            "└─"
+        } else {
+            "├─"
+        };
+        print!("   {} Entry {}: {}... ", tree_char, entry_num, entry_to_submit.branch);
+        std::io::Write::flush(&mut std::io::stdout()).ok();
 
         // Use provided title/description only for first entry or single entry submissions
         let entry_title = if total_entries == 1 {
@@ -1694,24 +1696,37 @@ async fn submit_entry(
         {
             Ok(pr) => {
                 submitted_count += 1;
-                Output::success(format!("Entry {} - PR #{}: {}", entry_num, pr.id, pr.title));
+                println!("✓ PR #{}", pr.id);
                 if let Some(url) = pr.web_url() {
+                    Output::sub_item(format!("{} → {}", pr.from_ref.display_id, pr.to_ref.display_id));
                     Output::sub_item(format!("URL: {url}"));
                 }
-                Output::sub_item(format!(
-                    "From: {} -> {}",
-                    pr.from_ref.display_id, pr.to_ref.display_id
-                ));
-                println!();
             }
             Err(e) => {
-                failed_entries.push((*entry_num, e.to_string()));
-                // Don't print the error here - we'll show it in the summary
+                println!("✗ Failed");
+                // Extract clean error message (remove git stderr noise)
+                let clean_error = if e.to_string().contains("non-fast-forward") {
+                    "Branch has diverged from remote. Try: git push --force origin ".to_string() + &entry_to_submit.branch
+                } else if e.to_string().contains("authentication") {
+                    "Authentication failed. Check your Bitbucket credentials.".to_string()
+                } else {
+                    // Extract first meaningful line, skip git hints
+                    e.to_string()
+                        .lines()
+                        .filter(|l| !l.trim().starts_with("hint:") && !l.trim().is_empty())
+                        .take(1)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .trim()
+                        .to_string()
+                };
+                Output::sub_item(format!("Error: {}", clean_error));
+                failed_entries.push((*entry_num, clean_error));
             }
         }
-
-        pb.inc(1);
     }
+
+    println!();
 
     // Update all PR descriptions in the stack if any PRs were created/exist
     let has_any_prs = active_stack
@@ -1719,13 +1734,13 @@ async fn submit_entry(
         .iter()
         .any(|e| e.pull_request_id.is_some());
     if has_any_prs && submitted_count > 0 {
-        pb.set_message("Updating PR descriptions...");
         match integration.update_all_pr_descriptions(&stack_id).await {
             Ok(updated_prs) => {
                 if !updated_prs.is_empty() {
                     Output::sub_item(format!(
-                        "Updated {} PR descriptions with current stack hierarchy",
-                        updated_prs.len()
+                        "Updated {} PR description{} with stack hierarchy",
+                        updated_prs.len(),
+                        if updated_prs.len() == 1 { "" } else { "s" }
                     ));
                 }
             }
@@ -1735,26 +1750,26 @@ async fn submit_entry(
         }
     }
 
+    // Summary
     if failed_entries.is_empty() {
-        pb.finish_with_message("✅ All pull requests created successfully");
         Output::success(format!(
-            "Successfully submitted {} entr{}",
+            "All {} {} submitted successfully!",
             submitted_count,
-            if submitted_count == 1 { "y" } else { "ies" }
+            if submitted_count == 1 { "entry" } else { "entries" }
         ));
     } else {
-        pb.abandon_with_message("⚠️  Some submissions failed");
+        println!();
         Output::section("Submission Summary");
-        Output::bullet(format!("Successful: {submitted_count}"));
-        Output::bullet(format!("Failed: {}", failed_entries.len()));
-
-        Output::section("Failed entries:");
-        for (entry_num, error) in failed_entries {
-            Output::bullet(format!("Entry {entry_num}: {error}"));
+        println!("   ✓ Successful: {submitted_count}");
+        println!("   ✗ Failed: {}", failed_entries.len());
+        
+        if !failed_entries.is_empty() {
+            println!();
+            Output::tip("Retry failed entries:");
+            for (entry_num, _) in &failed_entries {
+                Output::bullet(format!("ca stack submit {entry_num}"));
+            }
         }
-
-        Output::tip("You can retry failed entries individually:");
-        Output::command_example("ca stack submit <ENTRY_NUMBER>");
     }
 
     Ok(())
