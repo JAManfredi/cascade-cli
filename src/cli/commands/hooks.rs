@@ -971,28 +971,32 @@ echo "✅ Commit message validation passed"
                  if %ERRORLEVEL% equ 0 (\n\
                      echo ⚠️ You're in EDIT MODE for a stack entry!\n\
                      echo.\n\
-                     echo Choose your action:\n\
-                     echo   🔄 [A]mend: Modify the current entry\n\
-                     echo   ➕ [N]ew:   Create new entry on top ^(current behavior^)\n\
-                     echo   ❌ [C]ancel: Stop and think about it\n\
-                     echo.\n\
-                     set /p choice=\\\"Your choice (A/n/c): \\\"\n\
-                     \n\
-                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
-                         echo ✅ Running: git commit --amend\n\
-                         git commit --amend\n\
-                         if %ERRORLEVEL% equ 0 (\n\
-                             echo 💡 Entry updated! Run 'ca sync' to update PRs\n\
-                         )\n\
-                         exit /b %ERRORLEVEL%\n\
-                     ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
-                         echo ❌ Commit cancelled\n\
-                         exit /b 1\n\
-                     ) else (\n\
-                         echo ➕ Creating new stack entry...\n\
-                         rem Let the commit proceed normally\n\
-                         exit /b 0\n\
-                     )\n\
+                    echo Choose your action:\n\
+                    echo   🔄 [A]mend: Modify the current entry ^(default^)\n\
+                    echo   ➕ [N]ew:   Create new entry on top\n\
+                    echo   ❌ [C]ancel: Stop and think about it\n\
+                    echo.\n\
+                    set /p choice=\\\"Your choice (A/n/c): \\\"\n\
+                    if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
+                    \n\
+                    if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
+                        echo ✅ Running: git commit --amend\n\
+                        git commit --amend\n\
+                        if %ERRORLEVEL% equ 0 (\n\
+                            echo 💡 Entry updated! Run 'ca sync' to update PRs\n\
+                        )\n\
+                        exit /b %ERRORLEVEL%\n\
+                    ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
+                        echo ➕ Creating new stack entry...\n\
+                        rem Let the commit proceed normally\n\
+                        exit /b 0\n\
+                    ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
+                        echo ❌ Commit cancelled\n\
+                        exit /b 1\n\
+                    ) else (\n\
+                        echo ❓ Invalid choice. Please choose A, n, or c\n\
+                        exit /b 1\n\
+                    )\n\
                  )\n\n\
                  rem Not in edit mode, proceed normally\n\
                  exit /b 0\n",
@@ -1016,35 +1020,40 @@ echo "✅ Commit message validation passed"
                  if \\\"{0}\\\" entry status --quiet >/dev/null 2>&1; then\n\
                      echo \\\"⚠️ You're in EDIT MODE for a stack entry!\\\"\n\
                      echo \\\"\\\"\n\
-                     echo \\\"Choose your action:\\\"\n\
-                     echo \\\"  🔄 [A]mend: Modify the current entry\\\"\n\
-                     echo \\\"  ➕ [N]ew:   Create new entry on top (current behavior)\\\"\n\
-                     echo \\\"  ❌ [C]ancel: Stop and think about it\\\"\n\
-                     echo \\\"\\\"\n\
-                     \n\
-                     # Read user choice with default to 'new'\n\
-                     read -p \\\"Your choice (A/n/c): \\\" choice\n\
-                     \n\
-                     case \\\"$choice\\\" in\n\
-                         [Aa])\n\
-                             echo \\\"✅ Running: git commit --amend\\\"\n\
-                             # Temporarily disable hooks to avoid recursion\n\
-                             git -c core.hooksPath=/dev/null commit --amend\n\
-                             if [ $? -eq 0 ]; then\n\
-                                 echo \\\"💡 Entry updated! Run 'ca sync' to update PRs\\\"\n\
-                             fi\n\
-                             exit $?\n\
-                             ;;\n\
-                         [Cc])\n\
-                             echo \\\"❌ Commit cancelled\\\"\n\
-                             exit 1\n\
-                             ;;\n\
-                         *)\n\
-                             echo \\\"➕ Creating new stack entry...\\\"\n\
-                             # Let the commit proceed normally\n\
-                             exit 0\n\
-                             ;;\n\
-                     esac\n\
+                    echo \\\"Choose your action:\\\"\n\
+                    echo \\\"  🔄 [A]mend: Modify the current entry (default)\\\"\n\
+                    echo \\\"  ➕ [N]ew:   Create new entry on top\\\"\n\
+                    echo \\\"  ❌ [C]ancel: Stop and think about it\\\"\n\
+                    echo \\\"\\\"\n\
+                    \n\
+                    # Read user choice with default to amend\n\
+                    read -p \\\"Your choice (A/n/c): \\\" choice\n\
+                    choice=${{choice:-A}}\n\
+                    \n\
+                    case \\\"$choice\\\" in\n\
+                        [Aa])\n\
+                            echo \\\"✅ Running: git commit --amend\\\"\n\
+                            # Temporarily disable hooks to avoid recursion\n\
+                            git -c core.hooksPath=/dev/null commit --amend\n\
+                            if [ $? -eq 0 ]; then\n\
+                                echo \\\"💡 Entry updated! Run 'ca sync' to update PRs\\\"\n\
+                            fi\n\
+                            exit $?\n\
+                            ;;\n\
+                        [Nn])\n\
+                            echo \\\"➕ Creating new stack entry...\\\"\n\
+                            # Let the commit proceed normally\n\
+                            exit 0\n\
+                            ;;\n\
+                        [Cc])\n\
+                            echo \\\"❌ Commit cancelled\\\"\n\
+                            exit 1\n\
+                            ;;\n\
+                        *)\n\
+                            echo \\\"❓ Invalid choice. Please choose A, n, or c\\\"\n\
+                            exit 1\n\
+                            ;;\n\
+                    esac\n\
                  fi\n\n\
                  # Not in edit mode, proceed normally\n\
                  exit 0\n",
