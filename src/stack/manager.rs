@@ -1253,24 +1253,9 @@ impl StackManager {
                 .get_commits_between(&entry.commit_hash, &new_head)?;
 
             // Update the entry to point to the new HEAD
+            // Note: We intentionally do NOT append commit messages here
+            // The entry's message should describe the feature/change, not list all commits
             entry.commit_hash = new_head.clone();
-
-            // Update commit message to reflect the incorporation
-            let mut extra_messages = Vec::new();
-            for commit in &extra_commits {
-                if let Some(message) = commit.message() {
-                    let first_line = message.lines().next().unwrap_or("").to_string();
-                    extra_messages.push(first_line);
-                }
-            }
-
-            if !extra_messages.is_empty() {
-                entry.message = format!(
-                    "{}\n\nIncorporated commits:\n• {}",
-                    entry.message,
-                    extra_messages.join("\n• ")
-                );
-            }
 
             Output::success(format!(
                 "Incorporated {} commit(s) into entry '{}'",
