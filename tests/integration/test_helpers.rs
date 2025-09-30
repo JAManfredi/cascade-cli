@@ -632,3 +632,84 @@ mod tests {
         }
     }
 }
+
+/// Initialize Cascade in a repository
+pub fn run_cascade_init(repo_path: &Path) {
+    let output = Command::new("ca")
+        .current_dir(repo_path)
+        .args(["init", "--bitbucket-url", "https://test.bitbucket.com"])
+        .output()
+        .expect("Failed to run ca init");
+    
+    assert!(output.status.success(), "ca init failed: {}", String::from_utf8_lossy(&output.stderr));
+}
+
+/// Get current branch name
+pub fn git_current_branch(repo_path: &Path) -> String {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["branch", "--show-current"])
+        .output()
+        .expect("Failed to get current branch");
+    
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// Get HEAD commit hash
+pub fn git_head_hash(repo_path: &Path) -> String {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("Failed to get HEAD hash");
+    
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// Get commit hash for a specific branch
+pub fn git_branch_hash(repo_path: &Path, branch: &str) -> String {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", branch])
+        .output()
+        .expect("Failed to get branch hash");
+    
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// Create a file with content
+pub fn create_file(repo_path: &Path, filename: &str, content: &str) {
+    let file_path = repo_path.join(filename);
+    std::fs::write(file_path, content).expect("Failed to create file");
+}
+
+/// Git add all changes
+pub fn git_add_all(repo_path: &Path) {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["add", "-A"])
+        .output()
+        .expect("Failed to git add");
+    
+    assert!(output.status.success(), "git add failed");
+}
+
+/// Create a test repo with N commits and return temp dir + path
+pub async fn create_temp_repo_with_commits(count: u32) -> (TempDir, PathBuf) {
+    let (temp_dir, repo_path) = create_test_git_repo().await;
+    
+    for i in 1..=count {
+        create_file(&repo_path, &format!("file{}.txt", i), &format!("content {}", i));
+        git_add_all(&repo_path);
+        
+        let output = Command::new("git")
+            .current_dir(&repo_path)
+            .args(["commit", "-m", &format!("Commit {}", i)])
+            .output()
+            .expect("Failed to commit");
+        
+        assert!(output.status.success(), "Failed to create commit {}", i);
+    }
+    
+    (temp_dir, repo_path)
+}
