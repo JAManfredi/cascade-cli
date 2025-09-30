@@ -173,6 +173,11 @@ impl RebaseManager {
         }
     }
 
+    /// Consume the rebase manager and return the updated stack manager
+    pub fn into_stack_manager(self) -> StackManager {
+        self.stack_manager
+    }
+
     /// Rebase an entire stack onto a new base
     pub fn rebase_stack(&mut self, stack_id: &Uuid) -> Result<RebaseResult> {
         debug!("Starting rebase for stack {}", stack_id);

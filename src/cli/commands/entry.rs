@@ -52,6 +52,21 @@ pub enum EntryAction {
         #[arg(long, short)]
         yes: bool,
     },
+    /// Amend the current stack entry commit and update working branch
+    Amend {
+        /// New commit message (optional, uses git editor if not provided)
+        #[arg(long, short)]
+        message: Option<String>,
+        /// Include all changes (staged + unstaged) like 'git commit -a --amend'
+        #[arg(long, short)]
+        all: bool,
+        /// Automatically force-push after amending (if PR exists)
+        #[arg(long)]
+        push: bool,
+        /// Auto-restack dependent entries after amending
+        #[arg(long)]
+        restack: bool,
+    },
 }
 
 pub async fn run(action: EntryAction) -> Result<()> {
@@ -63,6 +78,12 @@ pub async fn run(action: EntryAction) -> Result<()> {
         EntryAction::Status { quiet } => show_edit_status(quiet).await,
         EntryAction::List { verbose } => list_entries(verbose).await,
         EntryAction::Clear { yes } => clear_edit_mode(yes).await,
+        EntryAction::Amend {
+            message,
+            all,
+            push,
+            restack,
+        } => amend_entry(message, all, push, restack).await,
     }
 }
 
@@ -741,6 +762,208 @@ async fn clear_edit_mode(skip_confirmation: bool) -> Result<()> {
 
     Output::success("Edit mode cleared");
     Output::tip("Use 'ca entry checkout' to start a new edit session");
+
+    Ok(())
+}
+
+/// Amend the current stack entry commit and update working branch
+async fn amend_entry(
+    message: Option<String>,
+    all: bool,
+    push: bool,
+    restack: bool,
+) -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
+    let repo = crate::git::GitRepository::open(&repo_root)?;
+
+    let current_branch = repo.get_current_branch()?;
+    
+    // Get active stack info we need (clone to avoid borrow issues)
+    let (stack_id, entry_index, entry_id, entry_branch, working_branch, has_dependents, has_pr) = {
+        let active_stack = manager.get_active_stack().ok_or_else(|| {
+            CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
+        })?;
+        
+        // Find which entry we're amending (must be on a stack branch)
+        let mut found_entry = None;
+        
+        for (idx, entry) in active_stack.entries.iter().enumerate() {
+            if entry.branch == current_branch {
+                found_entry = Some((
+                    idx,
+                    entry.id,
+                    entry.branch.clone(),
+                    entry.pull_request_id.clone(),
+                ));
+                break;
+            }
+        }
+        
+        match found_entry {
+            Some((idx, id, branch, pr_id)) => {
+                let has_dependents = idx + 1 < active_stack.entries.len();
+                (
+                    active_stack.id,
+                    idx,
+                    id,
+                    branch,
+                    active_stack.working_branch.clone(),
+                    has_dependents,
+                    pr_id.is_some(),
+                )
+            }
+            None => {
+                return Err(CascadeError::config(format!(
+                    "Current branch '{}' is not a stack entry branch.\n\
+                     Use 'ca entry checkout <N>' to checkout a stack entry first.",
+                    current_branch
+                )));
+            }
+        }
+    };
+
+    Output::section(format!("Amending stack entry #{}", entry_index + 1));
+
+    // 1. Perform the git commit --amend
+    let mut amend_args = vec!["commit", "--amend"];
+    
+    if all {
+        amend_args.insert(1, "-a");
+    }
+    
+    if let Some(ref msg) = message {
+        amend_args.push("-m");
+        amend_args.push(msg);
+    } else {
+        // Use git editor for interactive message editing
+        amend_args.push("--no-edit");
+    }
+    
+    debug!("Running git {}", amend_args.join(" "));
+    
+    let output = std::process::Command::new("git")
+        .args(&amend_args)
+        .current_dir(&repo_root)
+        .output()
+        .map_err(|e| CascadeError::Io(e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CascadeError::branch(format!(
+            "Failed to amend commit: {}",
+            stderr.trim()
+        )));
+    }
+
+    Output::success("Commit amended");
+
+    // 2. Get the new commit hash
+    let new_commit_hash = repo.get_head_commit()?.id().to_string();
+    debug!("New commit hash after amend: {}", new_commit_hash);
+
+    // 3. Update stack metadata with new commit hash
+    {
+        let stack = manager.get_stack_mut(&stack_id)
+            .ok_or_else(|| CascadeError::config("Stack not found"))?;
+        
+        if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == entry_id) {
+            let old_hash = entry.commit_hash.clone();
+            entry.commit_hash = new_commit_hash.clone();
+            debug!("Updated entry commit hash: {} -> {}", &old_hash[..8], &new_commit_hash[..8]);
+            Output::sub_item(format!("Updated metadata: {} → {}", &old_hash[..8], &new_commit_hash[..8]));
+        }
+    }
+
+    manager.save_to_disk()?;
+
+    // 4. Update working branch to keep safety net in sync
+    if let Some(ref working_branch_name) = working_branch {
+        Output::sub_item(format!("Updating working branch: {}", working_branch_name));
+        
+        // Force update the working branch to point to the amended commit
+        repo.update_branch_to_commit(working_branch_name, &new_commit_hash)?;
+        
+        Output::success(format!("Working branch '{}' updated (safety net preserved)", working_branch_name));
+    } else {
+        Output::warning("No working branch found - create one with 'ca stack create' for safety");
+    }
+
+    // 5. Auto-restack dependent entries if requested
+    if restack && has_dependents {
+        println!();
+        Output::section("Auto-restacking dependent entries");
+        
+        // Create fresh instances for rebase manager
+        let rebase_manager_stack = StackManager::new(&repo_root)?;
+        let rebase_manager_repo = crate::git::GitRepository::open(&repo_root)?;
+        
+        // Use the sync_stack mechanism to rebase dependent entries
+        let mut rebase_manager = crate::stack::RebaseManager::new(
+            rebase_manager_stack,
+            rebase_manager_repo,
+            crate::stack::RebaseOptions {
+                strategy: crate::stack::RebaseStrategy::ForcePush,
+                target_base: Some(entry_branch.clone()),
+                skip_pull: Some(true), // Don't pull, we're rebasing on local changes
+                ..Default::default()
+            },
+        );
+
+        match rebase_manager.rebase_stack(&stack_id) {
+            Ok(_) => {
+                Output::success("Dependent entries restacked");
+            }
+            Err(e) => {
+                Output::warning(format!("Could not auto-restack: {}", e));
+                Output::tip("Run 'ca sync' manually to restack dependent entries");
+            }
+        }
+    }
+
+    // 6. Auto-push if requested and entry has a PR
+    if push {
+        println!();
+
+        if has_pr {
+            Output::section("Force-pushing to remote");
+            
+            // Set env var to skip force-push confirmation
+            std::env::set_var("FORCE_PUSH_NO_CONFIRM", "1");
+            
+            repo.force_push_branch(&current_branch, &current_branch)?;
+            Output::success(format!("Force-pushed '{}' to remote", current_branch));
+            Output::sub_item("PR will be automatically updated");
+        } else {
+            Output::warning("No PR found for this entry - skipping push");
+            Output::tip("Use 'ca submit' to create a PR");
+        }
+    }
+
+    // Summary
+    println!();
+    Output::section("Summary");
+    Output::bullet(format!("Amended entry #{} on branch '{}'", entry_index + 1, entry_branch));
+    if working_branch.is_some() {
+        Output::bullet("Working branch updated (safety net preserved)");
+    }
+    if restack {
+        Output::bullet("Dependent entries restacked");
+    }
+    if push {
+        Output::bullet("Changes force-pushed to remote");
+    } else {
+        Output::tip("Use --push to automatically force-push after amending");
+    }
+    
+    if !restack && has_dependents {
+        Output::tip("Use --restack to automatically update dependent entries");
+    }
 
     Ok(())
 }
