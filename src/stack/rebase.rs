@@ -1,7 +1,6 @@
 use crate::errors::{CascadeError, Result};
 use crate::git::{ConflictAnalyzer, GitRepository};
 use crate::stack::{Stack, StackManager};
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
@@ -85,11 +84,13 @@ pub struct RebaseResult {
 /// This stores branch names and provides a cleanup method that can be called
 /// with a GitRepository reference. The Drop trait ensures cleanup happens
 /// even if the rebase function panics or returns early with an error.
+#[allow(dead_code)]
 struct TempBranchCleanupGuard {
     branches: Vec<String>,
     cleaned: bool,
 }
 
+#[allow(dead_code)]
 impl TempBranchCleanupGuard {
     fn new() -> Self {
         Self {
@@ -188,13 +189,12 @@ impl RebaseManager {
     }
 
     /// Rebase using force-push strategy (industry standard for stacked diffs)
-    /// This creates temporary branches, then force-pushes back to original branches
+    /// This updates local branches in-place, then force-pushes ONLY branches with existing PRs
     /// to preserve PR history - the approach used by Graphite, Phabricator, spr, etc.
     fn rebase_with_force_push(&mut self, stack: &Stack) -> Result<RebaseResult> {
-        info!(
-            "Rebasing stack '{}' using force-push strategy (preserves PR history)",
-            stack.name
-        );
+        use crate::cli::output::Output;
+        
+        Output::section(&format!("Rebasing stack: {}", stack.name));
 
         let mut result = RebaseResult {
             success: true,
@@ -211,83 +211,93 @@ impl RebaseManager {
             .as_ref()
             .unwrap_or(&stack.base_branch);
 
+        // Save original working branch to restore later
+        let original_branch = self.git_repo.get_current_branch().ok();
+
         // Ensure we're on the base branch
         if self.git_repo.get_current_branch()? != *target_base {
             self.git_repo.checkout_branch(target_base)?;
         }
 
         // Only pull if not already done by caller (like sync command)
-        // Note: This prevents redundant pulls when called from sync
         if !self.options.skip_pull.unwrap_or(false) {
             if let Err(e) = self.pull_latest_changes(target_base) {
-                warn!("Failed to pull latest changes: {}", e);
+                Output::warning(&format!("Could not pull latest changes: {}", e));
             }
-        } else {
-            debug!("Skipping pull - already done by caller");
         }
 
-        // CRITICAL: Reset working directory and index to match HEAD
-        // After pulling (or if sync already pulled), the working directory may have
-        // staged changes from the pull operation that shouldn't carry into the rebase
-        debug!("Resetting working directory to clean state before rebase");
+        // Reset working directory to clean state before rebase
         if let Err(e) = self.git_repo.reset_to_head() {
-            warn!("Failed to reset working directory: {}", e);
-            // Continue anyway - the staged file checks will catch any issues
+            Output::warning(&format!("Could not reset working directory: {}", e));
         }
 
         let mut current_base = target_base.clone();
+        let entry_count = stack.entries.len();
+        let mut pushed_count = 0;
+        let mut skipped_count = 0;
 
-        // RAII guard ensures temp branches are cleaned up even on error/panic
-        let mut cleanup_guard = TempBranchCleanupGuard::new();
+        Output::info(&format!("📋 Rebasing {} entries", entry_count));
 
         for (index, entry) in stack.entries.iter().enumerate() {
-            debug!("Processing entry {}: {}", index, entry.short_hash());
-
             let original_branch = &entry.branch;
 
-            // Generate temporary branch name for rebase
-            let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
+            // Checkout current base (where we'll apply the cherry-pick)
+            if self.git_repo.get_current_branch()? != current_base {
+                self.git_repo.checkout_branch(&current_base)?;
+            }
 
-            // Add to cleanup guard immediately - ensures cleanup even on error
-            cleanup_guard.add_branch(temp_branch.clone());
-
-            // Create temp branch from current base
-            self.git_repo
-                .create_branch(&temp_branch, Some(&current_base))?;
-            self.git_repo.checkout_branch(&temp_branch)?;
-
-            // Cherry-pick the commit onto the temp branch
+            // Cherry-pick the commit onto the current branch
             match self.cherry_pick_commit(&entry.commit_hash) {
                 Ok(new_commit_hash) => {
                     result.new_commits.push(new_commit_hash.clone());
 
-                    // Force-push temp branch content back to original branch
-                    // This preserves the PR associated with the original branch
-                    info!(
-                        "Force-pushing {} content to {} to preserve PR history",
-                        temp_branch, original_branch
-                    );
+                    // Get the commit that's now at HEAD (the cherry-picked commit)
+                    let rebased_commit_id = self.git_repo.get_head_commit()?.id().to_string();
 
-                    self.git_repo
-                        .force_push_branch(original_branch, &temp_branch)?;
+                    // Update the original branch to point to this rebased commit
+                    // This updates the local branch ref - no network traffic
+                    self.git_repo.update_branch_to_commit(original_branch, &rebased_commit_id)?;
+
+                    // Only force-push if this entry has a PR
+                    if entry.pull_request_id.is_some() {
+                        let pr_num = entry.pull_request_id.as_ref().unwrap();
+                        Output::progress(&format!(
+                            "   {} {} (PR #{})",
+                            if index + 1 == entry_count { "└─" } else { "├─" },
+                            original_branch,
+                            pr_num
+                        ));
+                        
+                        // Force-push the updated branch to remote to update the PR
+                        // Push original_branch (which now points to rebased commit) to remote
+                        self.git_repo.force_push_single_branch(original_branch)?;
+                        pushed_count += 1;
+                    } else {
+                        Output::progress(&format!(
+                            "   {} {} (not submitted)",
+                            if index + 1 == entry_count { "└─" } else { "├─" },
+                            original_branch
+                        ));
+                        skipped_count += 1;
+                    }
 
                     result
                         .branch_mapping
                         .insert(original_branch.clone(), original_branch.clone());
 
-                    // Update stack entry with new commit hash (branch name stays the same)
+                    // Update stack entry with new commit hash
                     self.update_stack_entry(
                         stack.id,
                         &entry.id,
                         original_branch,
-                        &new_commit_hash,
+                        &rebased_commit_id,
                     )?;
 
-                    // Original branch (now updated) becomes the base for the next entry
+                    // This branch becomes the base for the next entry
                     current_base = original_branch.clone();
                 }
                 Err(e) => {
-                    warn!("Failed to cherry-pick {}: {}", entry.commit_hash, e);
+                    Output::error(&format!("Conflict in {}: {}", entry.commit_hash, e));
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
@@ -299,7 +309,7 @@ impl RebaseManager {
                     // Try to resolve automatically
                     match self.auto_resolve_conflicts(&entry.commit_hash) {
                         Ok(_) => {
-                            info!("Auto-resolved conflicts for {}", entry.commit_hash);
+                            Output::success("   Auto-resolved conflicts");
                         }
                         Err(resolve_err) => {
                             result.success = false;
@@ -312,19 +322,33 @@ impl RebaseManager {
             }
         }
 
-        // Explicitly cleanup temp branches before returning
-        // The Drop guard will warn if this doesn't run (e.g., on panic)
-        cleanup_guard.cleanup(&self.git_repo);
+        // Return to original working branch
+        if let Some(orig_branch) = original_branch {
+            if let Err(e) = self.git_repo.checkout_branch(&orig_branch) {
+                Output::warning(&format!("Could not return to original branch '{}': {}", orig_branch, e));
+            }
+        }
 
-        result.summary = format!(
-            "Rebased {} entries using force-push strategy. PR history preserved.",
-            stack.entries.len()
-        );
+        result.summary = if pushed_count > 0 {
+            format!(
+                "✅ {} entries rebased ({} PR{} updated{})",
+                entry_count,
+                pushed_count,
+                if pushed_count == 1 { "" } else { "s" },
+                if skipped_count > 0 {
+                    format!(", {} not yet submitted", skipped_count)
+                } else {
+                    String::new()
+                }
+            )
+        } else {
+            format!("✅ {} entries rebased (no PRs to update yet)", entry_count)
+        };
 
         if result.success {
-            info!("✅ Rebase completed successfully - all PRs updated");
+            Output::success(&result.summary);
         } else {
-            warn!("❌ Rebase failed: {:?}", result.error);
+            Output::error(&format!("Rebase failed: {:?}", result.error));
         }
 
         Ok(result)
@@ -381,85 +405,21 @@ impl RebaseManager {
 
     /// Cherry-pick a commit onto the current branch
     fn cherry_pick_commit(&self, commit_hash: &str) -> Result<String> {
-        debug!("Cherry-picking commit {}", commit_hash);
-
         // Use the real cherry-pick implementation from GitRepository
-        match self.git_repo.cherry_pick(commit_hash) {
-            Ok(new_commit_hash) => {
-                info!("✅ Cherry-picked {} -> {}", commit_hash, new_commit_hash);
+        let new_commit_hash = self.git_repo.cherry_pick(commit_hash)?;
 
-                // Check for any leftover staged changes after successful cherry-pick
-                match self.git_repo.get_staged_files() {
-                    Ok(staged_files) if !staged_files.is_empty() => {
-                        warn!(
-                            "Found {} staged files after successful cherry-pick. Committing them.",
-                            staged_files.len()
-                        );
-
-                        // Commit any leftover staged changes
-                        let cleanup_message =
-                            format!("Cleanup after cherry-pick {}", &commit_hash[..8]);
-                        match self.git_repo.commit_staged_changes(&cleanup_message) {
-                            Ok(Some(cleanup_commit)) => {
-                                info!(
-                                    "✅ Committed {} leftover staged files as {}",
-                                    staged_files.len(),
-                                    &cleanup_commit[..8]
-                                );
-                                Ok(new_commit_hash) // Return the original cherry-pick commit
-                            }
-                            Ok(None) => {
-                                // Staged files disappeared, this is fine
-                                Ok(new_commit_hash)
-                            }
-                            Err(commit_err) => {
-                                warn!("Failed to commit leftover staged changes: {}", commit_err);
-                                // Don't fail the whole operation for this
-                                Ok(new_commit_hash)
-                            }
-                        }
-                    }
-                    _ => {
-                        // No staged changes, normal case
-                        Ok(new_commit_hash)
-                    }
-                }
-            }
-            Err(e) => {
-                // Check if there are staged changes that need to be committed
-                match self.git_repo.get_staged_files() {
-                    Ok(staged_files) if !staged_files.is_empty() => {
-                        warn!(
-                            "Cherry-pick failed but found {} staged files. Attempting to commit them.",
-                            staged_files.len()
-                        );
-
-                        // Try to commit the staged changes
-                        let commit_message =
-                            format!("Cherry-pick (partial): {}", &commit_hash[..8]);
-                        match self.git_repo.commit_staged_changes(&commit_message) {
-                            Ok(Some(commit_hash)) => {
-                                info!("✅ Committed staged changes as {}", &commit_hash[..8]);
-                                Ok(commit_hash)
-                            }
-                            Ok(None) => {
-                                // No staged changes after all
-                                Err(e)
-                            }
-                            Err(commit_err) => {
-                                warn!("Failed to commit staged changes: {}", commit_err);
-                                Err(e)
-                            }
-                        }
-                    }
-                    _ => {
-                        // No staged changes, return original error
-                        Err(e)
-                    }
-                }
+        // Check for any leftover staged changes after successful cherry-pick
+        if let Ok(staged_files) = self.git_repo.get_staged_files() {
+            if !staged_files.is_empty() {
+                // Commit any leftover staged changes silently
+                let cleanup_message = format!("Cleanup after cherry-pick {}", &commit_hash[..8]);
+                let _ = self.git_repo.commit_staged_changes(&cleanup_message);
             }
         }
+
+        Ok(new_commit_hash)
     }
+
 
     /// Attempt to automatically resolve conflicts
     fn auto_resolve_conflicts(&self, commit_hash: &str) -> Result<bool> {

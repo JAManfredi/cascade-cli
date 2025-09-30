@@ -288,6 +288,61 @@ impl GitRepository {
         Ok(())
     }
 
+    /// Update a branch to point to a specific commit (local operation only)
+    /// Creates the branch if it doesn't exist, updates it if it does
+    pub fn update_branch_to_commit(&self, branch_name: &str, commit_id: &str) -> Result<()> {
+        let commit_oid = Oid::from_str(commit_id)
+            .map_err(|e| CascadeError::branch(format!("Invalid commit ID '{}': {}", commit_id, e)))?;
+        
+        let commit = self.repo.find_commit(commit_oid)
+            .map_err(|e| CascadeError::branch(format!("Commit '{}' not found: {}", commit_id, e)))?;
+
+        // Try to find existing branch
+        if self.repo.find_branch(branch_name, git2::BranchType::Local).is_ok() {
+            // Update existing branch to point to new commit
+            let refname = format!("refs/heads/{}", branch_name);
+            self.repo.reference(&refname, commit_oid, true, "update branch to rebased commit")
+                .map_err(|e| CascadeError::branch(format!("Failed to update branch '{}': {}", branch_name, e)))?;
+        } else {
+            // Create new branch
+            self.repo.branch(branch_name, &commit, false)
+                .map_err(|e| CascadeError::branch(format!("Failed to create branch '{}': {}", branch_name, e)))?;
+        }
+
+        Ok(())
+    }
+
+    /// Force-push a single branch to remote (simpler version for when branch is already updated locally)
+    pub fn force_push_single_branch(&self, branch_name: &str) -> Result<()> {
+        // Fetch first to ensure we have latest remote state for safety checks
+        if let Err(e) = self.fetch() {
+            tracing::warn!("Could not fetch before force push: {}", e);
+        }
+
+        // Check safety and create backup if needed
+        let safety_result = self.check_force_push_safety_enhanced(branch_name)?;
+        if let Some(backup_info) = safety_result {
+            self.create_backup_branch(branch_name, &backup_info.remote_commit_id)?;
+        }
+
+        // Force push using git CLI (more reliable than git2 for TLS)
+        let output = std::process::Command::new("git")
+            .args(["push", "--force", "origin", branch_name])
+            .current_dir(&self.path)
+            .output()
+            .map_err(|e| CascadeError::branch(format!("Failed to execute git push: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(CascadeError::branch(format!(
+                "Force push failed for '{}': {}",
+                branch_name, stderr
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Switch to a branch with safety checks
     pub fn checkout_branch(&self, name: &str) -> Result<()> {
         self.checkout_branch_with_options(name, false)
