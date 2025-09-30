@@ -846,7 +846,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
         .args(&amend_args)
         .current_dir(&repo_root)
         .output()
-        .map_err(|e| CascadeError::Io(e))?;
+        .map_err(CascadeError::Io)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
