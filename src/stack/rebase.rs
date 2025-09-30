@@ -195,7 +195,7 @@ impl RebaseManager {
     fn rebase_with_force_push(&mut self, stack: &Stack) -> Result<RebaseResult> {
         use crate::cli::output::Output;
 
-        Output::section(&format!("Rebasing stack: {}", stack.name));
+        Output::section(format!("Rebasing stack: {}", stack.name));
 
         let mut result = RebaseResult {
             success: true,
@@ -224,13 +224,13 @@ impl RebaseManager {
         // Only pull if not already done by caller (like sync command)
         if !self.options.skip_pull.unwrap_or(false) {
             if let Err(e) = self.pull_latest_changes(&target_base) {
-                Output::warning(&format!("Could not pull latest changes: {}", e));
+                Output::warning(format!("Could not pull latest changes: {}", e));
             }
         }
 
         // Reset working directory to clean state before rebase
         if let Err(e) = self.git_repo.reset_to_head() {
-            Output::warning(&format!("Could not reset working directory: {}", e));
+            Output::warning(format!("Could not reset working directory: {}", e));
         }
 
         let mut current_base = target_base.clone();
@@ -308,7 +308,7 @@ impl RebaseManager {
                 }
                 Err(e) => {
                     println!(); // Spacing before error
-                    Output::error(&format!("Conflict in {}: {}", &entry.commit_hash[..8], e));
+                    Output::error(format!("Conflict in {}: {}", &entry.commit_hash[..8], e));
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
@@ -338,7 +338,7 @@ impl RebaseManager {
         if !temp_branches.is_empty() {
             // Checkout base branch to allow temp branch deletion
             if let Err(e) = self.git_repo.checkout_branch(&target_base) {
-                Output::warning(&format!("Could not checkout base for cleanup: {}", e));
+                Output::warning(format!("Could not checkout base for cleanup: {}", e));
             }
 
             // Delete all temp branches
@@ -352,7 +352,7 @@ impl RebaseManager {
         // Return to original working branch
         if let Some(orig_branch) = original_branch {
             if let Err(e) = self.git_repo.checkout_branch(&orig_branch) {
-                Output::warning(&format!(
+                Output::warning(format!(
                     "Could not return to original branch '{}': {}",
                     orig_branch, e
                 ));
@@ -385,7 +385,7 @@ impl RebaseManager {
         if result.success {
             Output::success(&result.summary);
         } else {
-            Output::error(&format!("Rebase failed: {:?}", result.error));
+            Output::error(format!("Rebase failed: {:?}", result.error));
         }
 
         Ok(result)
