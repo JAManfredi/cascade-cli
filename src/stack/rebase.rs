@@ -194,7 +194,7 @@ impl RebaseManager {
     /// to preserve PR history - the approach used by Graphite, Phabricator, spr, etc.
     fn rebase_with_force_push(&mut self, stack: &Stack) -> Result<RebaseResult> {
         use crate::cli::output::Output;
-        
+
         Output::section(&format!("Rebasing stack: {}", stack.name));
 
         let mut result = RebaseResult {
@@ -250,7 +250,8 @@ impl RebaseManager {
             // This avoids committing directly to protected branches like develop/main
             let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
             temp_branches.push(temp_branch.clone()); // Track for cleanup
-            self.git_repo.create_branch(&temp_branch, Some(&current_base))?;
+            self.git_repo
+                .create_branch(&temp_branch, Some(&current_base))?;
             self.git_repo.checkout_branch(&temp_branch)?;
 
             // Cherry-pick the commit onto the temp branch (NOT the protected base!)
@@ -263,20 +264,29 @@ impl RebaseManager {
 
                     // Update the original branch to point to this rebased commit
                     // This is LOCAL ONLY - moves refs/heads/<branch> to the commit on temp branch
-                    self.git_repo.update_branch_to_commit(original_branch, &rebased_commit_id)?;
+                    self.git_repo
+                        .update_branch_to_commit(original_branch, &rebased_commit_id)?;
 
                     // Only force-push to REMOTE if this entry has a PR
                     if entry.pull_request_id.is_some() {
                         let pr_num = entry.pull_request_id.as_ref().unwrap();
-                        let tree_char = if index + 1 == entry_count { "└─" } else { "├─" };
+                        let tree_char = if index + 1 == entry_count {
+                            "└─"
+                        } else {
+                            "├─"
+                        };
                         println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
-                        
+
                         // NOW do the actual force-push to remote (git push --force origin <branch>)
                         // This updates the PR with the rebased commits
                         self.git_repo.force_push_single_branch(original_branch)?;
                         pushed_count += 1;
                     } else {
-                        let tree_char = if index + 1 == entry_count { "└─" } else { "├─" };
+                        let tree_char = if index + 1 == entry_count {
+                            "└─"
+                        } else {
+                            "├─"
+                        };
                         println!("   {} {} (not submitted)", tree_char, original_branch);
                         skipped_count += 1;
                     }
@@ -330,7 +340,7 @@ impl RebaseManager {
             if let Err(e) = self.git_repo.checkout_branch(&target_base) {
                 Output::warning(&format!("Could not checkout base for cleanup: {}", e));
             }
-            
+
             // Delete all temp branches
             for temp_branch in &temp_branches {
                 if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
@@ -342,7 +352,10 @@ impl RebaseManager {
         // Return to original working branch
         if let Some(orig_branch) = original_branch {
             if let Err(e) = self.git_repo.checkout_branch(&orig_branch) {
-                Output::warning(&format!("Could not return to original branch '{}': {}", orig_branch, e));
+                Output::warning(&format!(
+                    "Could not return to original branch '{}': {}",
+                    orig_branch, e
+                ));
             }
         }
 
@@ -350,7 +363,7 @@ impl RebaseManager {
         result.summary = if pushed_count > 0 {
             let pr_plural = if pushed_count == 1 { "" } else { "s" };
             let entry_plural = if entry_count == 1 { "entry" } else { "entries" };
-            
+
             if skipped_count > 0 {
                 format!(
                     "{} {} rebased ({} PR{} updated, {} not yet submitted)",
@@ -443,7 +456,6 @@ impl RebaseManager {
 
         Ok(new_commit_hash)
     }
-
 
     /// Attempt to automatically resolve conflicts
     fn auto_resolve_conflicts(&self, commit_hash: &str) -> Result<bool> {

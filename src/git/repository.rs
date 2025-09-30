@@ -291,22 +291,40 @@ impl GitRepository {
     /// Update a branch to point to a specific commit (local operation only)
     /// Creates the branch if it doesn't exist, updates it if it does
     pub fn update_branch_to_commit(&self, branch_name: &str, commit_id: &str) -> Result<()> {
-        let commit_oid = Oid::from_str(commit_id)
-            .map_err(|e| CascadeError::branch(format!("Invalid commit ID '{}': {}", commit_id, e)))?;
-        
-        let commit = self.repo.find_commit(commit_oid)
-            .map_err(|e| CascadeError::branch(format!("Commit '{}' not found: {}", commit_id, e)))?;
+        let commit_oid = Oid::from_str(commit_id).map_err(|e| {
+            CascadeError::branch(format!("Invalid commit ID '{}': {}", commit_id, e))
+        })?;
+
+        let commit = self.repo.find_commit(commit_oid).map_err(|e| {
+            CascadeError::branch(format!("Commit '{}' not found: {}", commit_id, e))
+        })?;
 
         // Try to find existing branch
-        if self.repo.find_branch(branch_name, git2::BranchType::Local).is_ok() {
+        if self
+            .repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .is_ok()
+        {
             // Update existing branch to point to new commit
             let refname = format!("refs/heads/{}", branch_name);
-            self.repo.reference(&refname, commit_oid, true, "update branch to rebased commit")
-                .map_err(|e| CascadeError::branch(format!("Failed to update branch '{}': {}", branch_name, e)))?;
+            self.repo
+                .reference(
+                    &refname,
+                    commit_oid,
+                    true,
+                    "update branch to rebased commit",
+                )
+                .map_err(|e| {
+                    CascadeError::branch(format!(
+                        "Failed to update branch '{}': {}",
+                        branch_name, e
+                    ))
+                })?;
         } else {
             // Create new branch
-            self.repo.branch(branch_name, &commit, false)
-                .map_err(|e| CascadeError::branch(format!("Failed to create branch '{}': {}", branch_name, e)))?;
+            self.repo.branch(branch_name, &commit, false).map_err(|e| {
+                CascadeError::branch(format!("Failed to create branch '{}': {}", branch_name, e))
+            })?;
         }
 
         Ok(())
@@ -1400,22 +1418,25 @@ impl GitRepository {
         if merge_base_oid == head_commit.id() {
             // Fast-forward: local is direct ancestor of remote, just move pointer
             tracing::debug!("Fast-forwarding {} to {}", branch, remote_commit.id());
-            
+
             // Update the branch reference to point to remote commit
             let refname = format!("refs/heads/{}", branch);
-            self.repo.reference(&refname, remote_oid, true, "pull: Fast-forward")
+            self.repo
+                .reference(&refname, remote_oid, true, "pull: Fast-forward")
                 .map_err(CascadeError::Git)?;
-            
+
             // Update HEAD to point to the new commit
             self.repo.set_head(&refname).map_err(CascadeError::Git)?;
-            
+
             // Checkout the new commit (update working directory)
-            self.repo.checkout_head(Some(
-                git2::build::CheckoutBuilder::new()
-                    .force()
-                    .remove_untracked(false)
-            )).map_err(CascadeError::Git)?;
-            
+            self.repo
+                .checkout_head(Some(
+                    git2::build::CheckoutBuilder::new()
+                        .force()
+                        .remove_untracked(false),
+                ))
+                .map_err(CascadeError::Git)?;
+
             tracing::info!("Fast-forwarded to {}", remote_commit.id());
             return Ok(());
         }
