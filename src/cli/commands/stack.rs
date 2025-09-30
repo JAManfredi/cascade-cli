@@ -2169,11 +2169,14 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     // Return to original working branch
     if let Some(orig_branch) = original_branch {
         if orig_branch != base_branch {
-            if let Err(e) = git_repo.checkout_branch(&orig_branch) {
-                Output::warning(format!(
-                    "Could not return to original branch '{}': {}",
-                    orig_branch, e
-                ));
+            // Create new git_repo instance since the previous one was moved
+            if let Ok(git_repo) = GitRepository::open(&repo_root) {
+                if let Err(e) = git_repo.checkout_branch(&orig_branch) {
+                    Output::warning(format!(
+                        "Could not return to original branch '{}': {}",
+                        orig_branch, e
+                    ));
+                }
             }
         }
     }

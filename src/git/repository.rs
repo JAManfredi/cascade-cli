@@ -4,7 +4,7 @@ use chrono;
 use dialoguer::{theme::ColorfulTheme, Confirm, Select};
 use git2::{Oid, Repository, Signature};
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Repository information
 #[derive(Debug, Clone)]

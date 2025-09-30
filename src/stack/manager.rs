@@ -779,7 +779,7 @@ impl StackManager {
     }
 
     /// Save all data to disk
-    fn save_to_disk(&self) -> Result<()> {
+    pub fn save_to_disk(&self) -> Result<()> {
         // Ensure config directory exists
         if !self.config_dir.exists() {
             fs::create_dir_all(&self.config_dir).map_err(|e| {
