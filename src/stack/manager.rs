@@ -626,7 +626,7 @@ impl StackManager {
         self.metadata.edit_mode = None;
         self.save_to_disk()?;
 
-        info!("Exited edit mode");
+        debug!("Exited edit mode");
         Ok(())
     }
 

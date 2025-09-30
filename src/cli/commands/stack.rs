@@ -2001,6 +2001,7 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
     let mut stack_manager = StackManager::new(&repo_root)?;
 
     // Exit edit mode if active (sync will invalidate commit SHAs)
+    // TODO: Add error recovery to restore edit mode if sync fails
     if stack_manager.is_in_edit_mode() {
         debug!("Exiting edit mode before sync (commit SHAs will change)");
         stack_manager.exit_edit_mode()?;
@@ -2059,9 +2060,30 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         }
     }
 
-    // Step 2: Check if stack needs rebase and handle it
+    // Step 2: Reconcile metadata with current Git state before checking integrity
+    // This fixes stale metadata from previous bugs or interrupted operations
     let mut updated_stack_manager = StackManager::new(&repo_root)?;
     let stack_id = active_stack.id;
+
+    // Update entry commit hashes to match current branch HEADs
+    // This prevents false "branch modification" errors from stale metadata
+    if let Some(stack) = updated_stack_manager.get_stack_mut(&stack_id) {
+        for entry in &mut stack.entries {
+            if let Ok(current_commit) = git_repo.get_branch_head(&entry.branch) {
+                if entry.commit_hash != current_commit {
+                    debug!(
+                        "Reconciling entry '{}': updating hash from {} to {} (current branch HEAD)",
+                        entry.branch,
+                        &entry.commit_hash[..8],
+                        &current_commit[..8]
+                    );
+                    entry.commit_hash = current_commit;
+                }
+            }
+        }
+        // Save reconciled metadata
+        updated_stack_manager.save_to_disk()?;
+    }
 
     match updated_stack_manager.sync_stack(&stack_id) {
         Ok(_) => {

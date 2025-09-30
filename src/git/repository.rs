@@ -1367,7 +1367,7 @@ impl GitRepository {
 
     /// Pull changes from remote (fetch + merge)
     pub fn pull(&self, branch: &str) -> Result<()> {
-        tracing::info!("Pulling branch: {}", branch);
+        tracing::debug!("Pulling branch: {}", branch);
 
         // First fetch - this now includes TLS fallback
         match self.fetch() {
@@ -1437,7 +1437,7 @@ impl GitRepository {
                 ))
                 .map_err(CascadeError::Git)?;
 
-            tracing::info!("Fast-forwarded to {}", remote_commit.id());
+            tracing::debug!("Fast-forwarded to {}", remote_commit.id());
             return Ok(());
         }
 
