@@ -693,22 +693,32 @@ async fn clear_edit_mode(skip_confirmation: bool) -> Result<()> {
     // Show current edit mode info
     if let Some(edit_info) = manager.get_edit_mode_info() {
         Output::section("Current edit mode state");
-        
+
         if let Some(target_entry_id) = &edit_info.target_entry_id {
             Output::sub_item(format!("Target entry: {}", target_entry_id));
-            
+
             // Try to find the entry
             if let Some(active_stack) = manager.get_active_stack() {
-                if let Some(entry) = active_stack.entries.iter().find(|e| e.id == *target_entry_id) {
+                if let Some(entry) = active_stack
+                    .entries
+                    .iter()
+                    .find(|e| e.id == *target_entry_id)
+                {
                     Output::sub_item(format!("Entry: {}", entry.short_message(50)));
                 } else {
                     Output::warning("Target entry not found in stack (corrupted state)");
                 }
             }
         }
-        
-        Output::sub_item(format!("Original commit: {}", &edit_info.original_commit_hash[..8]));
-        Output::sub_item(format!("Started: {}", edit_info.started_at.format("%Y-%m-%d %H:%M:%S")));
+
+        Output::sub_item(format!(
+            "Original commit: {}",
+            &edit_info.original_commit_hash[..8]
+        ));
+        Output::sub_item(format!(
+            "Started: {}",
+            edit_info.started_at.format("%Y-%m-%d %H:%M:%S")
+        ));
     }
 
     // Confirm before clearing
@@ -718,9 +728,7 @@ async fn clear_edit_mode(skip_confirmation: bool) -> Result<()> {
             .with_prompt("Clear edit mode state?")
             .default(true)
             .interact()
-            .map_err(|e| {
-                CascadeError::config(format!("Failed to get user confirmation: {e}"))
-            })?;
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
 
         if !confirmed {
             return Err(CascadeError::config("Operation cancelled."));
@@ -729,7 +737,7 @@ async fn clear_edit_mode(skip_confirmation: bool) -> Result<()> {
 
     // Clear edit mode
     manager.exit_edit_mode()?;
-    
+
     Output::success("Edit mode cleared");
     Output::tip("Use 'ca entry checkout' to start a new edit session");
 

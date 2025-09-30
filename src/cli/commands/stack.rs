@@ -1999,13 +1999,13 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
     let mut stack_manager = StackManager::new(&repo_root)?;
-    
+
     // Exit edit mode if active (sync will invalidate commit SHAs)
     if stack_manager.is_in_edit_mode() {
         debug!("Exiting edit mode before sync (commit SHAs will change)");
         stack_manager.exit_edit_mode()?;
     }
-    
+
     let git_repo = GitRepository::open(&repo_root)?;
 
     // Get active stack
