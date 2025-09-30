@@ -46,6 +46,12 @@ pub enum EntryAction {
         #[arg(long, short)]
         verbose: bool,
     },
+    /// Clear/exit edit mode (useful for recovering from corrupted state)
+    Clear {
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
+    },
 }
 
 pub async fn run(action: EntryAction) -> Result<()> {
@@ -56,6 +62,7 @@ pub async fn run(action: EntryAction) -> Result<()> {
         EntryAction::Checkout { entry, direct, yes } => checkout_entry(entry, direct, yes).await,
         EntryAction::Status { quiet } => show_edit_status(quiet).await,
         EntryAction::List { verbose } => list_entries(verbose).await,
+        EntryAction::Clear { yes } => clear_edit_mode(yes).await,
     }
 }
 
@@ -664,6 +671,67 @@ async fn list_entries(verbose: bool) -> Result<()> {
         Output::spacing();
         Output::tip("Use 'ca entry checkout' to start editing an entry");
     }
+
+    Ok(())
+}
+
+/// Clear/exit edit mode (useful for recovering from corrupted state)
+async fn clear_edit_mode(skip_confirmation: bool) -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
+
+    if !manager.is_in_edit_mode() {
+        Output::info("Not currently in edit mode");
+        return Ok(());
+    }
+
+    // Show current edit mode info
+    if let Some(edit_info) = manager.get_edit_mode_info() {
+        Output::section("Current edit mode state");
+        
+        if let Some(target_entry_id) = &edit_info.target_entry_id {
+            Output::sub_item(format!("Target entry: {}", target_entry_id));
+            
+            // Try to find the entry
+            if let Some(active_stack) = manager.get_active_stack() {
+                if let Some(entry) = active_stack.entries.iter().find(|e| e.id == *target_entry_id) {
+                    Output::sub_item(format!("Entry: {}", entry.short_message(50)));
+                } else {
+                    Output::warning("Target entry not found in stack (corrupted state)");
+                }
+            }
+        }
+        
+        Output::sub_item(format!("Original commit: {}", &edit_info.original_commit_hash[..8]));
+        Output::sub_item(format!("Started: {}", edit_info.started_at.format("%Y-%m-%d %H:%M:%S")));
+    }
+
+    // Confirm before clearing
+    if !skip_confirmation {
+        println!();
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Clear edit mode state?")
+            .default(true)
+            .interact()
+            .map_err(|e| {
+                CascadeError::config(format!("Failed to get user confirmation: {e}"))
+            })?;
+
+        if !confirmed {
+            return Err(CascadeError::config("Operation cancelled."));
+        }
+    }
+
+    // Clear edit mode
+    manager.exit_edit_mode()?;
+    
+    Output::success("Edit mode cleared");
+    Output::tip("Use 'ca entry checkout' to start a new edit session");
 
     Ok(())
 }
