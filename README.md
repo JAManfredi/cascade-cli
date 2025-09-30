@@ -531,6 +531,7 @@ ca switch <name>                        # Switch to different stack
 
 # Entry Editing (Modern Convenience)
 ca entry checkout [number]              # Interactive checkout for editing entries
+ca entry amend                          # Amend current entry + update working branch  
 ca entry status                         # Show current edit mode status  
 ca entry list                           # List all entries with edit indicators
 ca entry clear                          # Clear/exit edit mode (useful for recovery)
@@ -584,9 +585,33 @@ ca entry status --quiet                     # Brief status only
 ca entry list                               # List all entries with edit status
 ca entry list --verbose                     # Show detailed entry information
 
+# Amend the current stack entry (safer than raw git commit --amend)
+ca entry amend                              # Amend with editor
+ca entry amend -m "New message"             # Amend with message
+ca entry amend --all                        # Amend all changes (like git commit -a --amend)
+ca entry amend --restack                    # Auto-restack dependent entries after amend
+ca entry amend --push                       # Auto force-push to PR after amend
+ca entry amend --restack --push             # Full workflow: amend + restack + push
+
 # Clear edit mode
 ca entry clear                              # Clear/exit edit mode (with confirmation)
 ca entry clear --yes                        # Clear without confirmation (for corrupted state)
+```
+
+**🛡️ Working Branch Safety Net:**
+
+When you use `ca entry amend`, Cascade automatically updates your **original working branch** to include the amended changes. This ensures your working branch always serves as a reliable safety net/fallback, even after amending stack entries.
+
+```bash
+# Safe amend workflow:
+ca entry checkout 2                         # Checkout entry #2
+# make changes...
+ca entry amend --all                        # Amend + update working branch automatically
+# ✅ Both the stack branch AND working branch are updated!
+
+# Compare to unsafe raw git:
+git commit --amend                          # ❌ Only updates stack branch
+# ⚠️ Working branch becomes stale - safety net broken!
 ```
 
 ### **Adding Commits to Stack**
