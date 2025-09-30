@@ -1646,7 +1646,11 @@ async fn submit_entry(
     Output::section(format!(
         "Submitting {} {}",
         entries_to_submit.len(),
-        if entries_to_submit.len() == 1 { "entry" } else { "entries" }
+        if entries_to_submit.len() == 1 {
+            "entry"
+        } else {
+            "entries"
+        }
     ));
     println!();
 
@@ -1669,7 +1673,10 @@ async fn submit_entry(
         } else {
             "├─"
         };
-        print!("   {} Entry {}: {}... ", tree_char, entry_num, entry_to_submit.branch);
+        print!(
+            "   {} Entry {}: {}... ",
+            tree_char, entry_num, entry_to_submit.branch
+        );
         std::io::Write::flush(&mut std::io::stdout()).ok();
 
         // Use provided title/description only for first entry or single entry submissions
@@ -1698,7 +1705,10 @@ async fn submit_entry(
                 submitted_count += 1;
                 println!("✓ PR #{}", pr.id);
                 if let Some(url) = pr.web_url() {
-                    Output::sub_item(format!("{} → {}", pr.from_ref.display_id, pr.to_ref.display_id));
+                    Output::sub_item(format!(
+                        "{} → {}",
+                        pr.from_ref.display_id, pr.to_ref.display_id
+                    ));
                     Output::sub_item(format!("URL: {url}"));
                 }
             }
@@ -1706,7 +1716,7 @@ async fn submit_entry(
                 println!("✗ Failed");
                 // Extract clean error message (remove git stderr noise)
                 let clean_error = if e.to_string().contains("non-fast-forward") {
-                    "Branch has diverged from remote. Try: git push --force origin ".to_string() + &entry_to_submit.branch
+                    "Branch has diverged (was rebased after initial submission). Update to v0.1.41+ to auto force-push.".to_string()
                 } else if e.to_string().contains("authentication") {
                     "Authentication failed. Check your Bitbucket credentials.".to_string()
                 } else {
@@ -1755,14 +1765,18 @@ async fn submit_entry(
         Output::success(format!(
             "All {} {} submitted successfully!",
             submitted_count,
-            if submitted_count == 1 { "entry" } else { "entries" }
+            if submitted_count == 1 {
+                "entry"
+            } else {
+                "entries"
+            }
         ));
     } else {
         println!();
         Output::section("Submission Summary");
         println!("   ✓ Successful: {submitted_count}");
         println!("   ✗ Failed: {}", failed_entries.len());
-        
+
         if !failed_entries.is_empty() {
             println!();
             Output::tip("Retry failed entries:");

@@ -124,7 +124,7 @@ impl BitbucketIntegration {
 
         // Push branch to remote
         let git_repo = self.stack_manager.git_repo();
-        
+
         // If entry already has a PR, force-push to update it (standard stacked diff workflow)
         // Otherwise, regular push for new submissions
         if entry.pull_request_id.is_some() {
