@@ -122,12 +122,22 @@ impl BitbucketIntegration {
             )));
         }
 
-        // Push branch to remote if not already pushed
+        // Push branch to remote
         let git_repo = self.stack_manager.git_repo();
-        // Push the entry branch - fail fast if this fails
-        git_repo
-            .push(&entry.branch)
-            .map_err(|e| CascadeError::bitbucket(e.to_string()))?;
+        
+        // If entry already has a PR, force-push to update it (standard stacked diff workflow)
+        // Otherwise, regular push for new submissions
+        if entry.pull_request_id.is_some() {
+            // Force push for existing PRs (after rebase/amend)
+            git_repo
+                .force_push_single_branch(&entry.branch)
+                .map_err(|e| CascadeError::bitbucket(e.to_string()))?;
+        } else {
+            // Regular push for new submissions
+            git_repo
+                .push(&entry.branch)
+                .map_err(|e| CascadeError::bitbucket(e.to_string()))?;
+        }
 
         // Branch pushed successfully
 
