@@ -988,39 +988,58 @@ echo "✅ Commit message validation passed"
                  for /f \\\"tokens=*\\\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \\\"%REPO_ROOT%\\\"==\\\"\\\" set REPO_ROOT=.\n\
                  if not exist \\\"%REPO_ROOT%\\.cascade\\\" exit /b 0\n\n\
-                 rem Check if we're in edit mode\n\
-                 \\\"{0}\\\" entry status --quiet >nul 2>&1\n\
+                 rem Check if we're on an entry branch\n\
+                 for /f \\\"tokens=*\\\" %%i in ('git branch --show-current 2^>nul') do set CURRENT_BRANCH=%%i\n\
+                 echo %CURRENT_BRANCH% | findstr /r \\\".*-entry-[0-9][0-9]*$\\\" >nul\n\
+                 if %ERRORLEVEL% neq 0 exit /b 0\n\n\
+                 rem Get edit status\n\
+                 for /f \\\"tokens=*\\\" %%i in ('\\\"{0}\\\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
+                 if \\\"%EDIT_STATUS%\\\"==\\\"\\\" set EDIT_STATUS=inactive\n\n\
+                 rem Check if edit status is active\n\
+                 echo %EDIT_STATUS% | findstr /b \\\"active:\\\" >nul\n\
                  if %ERRORLEVEL% equ 0 (\n\
-                     echo ⚠  You're in EDIT MODE for a stack entry!\n\
+                     echo WARNING: You're in EDIT MODE for a stack entry\n\
                      echo.\n\
-                    echo Choose your action:\n\
-                    echo   [A] Amend: Modify the current entry ^(default^)\n\
-                    echo   [N] New:   Create new entry on top\n\
-                    echo   [C] Cancel: Stop and think about it\n\
-                    echo.\n\
-                    set /p choice=\\\"Your choice (A/n/c): \\\"\n\
-                    if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
-                    \n\
-                    if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
-                        echo Amending current entry...\n\
-                        rem Stage all changes first\n\
-                        git add -A\n\
-                        rem Use ca entry amend to properly update entry + working branch\n\
-                        \\\"{0}\\\" entry amend --all\n\
-                        exit /b %ERRORLEVEL%\n\
-                    ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
-                        echo Creating new stack entry...\n\
-                        rem Let the commit proceed normally\n\
-                        exit /b 0\n\
-                    ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
-                        echo Commit cancelled\n\
-                        exit /b 1\n\
-                    ) else (\n\
-                        echo Invalid choice. Please choose A, n, or c\n\
-                        exit /b 1\n\
-                    )\n\
+                     echo Choose your action:\n\
+                     echo   [A] Amend: Modify the current entry ^(default^)\n\
+                     echo   [N] New:   Create new entry on top\n\
+                     echo   [C] Cancel: Stop and think about it\n\
+                     echo.\n\
+                     set /p choice=\\\"Your choice (A/n/c): \\\"\n\
+                     if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
+                     \n\
+                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
+                         echo Amending current entry...\n\
+                         git add -A\n\
+                         \\\"{0}\\\" entry amend --all\n\
+                         exit /b %ERRORLEVEL%\n\
+                     ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
+                         echo Creating new stack entry...\n\
+                         exit /b 0\n\
+                     ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
+                         echo Commit cancelled\n\
+                         exit /b 1\n\
+                     ) else (\n\
+                         echo Invalid choice. Please choose A, n, or c\n\
+                         exit /b 1\n\
+                     )\n\
+                 ) else (\n\
+                     rem On entry branch but NOT in edit mode\n\
+                     echo.\n\
+                     echo WARNING: You're on a stack entry branch\n\
+                     echo.\n\
+                     echo Current branch: %CURRENT_BRANCH%\n\
+                     echo.\n\
+                     echo ERROR: Cannot commit directly to entry branches\n\
+                     echo.\n\
+                     echo Did you mean to:\n\
+                     echo   - {0} entry checkout ^<N^>  ^(enter proper edit mode^)\n\
+                     echo   - git checkout ^<working-branch^>  ^(switch to working branch^)\n\
+                     echo   - {0} stack list  ^(see your stacks^)\n\
+                     echo.\n\
+                     exit /b 1\n\
                  )\n\n\
-                 rem Not in edit mode, proceed normally\n\
+                 rem Not on entry branch, proceed normally\n\
                  exit /b 0\n",
                 cascade_cli
             )
