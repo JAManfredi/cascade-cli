@@ -186,8 +186,8 @@ jobs:
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
 
-    - name: Clean up build artifacts (ARM64)
-      if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin' || matrix.target == 'aarch64-pc-windows-msvc'
+    - name: Clean up build artifacts (ARM64 Linux/macOS)
+      if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin'
       run: |
         # Remove intermediate build artifacts to save disk space
         # Keep only the final binary
@@ -197,6 +197,20 @@ jobs:
           find target/${{ matrix.target }}/release -type d -name 'build' -exec rm -rf {} + || true
           find target/${{ matrix.target }}/release -type d -name 'deps' -exec rm -rf {} + || true
         fi
+
+    - name: Clean up build artifacts (ARM64 Windows)
+      if: matrix.target == 'aarch64-pc-windows-msvc'
+      shell: powershell
+      run: |
+        # Remove intermediate build artifacts to save disk space
+        # Keep only the final binary
+        $targetPath = "target/${{ matrix.target }}/release"
+        if (Test-Path $targetPath) {
+          Get-ChildItem $targetPath -File | Where-Object { $_.Name -ne 'ca.exe' } | Remove-Item -Force
+          Get-ChildItem $targetPath -Directory -Filter '.fingerprint' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+          Get-ChildItem $targetPath -Directory -Filter 'build' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+          Get-ChildItem $targetPath -Directory -Filter 'deps' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+        }
 
     - name: Download completions
       uses: actions/download-artifact@v4
