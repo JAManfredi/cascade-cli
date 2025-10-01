@@ -145,6 +145,9 @@ pub enum StackAction {
         /// Create draft pull requests (can be edited later)
         #[arg(long)]
         draft: bool,
+        /// Open the PR(s) in your default browser after submission (default: true, use --no-open to disable)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        open: bool,
     },
 
     /// Check status of all pull requests in a stack
@@ -372,7 +375,8 @@ pub async fn run(action: StackAction) -> Result<()> {
             description,
             range,
             draft,
-        } => submit_entry(entry, title, description, range, draft).await,
+            open,
+        } => submit_entry(entry, title, description, range, draft, open).await,
         StackAction::Status { name } => check_stack_status(name).await,
         StackAction::Prs { state, verbose } => list_pull_requests(state, verbose).await,
         StackAction::Check { force } => check_stack(force).await,
@@ -1528,6 +1532,7 @@ async fn submit_entry(
     description: Option<String>,
     range: Option<String>,
     draft: bool,
+    open: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
@@ -1662,6 +1667,7 @@ async fn submit_entry(
     // Submit each entry
     let mut submitted_count = 0;
     let mut failed_entries = Vec::new();
+    let mut pr_urls = Vec::new(); // Collect URLs to open
     let total_entries = entries_to_submit.len();
 
     for (entry_num, entry_to_submit) in &entries_to_submit {
@@ -1710,6 +1716,7 @@ async fn submit_entry(
                         pr.from_ref.display_id, pr.to_ref.display_id
                     ));
                     Output::sub_item(format!("URL: {url}"));
+                    pr_urls.push(url); // Collect for opening later
                 }
             }
             Err(e) => {
@@ -1782,6 +1789,17 @@ async fn submit_entry(
             Output::tip("Retry failed entries:");
             for (entry_num, _) in &failed_entries {
                 Output::bullet(format!("ca stack submit {entry_num}"));
+            }
+        }
+    }
+
+    // Open PRs in browser if requested (default: true)
+    if open && !pr_urls.is_empty() {
+        println!();
+        for url in &pr_urls {
+            if let Err(e) = open::that(url) {
+                Output::warning(format!("Could not open browser: {}", e));
+                Output::tip(format!("Open manually: {}", url));
             }
         }
     }
@@ -4304,6 +4322,7 @@ mod tests {
                     None,  // description
                     None,  // range
                     false, // draft
+                    true,  // open
                 )
                 .await;
 
@@ -4343,6 +4362,7 @@ mod tests {
             description: None,
             range: None,
             draft: false,
+            open: true,
         };
 
         assert!(matches!(
@@ -4352,7 +4372,8 @@ mod tests {
                 title: None,
                 description: None,
                 range: None,
-                draft: false
+                draft: false,
+                open: true
             }
         ));
     }
@@ -4406,7 +4427,8 @@ mod tests {
                 title: None,
                 description: None,
                 range: None,
-                draft: false
+                draft: false,
+                open: true
             },
             StackAction::Submit { .. }
         ));

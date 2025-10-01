@@ -278,6 +278,9 @@ pub enum Commands {
         /// Create draft pull requests (can be edited later)
         #[arg(long)]
         draft: bool,
+        /// Open the PR(s) in your default browser after submission (default: true, use --no-open to disable)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        open: bool,
     },
 
     /// Validate stack integrity and handle branch modifications (shortcut for 'stacks validate')
@@ -649,6 +652,7 @@ impl Cli {
                 description,
                 range,
                 draft,
+                open,
             } => {
                 // Delegate to the stacks submit functionality
                 let submit_action = StackAction::Submit {
@@ -657,6 +661,7 @@ impl Cli {
                     description,
                     range,
                     draft,
+                    open,
                 };
                 commands::stack::run(submit_action).await
             }
