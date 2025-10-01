@@ -1032,17 +1032,18 @@ echo "✅ Commit message validation passed"
                     \n\
                     case \\\"$choice\\\" in\n\
                         [Aa])\n\
-                            echo \\\"✅ Running: git commit --amend\\\"\n\
+                            echo \\\"✅ Amending current entry...\\\"\n\
                             # Temporarily disable hooks to avoid recursion\n\
+                            # Use --amend to update the existing commit\n\
                             git -c core.hooksPath=/dev/null commit --amend\n\
                             if [ $? -eq 0 ]; then\n\
-                                echo \\\"💡 Entry updated! Run 'ca sync' to update PRs\\\"\n\
+                                echo \\\"💡 Entry updated! Run 'ca entry amend' to update working branch, or 'ca sync' to update PRs\\\"\n\
                             fi\n\
                             exit $?\n\
                             ;;\n\
                         [Nn])\n\
                             echo \\\"➕ Creating new stack entry...\\\"\n\
-                            # Let the commit proceed normally\n\
+                            # Let the commit proceed normally (will create new commit)\n\
                             exit 0\n\
                             ;;\n\
                         [Cc])\n\

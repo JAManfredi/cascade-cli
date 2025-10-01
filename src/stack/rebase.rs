@@ -339,8 +339,8 @@ impl RebaseManager {
         // Cleanup temp branches before returning to original branch
         // Must checkout away from temp branches first
         if !temp_branches.is_empty() {
-            // Checkout base branch to allow temp branch deletion
-            if let Err(e) = self.git_repo.checkout_branch(&target_base) {
+            // Checkout base branch silently to allow temp branch deletion
+            if let Err(e) = self.git_repo.checkout_branch_silent(&target_base) {
                 Output::warning(format!("Could not checkout base for cleanup: {}", e));
             }
 
@@ -352,9 +352,9 @@ impl RebaseManager {
             }
         }
 
-        // Return to original working branch
+        // Return to original working branch silently
         if let Some(orig_branch) = original_branch {
-            if let Err(e) = self.git_repo.checkout_branch(&orig_branch) {
+            if let Err(e) = self.git_repo.checkout_branch_silent(&orig_branch) {
                 Output::warning(format!(
                     "Could not return to original branch '{}': {}",
                     orig_branch, e

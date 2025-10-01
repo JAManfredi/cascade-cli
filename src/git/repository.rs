@@ -381,16 +381,21 @@ impl GitRepository {
 
     /// Switch to a branch with safety checks
     pub fn checkout_branch(&self, name: &str) -> Result<()> {
-        self.checkout_branch_with_options(name, false)
+        self.checkout_branch_with_options(name, false, true)
+    }
+
+    /// Switch to a branch silently (no output)
+    pub fn checkout_branch_silent(&self, name: &str) -> Result<()> {
+        self.checkout_branch_with_options(name, false, false)
     }
 
     /// Switch to a branch with force option to bypass safety checks
     pub fn checkout_branch_unsafe(&self, name: &str) -> Result<()> {
-        self.checkout_branch_with_options(name, true)
+        self.checkout_branch_with_options(name, true, true)
     }
 
     /// Internal branch checkout implementation with safety options
-    fn checkout_branch_with_options(&self, name: &str, force_unsafe: bool) -> Result<()> {
+    fn checkout_branch_with_options(&self, name: &str, force_unsafe: bool, show_output: bool) -> Result<()> {
         debug!("Attempting to checkout branch: {}", name);
 
         // Enhanced safety check: Detect uncommitted work before checkout
@@ -425,7 +430,9 @@ impl GitRepository {
             .set_head(&format!("refs/heads/{name}"))
             .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{name}': {e}")))?;
 
-        Output::success(format!("Switched to branch '{name}'"));
+        if show_output {
+            Output::success(format!("Switched to branch '{name}'"));
+        }
         Ok(())
     }
 
@@ -1257,9 +1264,9 @@ impl GitRepository {
             .find_tree(merged_tree_oid)
             .map_err(CascadeError::Git)?;
 
-        // Create new commit
+        // Create new commit with original message (preserve it exactly)
         let signature = self.get_signature()?;
-        let message = format!("Cherry-pick: {}", commit.message().unwrap_or(""));
+        let message = commit.message().unwrap_or("Cherry-picked commit");
 
         let new_commit_oid = self
             .repo
@@ -1267,7 +1274,7 @@ impl GitRepository {
                 Some("HEAD"),
                 &signature,
                 &signature,
-                &message,
+                message,
                 &merged_tree,
                 &[&head_commit],
             )

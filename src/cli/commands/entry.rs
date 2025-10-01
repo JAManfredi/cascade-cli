@@ -894,7 +894,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
         repo.update_branch_to_commit(working_branch_name, &new_commit_hash)?;
 
         Output::success(format!(
-            "Working branch '{}' updated (safety net preserved)",
+            "Working branch '{}' updated",
             working_branch_name
         ));
     } else {
@@ -961,7 +961,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
         entry_branch
     ));
     if working_branch.is_some() {
-        Output::bullet("Working branch updated (safety net preserved)");
+        Output::bullet("Working branch updated");
     }
     if restack {
         Output::bullet("Dependent entries restacked");

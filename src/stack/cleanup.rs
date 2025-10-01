@@ -218,7 +218,12 @@ impl CleanupManager {
             }
         }
 
-        // Check for stale branches (if enabled)
+        // Never clean up active stack branches - they're in use!
+        if stack_id.is_some() {
+            return Ok(None);
+        }
+
+        // Check for stale branches (if enabled) - only for NON-stack branches
         if self.options.include_stale {
             if let Some(candidate) =
                 self.check_stale_branch(branch_name, stack_id, entry_id, has_remote, is_current)?
@@ -228,7 +233,7 @@ impl CleanupManager {
         }
 
         // Check for orphaned branches (if enabled)
-        if self.options.cleanup_non_stack && stack_id.is_none() {
+        if self.options.cleanup_non_stack {
             if let Some(candidate) =
                 self.check_orphaned_branch(branch_name, has_remote, is_current)?
             {
