@@ -359,12 +359,47 @@ pub fn show_completions_status() -> Result<()> {
     } else {
         println!();
         Output::success("All available shells have completions installed!");
-        println!();
-        Output::warning("⚠️  Important: Just having the file installed doesn't mean it works!");
-        Output::tip("For zsh users, you must also:");
-        Output::bullet("Add 'fpath=(~/.zsh/completions $fpath)' to ~/.zshrc");
-        Output::bullet("Add 'autoload -Uz compinit && compinit' to ~/.zshrc");
-        Output::bullet("Then run 'source ~/.zshrc'");
+        
+        // Check if zsh is available and provide setup instructions
+        if available_shells.contains(&Shell::Zsh) {
+            println!();
+            
+            // Check if zsh is already configured
+            let zshrc_path = dirs::home_dir()
+                .map(|h| h.join(".zshrc"))
+                .unwrap_or_else(|| PathBuf::from("~/.zshrc"));
+            
+            let mut needs_fpath = true;
+            let mut needs_compinit = true;
+            
+            if let Ok(zshrc_content) = std::fs::read_to_string(&zshrc_path) {
+                if zshrc_content.contains("fpath=(~/.zsh/completions") 
+                    || zshrc_content.contains("fpath=(\"$HOME/.zsh/completions\"")
+                    || zshrc_content.contains("fpath=($HOME/.zsh/completions") {
+                    needs_fpath = false;
+                }
+                if zshrc_content.contains("compinit") {
+                    needs_compinit = false;
+                }
+            }
+            
+            if needs_fpath || needs_compinit {
+                Output::warning("Zsh requires additional setup for completions to work");
+                println!();
+                Output::sub_item("Run these commands to complete setup:");
+                println!();
+                
+                if needs_fpath {
+                    Output::command_example("echo 'fpath=(~/.zsh/completions $fpath)' >> ~/.zshrc");
+                }
+                if needs_compinit {
+                    Output::command_example("echo 'autoload -Uz compinit && compinit' >> ~/.zshrc");
+                }
+                Output::command_example("source ~/.zshrc");
+            } else {
+                Output::success("Zsh is properly configured for completions!");
+            }
+        }
     }
 
     println!();
