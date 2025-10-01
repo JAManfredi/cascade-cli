@@ -522,6 +522,10 @@ _ca_switch_completion() {
 
 # Override the switch completion
 compdef _ca_switch_completion ca switch
+
+# Explicitly bind the main completion function to 'ca'
+# This ensures the completion works even if Oh-My-Zsh or other plugins interfere
+compdef _ca ca
 "#.to_string()
         }
         Shell::Fish => {
