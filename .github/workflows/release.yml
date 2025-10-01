@@ -129,6 +129,23 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y pkg-config libssl-dev
         
+    - name: Free disk space (Ubuntu ARM64)
+      if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        # ARM64 cross-compilation needs more space - clean up runner
+        echo "Disk space before cleanup:"
+        df -h
+        
+        # Remove unnecessary packages and files
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force || true
+        
+        echo "Disk space after cleanup:"
+        df -h
+        
     - name: Install cross-compilation tools (Ubuntu ARM64)
       if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
       run: |
@@ -144,9 +161,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
         key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-${{ matrix.target }}-
@@ -168,6 +185,18 @@ jobs:
 
     - name: Build release binary
       run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Clean up build artifacts (ARM64)
+      if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin' || matrix.target == 'aarch64-pc-windows-msvc'
+      run: |
+        # Remove intermediate build artifacts to save disk space
+        # Keep only the final binary
+        if [ -d "target/${{ matrix.target }}/release" ]; then
+          find target/${{ matrix.target }}/release -type f ! -name 'ca' ! -name 'ca.exe' -delete
+          find target/${{ matrix.target }}/release -type d -name '.fingerprint' -exec rm -rf {} + || true
+          find target/${{ matrix.target }}/release -type d -name 'build' -exec rm -rf {} + || true
+          find target/${{ matrix.target }}/release -type d -name 'deps' -exec rm -rf {} + || true
+        fi
 
     - name: Download completions
       uses: actions/download-artifact@v4
