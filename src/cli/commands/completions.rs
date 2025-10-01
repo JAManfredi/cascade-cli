@@ -390,10 +390,10 @@ pub fn show_completions_status() -> Result<()> {
                 println!();
                 
                 if needs_fpath {
-                    Output::command_example("echo 'fpath=(~/.zsh/completions $fpath)' >> ~/.zshrc");
+                    Output::command_example(r#"echo 'fpath=(~/.zsh/completions $fpath)' >> ~/.zshrc"#);
                 }
                 if needs_compinit {
-                    Output::command_example("echo 'autoload -Uz compinit && compinit' >> ~/.zshrc");
+                    Output::command_example(r#"echo 'autoload -Uz compinit && compinit' >> ~/.zshrc"#);
                 }
                 Output::command_example("source ~/.zshrc");
             } else {
