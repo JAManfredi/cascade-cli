@@ -1016,44 +1016,44 @@ echo "✅ Commit message validation passed"
                  # Smart edit mode guidance for better UX\n\n\
                  set -e\n\n\
                  # Check if Cascade is initialized\n\
-                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \\\".\\\")\n\
-                 if [ ! -d \\\"$REPO_ROOT/.cascade\\\" ]; then\n\
+                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
+                 if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
                  # Check if we're in edit mode\n\
-                 if \\\"{0}\\\" entry status --quiet >/dev/null 2>&1; then\n\
-                     echo \\\"⚠  You're in EDIT MODE for a stack entry!\\\"\n\
-                     echo \\\"\\\"\n\
-                    echo \\\"Choose your action:\\\"\n\
-                    echo \\\"  [A] Amend: Modify the current entry (default)\\\"\n\
-                    echo \\\"  [N] New:   Create new entry on top\\\"\n\
-                    echo \\\"  [C] Cancel: Stop and think about it\\\"\n\
-                    echo \\\"\\\"\n\
+                 if \"{0}\" entry status --quiet >/dev/null 2>&1; then\n\
+                     echo \"⚠  You're in EDIT MODE for a stack entry!\"\n\
+                     echo \"\"\n\
+                    echo \"Choose your action:\"\n\
+                    echo \"  [A] Amend: Modify the current entry (default)\"\n\
+                    echo \"  [N] New:   Create new entry on top\"\n\
+                    echo \"  [C] Cancel: Stop and think about it\"\n\
+                    echo \"\"\n\
                     \n\
                     # Read user choice with default to amend\n\
-                    read -p \\\"Your choice (A/n/c): \\\" choice\n\
+                    read -p \"Your choice (A/n/c): \" choice\n\
                     choice=${{choice:-A}}\n\
                     \n\
-                    case \\\"$choice\\\" in\n\
+                    case \"$choice\" in\n\
                         [Aa])\n\
-                            echo \\\"Amending current entry...\\\"\n\
+                            echo \"Amending current entry...\"\n\
                             # Stage all changes first (like git commit -a)\n\
                             git add -A\n\
                             # Use ca entry amend to properly update entry + working branch\n\
-                            \\\"{0}\\\" entry amend --all\n\
+                            \"{0}\" entry amend --all\n\
                             exit $?\n\
                             ;;\n\
                         [Nn])\n\
-                            echo \\\"Creating new stack entry...\\\"\n\
+                            echo \"Creating new stack entry...\"\n\
                             # Let the commit proceed normally (will create new commit)\n\
                             exit 0\n\
                             ;;\n\
                         [Cc])\n\
-                            echo \\\"Commit cancelled\\\"\n\
+                            echo \"Commit cancelled\"\n\
                             exit 1\n\
                             ;;\n\
                         *)\n\
-                            echo \\\"Invalid choice. Please choose A, n, or c\\\"\n\
+                            echo \"Invalid choice. Please choose A, n, or c\"\n\
                             exit 1\n\
                             ;;\n\
                     esac\n\
