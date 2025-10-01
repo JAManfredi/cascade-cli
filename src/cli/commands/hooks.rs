@@ -487,11 +487,13 @@ impl HooksManager {
             }
             println!();
         } else {
-            Output::warning("⚠️  Cascade hooks are NOT installed in this repository");
-            Output::tip("To install Cascade hooks:");
-            Output::bullet("Run: ca hooks install            (recommended: 4 essential hooks)");
-            Output::bullet("Run: ca hooks install --all      (all 5 hooks + post-commit auto-add)");
-            Output::bullet("Both options preserve existing hooks by chaining to them");
+            Output::warning("Cascade hooks are NOT installed in this repository");
+            println!();
+            Output::sub_item("To install Cascade hooks:");
+            Output::command_example("ca hooks install            # recommended: 4 essential hooks");
+            Output::command_example("ca hooks install --all      # all 5 hooks + post-commit auto-add");
+            println!();
+            Output::sub_item("Both options preserve existing hooks by chaining to them");
             println!();
         }
 
