@@ -1029,10 +1029,12 @@ echo "✅ Commit message validation passed"
         #[cfg(not(windows))]
         {
             // Use string building to avoid escaping issues with format! macros
-            let if_line = format!(
-                "if \"{}\" entry status --quiet >/dev/null 2>&1; then",
+            // Check the OUTPUT of entry status, not just exit code
+            let status_check = format!(
+                "EDIT_STATUS=$(\"{}\" entry status --quiet 2>/dev/null || echo \"inactive\")",
                 cascade_cli
             );
+            let if_line = r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string();
             let amend_line = format!("           \"{}\" entry amend --all", cascade_cli);
 
             vec![
@@ -1049,7 +1051,18 @@ echo "✅ Commit message validation passed"
                 "fi".to_string(),
                 "".to_string(),
                 "# Check if we're in edit mode".to_string(),
+                status_check,
                 if_line,
+                "    # Check if we're actually on an entry branch by looking at current branch".to_string(),
+                "    # Working branches typically have the pattern: feature/xyz or JIRA-123/xyz".to_string(),
+                "    # Entry branches have pattern: feature/xyz-entry-1, JIRA-123/xyz-entry-1, etc.".to_string(),
+                r#"    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)"#.to_string(),
+                "    ".to_string(),
+                "    # If branch doesn't end with -entry-N pattern, it's likely the working branch".to_string(),
+                r#"    if ! echo "$CURRENT_BRANCH" | grep -qE '\-entry\-[0-9]+$'; then"#.to_string(),
+                "        exit 0  # Normal commit (on working branch or other branch)".to_string(),
+                "    fi".to_string(),
+                "    ".to_string(),
                 r#"    echo "⚠  You're in EDIT MODE for a stack entry!""#.to_string(),
                 r#"    echo """#.to_string(),
                 "   ".to_string(),
