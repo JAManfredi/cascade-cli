@@ -175,15 +175,22 @@ impl HooksManager {
     fn save_original_hooks_path(&self) -> Result<()> {
         use std::process::Command;
 
+        let config_dir = self.get_cascade_config_dir()?;
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| CascadeError::config(format!("Failed to create config directory: {e}")))?;
+
+        let original_path_file = config_dir.join("original-hooks-path");
+
+        // Only save if we haven't already saved it (don't overwrite on subsequent hook installs)
+        if original_path_file.exists() {
+            return Ok(());
+        }
+
         let output = Command::new("git")
             .args(["config", "--get", "core.hooksPath"])
             .current_dir(&self.repo_path)
             .output()
             .map_err(|e| CascadeError::config(format!("Failed to check git config: {e}")))?;
-
-        let config_dir = self.get_cascade_config_dir()?;
-        fs::create_dir_all(&config_dir)
-            .map_err(|e| CascadeError::config(format!("Failed to create config directory: {e}")))?;
 
         let original_path = if output.status.success() {
             String::from_utf8_lossy(&output.stdout).trim().to_string()
@@ -192,7 +199,7 @@ impl HooksManager {
             String::new()
         };
 
-        fs::write(config_dir.join("original-hooks-path"), original_path).map_err(|e| {
+        fs::write(original_path_file, original_path).map_err(|e| {
             CascadeError::config(format!("Failed to save original hooks path: {e}"))
         })?;
 
