@@ -236,7 +236,7 @@ async fn test_pre_commit_hook_contains_edit_mode_guidance() {
         "Pre-commit hook should check edit mode status"
     );
     assert!(
-        hook_content.contains("You're in EDIT MODE for a stack entry!"),
+        hook_content.contains("WARNING: You're in EDIT MODE for a stack entry"),
         "Pre-commit hook should provide edit mode warning"
     );
     assert!(

@@ -1034,7 +1034,6 @@ echo "✅ Commit message validation passed"
                 "EDIT_STATUS=$(\"{}\" entry status --quiet 2>/dev/null || echo \"inactive\")",
                 cascade_cli
             );
-            let if_line = r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string();
             let amend_line = format!("           \"{}\" entry amend --all", cascade_cli);
 
             vec![
