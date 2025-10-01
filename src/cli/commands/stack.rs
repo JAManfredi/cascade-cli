@@ -175,9 +175,9 @@ pub enum StackAction {
         /// Force sync even if there are conflicts
         #[arg(long)]
         force: bool,
-        /// Skip cleanup of merged branches
+        /// Also cleanup merged branches after sync
         #[arg(long)]
-        skip_cleanup: bool,
+        cleanup: bool,
         /// Interactive mode for conflict resolution
         #[arg(long, short)]
         interactive: bool,
@@ -378,9 +378,9 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::Check { force } => check_stack(force).await,
         StackAction::Sync {
             force,
-            skip_cleanup,
+            cleanup,
             interactive,
-        } => sync_stack(force, skip_cleanup, interactive).await,
+        } => sync_stack(force, cleanup, interactive).await,
         StackAction::Rebase {
             interactive,
             onto,
@@ -1991,7 +1991,7 @@ async fn check_stack(_force: bool) -> Result<()> {
     Ok(())
 }
 
-async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Result<()> {
+async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -2189,8 +2189,8 @@ async fn sync_stack(force: bool, skip_cleanup: bool, interactive: bool) -> Resul
         }
     }
 
-    // Step 3: Cleanup merged branches (optional) - only show if something happens
-    if !skip_cleanup {
+    // Step 3: Cleanup merged branches (optional) - only if explicitly requested
+    if cleanup {
         let git_repo_for_cleanup = GitRepository::open(&repo_root)?;
         match perform_simple_cleanup(&stack_manager, &git_repo_for_cleanup, false).await {
             Ok(result) => {

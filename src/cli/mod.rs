@@ -208,9 +208,9 @@ pub enum Commands {
         /// Force sync even if there are conflicts
         #[arg(long)]
         force: bool,
-        /// Skip cleanup of merged branches
+        /// Also cleanup merged branches after sync
         #[arg(long)]
-        skip_cleanup: bool,
+        cleanup: bool,
         /// Interactive mode for conflict resolution
         #[arg(long, short)]
         interactive: bool,
@@ -614,9 +614,9 @@ impl Cli {
 
             Commands::Sync {
                 force,
-                skip_cleanup,
+                cleanup,
                 interactive,
-            } => commands::stack::sync(force, skip_cleanup, interactive).await,
+            } => commands::stack::sync(force, cleanup, interactive).await,
 
             Commands::Rebase {
                 interactive,
