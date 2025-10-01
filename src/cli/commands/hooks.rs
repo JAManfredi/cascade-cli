@@ -980,11 +980,11 @@ echo "✅ Commit message validation passed"
                     if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
                     \n\
                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
-                        echo ✅ Running: git commit --amend\n\
-                        git commit --amend\n\
-                        if %ERRORLEVEL% equ 0 (\n\
-                            echo 💡 Entry updated! Run 'ca sync' to update PRs\n\
-                        )\n\
+                        echo ✅ Amending current entry...\n\
+                        rem Stage all changes first\n\
+                        git add -A\n\
+                        rem Use ca entry amend to properly update entry + working branch\n\
+                        \\\"{0}\\\" entry amend --all\n\
                         exit /b %ERRORLEVEL%\n\
                     ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
                         echo ➕ Creating new stack entry...\n\
@@ -1033,12 +1033,10 @@ echo "✅ Commit message validation passed"
                     case \\\"$choice\\\" in\n\
                         [Aa])\n\
                             echo \\\"✅ Amending current entry...\\\"\n\
-                            # Temporarily disable hooks to avoid recursion\n\
-                            # Use --amend to update the existing commit\n\
-                            git -c core.hooksPath=/dev/null commit --amend\n\
-                            if [ $? -eq 0 ]; then\n\
-                                echo \\\"💡 Entry updated! Run 'ca entry amend' to update working branch, or 'ca sync' to update PRs\\\"\n\
-                            fi\n\
+                            # Stage all changes first (like git commit -a)\n\
+                            git add -A\n\
+                            # Use ca entry amend to properly update entry + working branch\n\
+                            \\\"{0}\\\" entry amend --all\n\
                             exit $?\n\
                             ;;\n\
                         [Nn])\n\
