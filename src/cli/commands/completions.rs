@@ -359,22 +359,22 @@ pub fn show_completions_status() -> Result<()> {
     } else {
         println!();
         Output::success("All available shells have completions installed!");
-        
+
         // Check if zsh is available and provide setup instructions
         if available_shells.contains(&Shell::Zsh) {
             println!();
-            
+
             // Check if zsh is already configured
             let zshrc_path = dirs::home_dir()
                 .map(|h| h.join(".zshrc"))
                 .unwrap_or_else(|| PathBuf::from("~/.zshrc"));
-            
+
             let mut needs_fpath = true;
             let mut needs_compinit = true;
-            
+
             let mut using_omz = false;
             let mut omz_line = None;
-            
+
             if let Ok(zshrc_content) = std::fs::read_to_string(&zshrc_path) {
                 // Check if Oh-My-Zsh is being used
                 if zshrc_content.contains("oh-my-zsh.sh") {
@@ -387,31 +387,34 @@ pub fn show_completions_status() -> Result<()> {
                         }
                     }
                 }
-                
-                if zshrc_content.contains("fpath=(~/.zsh/completions") 
+
+                if zshrc_content.contains("fpath=(~/.zsh/completions")
                     || zshrc_content.contains("fpath=(\"$HOME/.zsh/completions\"")
-                    || zshrc_content.contains("fpath=($HOME/.zsh/completions") {
+                    || zshrc_content.contains("fpath=($HOME/.zsh/completions")
+                {
                     needs_fpath = false;
                 }
                 if zshrc_content.contains("compinit") {
                     needs_compinit = false;
                 }
             }
-            
+
             if needs_fpath || needs_compinit {
                 Output::warning("Zsh requires additional setup for completions to work");
                 println!();
-                
+
                 if using_omz {
                     Output::sub_item("Detected Oh-My-Zsh - special setup required:");
                     println!();
                     if let Some(line_num) = omz_line {
                         Output::info(format!("Oh-My-Zsh loads at line {} in ~/.zshrc", line_num));
                         Output::sub_item("The fpath MUST be set BEFORE Oh-My-Zsh loads");
-                        Output::sub_item("Oh-My-Zsh calls compinit internally, so DON'T add compinit yourself");
+                        Output::sub_item(
+                            "Oh-My-Zsh calls compinit internally, so DON'T add compinit yourself",
+                        );
                         println!();
                     }
-                    
+
                     Output::sub_item("Option 1: Manual edit (recommended)");
                     Output::bullet("Open ~/.zshrc in an editor");
                     Output::bullet("Find the line: source $ZSH/oh-my-zsh.sh");
@@ -421,11 +424,11 @@ pub fn show_completions_status() -> Result<()> {
                     Output::bullet("Save, then clear Oh-My-Zsh cache and reload:");
                     println!("      rm -f ~/.zcompdump && exec zsh");
                     println!();
-                    
+
                     Output::sub_item("Option 2: Automatic (requires sed)");
                     if let Some(line_num) = omz_line {
                         let insert_line = line_num;
-                        Output::command_example(&format!(
+                        Output::command_example(format!(
                             "sed -i.bak '{}i\\fpath=(~/.zsh/completions $fpath)' ~/.zshrc",
                             insert_line
                         ));
@@ -434,18 +437,22 @@ pub fn show_completions_status() -> Result<()> {
                 } else {
                     Output::sub_item("Run these commands to complete setup:");
                     println!();
-                    
+
                     if needs_fpath {
-                        Output::command_example(r#"echo 'fpath=(~/.zsh/completions $fpath)' >> ~/.zshrc"#);
+                        Output::command_example(
+                            r#"echo 'fpath=(~/.zsh/completions $fpath)' >> ~/.zshrc"#,
+                        );
                     }
                     if needs_compinit {
-                        Output::command_example(r#"echo 'autoload -Uz compinit && compinit' >> ~/.zshrc"#);
+                        Output::command_example(
+                            r#"echo 'autoload -Uz compinit && compinit' >> ~/.zshrc"#,
+                        );
                     }
                     Output::command_example("source ~/.zshrc");
                 }
             } else {
                 Output::success("Zsh is properly configured for completions!");
-                
+
                 if using_omz {
                     println!();
                     Output::tip("If completions aren't working, clear Oh-My-Zsh cache:");

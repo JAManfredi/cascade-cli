@@ -548,7 +548,6 @@ pub async fn run_cc_with_timeout_in_dir(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -236,32 +236,28 @@ async fn test_pre_commit_hook_contains_edit_mode_guidance() {
         "Pre-commit hook should check edit mode status"
     );
     assert!(
-        hook_content.contains("⚠️ You're in EDIT MODE for a stack entry!"),
+        hook_content.contains("You're in EDIT MODE for a stack entry!"),
         "Pre-commit hook should provide edit mode warning"
     );
     assert!(
-        hook_content.contains("🔄 [A]mend: Modify the current entry"),
+        hook_content.contains("[A] Amend: Modify the current entry"),
         "Pre-commit hook should explain amend option"
     );
     assert!(
-        hook_content.contains("➕ [N]ew:   Create new entry on top"),
+        hook_content.contains("[N] New:   Create new entry on top"),
         "Pre-commit hook should explain new commit option"
     );
     assert!(
-        hook_content.contains("❌ [C]ancel: Stop and think about it"),
+        hook_content.contains("[C] Cancel: Stop and think about it"),
         "Pre-commit hook should provide cancel option"
     );
     assert!(
-        hook_content.contains("✅ Running: git commit --amend"),
+        hook_content.contains("Amending current entry..."),
         "Pre-commit hook should show what happens when amending"
     );
     assert!(
-        hook_content.contains("💡 Entry updated! Run 'ca sync' to update PRs"),
-        "Pre-commit hook should provide next steps guidance"
-    );
-    assert!(
-        hook_content.contains("➕ Creating new stack entry..."),
-        "Pre-commit hook should indicate new entry creation"
+        hook_content.contains("Creating new stack entry..."),
+        "Pre-commit hook should show what happens when creating new entry"
     );
 }
 

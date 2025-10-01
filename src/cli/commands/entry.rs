@@ -893,10 +893,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
         // Force update the working branch to point to the amended commit
         repo.update_branch_to_commit(working_branch_name, &new_commit_hash)?;
 
-        Output::success(format!(
-            "Working branch '{}' updated",
-            working_branch_name
-        ));
+        Output::success(format!("Working branch '{}' updated", working_branch_name));
     } else {
         Output::warning("No working branch found - create one with 'ca stack create' for safety");
     }

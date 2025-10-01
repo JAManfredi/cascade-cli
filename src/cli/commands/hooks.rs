@@ -491,7 +491,9 @@ impl HooksManager {
             println!();
             Output::sub_item("To install Cascade hooks:");
             Output::command_example("ca hooks install            # recommended: 4 essential hooks");
-            Output::command_example("ca hooks install --all      # all 5 hooks + post-commit auto-add");
+            Output::command_example(
+                "ca hooks install --all      # all 5 hooks + post-commit auto-add",
+            );
             println!();
             Output::sub_item("Both options preserve existing hooks by chaining to them");
             println!();
