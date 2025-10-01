@@ -643,14 +643,24 @@ impl HooksManager {
             ));
 
         #[cfg(not(windows))]
-        Ok(format!(
+        {
+            // Build the wrapper using string concatenation to avoid double-escaping issues
+            let trimmed_logic = cascade_logic
+                .trim_start_matches("#!/bin/sh\n")
+                .trim_start_matches("set -e\n");
+
+            let wrapper = format!(
                 "#!/bin/sh\n\
                  # Cascade CLI Hook Wrapper - {}\n\
                  # This hook runs Cascade logic first, then chains to original hooks\n\n\
                  set -e\n\n\
                  # Function to run Cascade logic\n\
-                 cascade_logic() {{\n\
-                 {}\n\
+                 cascade_logic() {{\n",
+                hook_name
+            );
+
+            let chaining_logic = format!(
+                "\n\
                  }}\n\n\
                  # Run Cascade logic first\n\
                  cascade_logic \"$@\"\n\
@@ -677,13 +687,14 @@ impl HooksManager {
                      exit $?\n\
                  fi\n\n\
                  exit 0\n",
-                hook_name,
-                cascade_logic.trim_start_matches("#!/bin/sh\n").trim_start_matches("set -e\n"),
                 config_dir.to_string_lossy(),
                 config_dir.to_string_lossy(),
                 hook_name,
                 hook_name
-        ))
+            );
+
+            Ok(format!("{}{}{}", wrapper, trimmed_logic, chaining_logic))
+        }
     }
 
     fn generate_post_commit_hook(&self, cascade_cli: &str) -> String {
@@ -1010,58 +1021,70 @@ echo "✅ Commit message validation passed"
 
         #[cfg(not(windows))]
         {
-            format!(
-                "#!/bin/sh\n\
-                 # Cascade CLI Hook - Pre Commit\n\
-                 # Smart edit mode guidance for better UX\n\n\
-                 set -e\n\n\
-                 # Check if Cascade is initialized\n\
-                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
-                 if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
-                     exit 0\n\
-                 fi\n\n\
-                 # Check if we're in edit mode\n\
-                 if \"{0}\" entry status --quiet >/dev/null 2>&1; then\n\
-                     echo \"⚠  You're in EDIT MODE for a stack entry!\"\n\
-                     echo \"\"\n\
-                    echo \"Choose your action:\"\n\
-                    echo \"  [A] Amend: Modify the current entry (default)\"\n\
-                    echo \"  [N] New:   Create new entry on top\"\n\
-                    echo \"  [C] Cancel: Stop and think about it\"\n\
-                    echo \"\"\n\
-                    \n\
-                    # Read user choice with default to amend\n\
-                    read -p \"Your choice (A/n/c): \" choice\n\
-                    choice=${{choice:-A}}\n\
-                    \n\
-                    case \"$choice\" in\n\
-                        [Aa])\n\
-                            echo \"Amending current entry...\"\n\
-                            # Stage all changes first (like git commit -a)\n\
-                            git add -A\n\
-                            # Use ca entry amend to properly update entry + working branch\n\
-                            \"{0}\" entry amend --all\n\
-                            exit $?\n\
-                            ;;\n\
-                        [Nn])\n\
-                            echo \"Creating new stack entry...\"\n\
-                            # Let the commit proceed normally (will create new commit)\n\
-                            exit 0\n\
-                            ;;\n\
-                        [Cc])\n\
-                            echo \"Commit cancelled\"\n\
-                            exit 1\n\
-                            ;;\n\
-                        *)\n\
-                            echo \"Invalid choice. Please choose A, n, or c\"\n\
-                            exit 1\n\
-                            ;;\n\
-                    esac\n\
-                 fi\n\n\
-                 # Not in edit mode, proceed normally\n\
-                 exit 0\n",
+            // Use string building to avoid escaping issues with format! macros
+            let if_line = format!(
+                "if \"{}\" entry status --quiet >/dev/null 2>&1; then",
                 cascade_cli
-            )
+            );
+            let amend_line = format!("           \"{}\" entry amend --all", cascade_cli);
+
+            vec![
+                "#!/bin/sh".to_string(),
+                "# Cascade CLI Hook - Pre Commit".to_string(),
+                "# Smart edit mode guidance for better UX".to_string(),
+                "".to_string(),
+                "set -e".to_string(),
+                "".to_string(),
+                "# Check if Cascade is initialized".to_string(),
+                r#"REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"#.to_string(),
+                r#"if [ ! -d "$REPO_ROOT/.cascade" ]; then"#.to_string(),
+                "    exit 0".to_string(),
+                "fi".to_string(),
+                "".to_string(),
+                "# Check if we're in edit mode".to_string(),
+                if_line,
+                r#"    echo "⚠  You're in EDIT MODE for a stack entry!""#.to_string(),
+                r#"    echo """#.to_string(),
+                r#"   echo "Choose your action:""#.to_string(),
+                r#"   echo "  [A] Amend: Modify the current entry (default)""#.to_string(),
+                r#"   echo "  [N] New:   Create new entry on top""#.to_string(),
+                r#"   echo "  [C] Cancel: Stop and think about it""#.to_string(),
+                r#"   echo """#.to_string(),
+                "   ".to_string(),
+                "   # Read user choice with default to amend".to_string(),
+                r#"   read -p "Your choice (A/n/c): " choice"#.to_string(),
+                "   choice=${choice:-A}".to_string(),
+                "   ".to_string(),
+                r#"   case "$choice" in"#.to_string(),
+                "       [Aa])".to_string(),
+                r#"           echo "Amending current entry...""#.to_string(),
+                "           # Stage all changes first (like git commit -a)".to_string(),
+                "           git add -A".to_string(),
+                "           # Use ca entry amend to properly update entry + working branch"
+                    .to_string(),
+                amend_line,
+                "           exit $?".to_string(),
+                "           ;;".to_string(),
+                "       [Nn])".to_string(),
+                r#"           echo "Creating new stack entry...""#.to_string(),
+                "           # Let the commit proceed normally (will create new commit)".to_string(),
+                "           exit 0".to_string(),
+                "           ;;".to_string(),
+                "       [Cc])".to_string(),
+                r#"           echo "Commit cancelled""#.to_string(),
+                "           exit 1".to_string(),
+                "           ;;".to_string(),
+                "       *)".to_string(),
+                r#"           echo "Invalid choice. Please choose A, n, or c""#.to_string(),
+                "           exit 1".to_string(),
+                "           ;;".to_string(),
+                "   esac".to_string(),
+                "fi".to_string(),
+                "".to_string(),
+                "# Not in edit mode, proceed normally".to_string(),
+                "exit 0".to_string(),
+            ]
+            .join("\n")
         }
     }
 
