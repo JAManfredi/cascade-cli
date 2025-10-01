@@ -969,32 +969,32 @@ echo "✅ Commit message validation passed"
                  rem Check if we're in edit mode\n\
                  \\\"{0}\\\" entry status --quiet >nul 2>&1\n\
                  if %ERRORLEVEL% equ 0 (\n\
-                     echo ⚠️ You're in EDIT MODE for a stack entry!\n\
+                     echo ⚠  You're in EDIT MODE for a stack entry!\n\
                      echo.\n\
                     echo Choose your action:\n\
-                    echo   🔄 [A]mend: Modify the current entry ^(default^)\n\
-                    echo   ➕ [N]ew:   Create new entry on top\n\
-                    echo   ❌ [C]ancel: Stop and think about it\n\
+                    echo   [A] Amend: Modify the current entry ^(default^)\n\
+                    echo   [N] New:   Create new entry on top\n\
+                    echo   [C] Cancel: Stop and think about it\n\
                     echo.\n\
                     set /p choice=\\\"Your choice (A/n/c): \\\"\n\
                     if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
                     \n\
                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
-                        echo ✅ Amending current entry...\n\
+                        echo Amending current entry...\n\
                         rem Stage all changes first\n\
                         git add -A\n\
                         rem Use ca entry amend to properly update entry + working branch\n\
                         \\\"{0}\\\" entry amend --all\n\
                         exit /b %ERRORLEVEL%\n\
                     ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
-                        echo ➕ Creating new stack entry...\n\
+                        echo Creating new stack entry...\n\
                         rem Let the commit proceed normally\n\
                         exit /b 0\n\
                     ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
-                        echo ❌ Commit cancelled\n\
+                        echo Commit cancelled\n\
                         exit /b 1\n\
                     ) else (\n\
-                        echo ❓ Invalid choice. Please choose A, n, or c\n\
+                        echo Invalid choice. Please choose A, n, or c\n\
                         exit /b 1\n\
                     )\n\
                  )\n\n\
@@ -1018,12 +1018,12 @@ echo "✅ Commit message validation passed"
                  fi\n\n\
                  # Check if we're in edit mode\n\
                  if \\\"{0}\\\" entry status --quiet >/dev/null 2>&1; then\n\
-                     echo \\\"⚠️ You're in EDIT MODE for a stack entry!\\\"\n\
+                     echo \\\"⚠  You're in EDIT MODE for a stack entry!\\\"\n\
                      echo \\\"\\\"\n\
                     echo \\\"Choose your action:\\\"\n\
-                    echo \\\"  🔄 [A]mend: Modify the current entry (default)\\\"\n\
-                    echo \\\"  ➕ [N]ew:   Create new entry on top\\\"\n\
-                    echo \\\"  ❌ [C]ancel: Stop and think about it\\\"\n\
+                    echo \\\"  [A] Amend: Modify the current entry (default)\\\"\n\
+                    echo \\\"  [N] New:   Create new entry on top\\\"\n\
+                    echo \\\"  [C] Cancel: Stop and think about it\\\"\n\
                     echo \\\"\\\"\n\
                     \n\
                     # Read user choice with default to amend\n\
@@ -1032,7 +1032,7 @@ echo "✅ Commit message validation passed"
                     \n\
                     case \\\"$choice\\\" in\n\
                         [Aa])\n\
-                            echo \\\"✅ Amending current entry...\\\"\n\
+                            echo \\\"Amending current entry...\\\"\n\
                             # Stage all changes first (like git commit -a)\n\
                             git add -A\n\
                             # Use ca entry amend to properly update entry + working branch\n\
@@ -1040,16 +1040,16 @@ echo "✅ Commit message validation passed"
                             exit $?\n\
                             ;;\n\
                         [Nn])\n\
-                            echo \\\"➕ Creating new stack entry...\\\"\n\
+                            echo \\\"Creating new stack entry...\\\"\n\
                             # Let the commit proceed normally (will create new commit)\n\
                             exit 0\n\
                             ;;\n\
                         [Cc])\n\
-                            echo \\\"❌ Commit cancelled\\\"\n\
+                            echo \\\"Commit cancelled\\\"\n\
                             exit 1\n\
                             ;;\n\
                         *)\n\
-                            echo \\\"❓ Invalid choice. Please choose A, n, or c\\\"\n\
+                            echo \\\"Invalid choice. Please choose A, n, or c\\\"\n\
                             exit 1\n\
                             ;;\n\
                     esac\n\
