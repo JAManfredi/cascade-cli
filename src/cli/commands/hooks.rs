@@ -193,7 +193,23 @@ impl HooksManager {
             .map_err(|e| CascadeError::config(format!("Failed to check git config: {e}")))?;
 
         let original_path = if output.status.success() {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
+            let current_hooks_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            
+            // Don't save Cascade's own hooks directory as "original"
+            // This prevents infinite loops in hook chaining
+            let cascade_hooks_dir = dirs::home_dir()
+                .ok_or_else(|| CascadeError::config("Could not find home directory".to_string()))?
+                .join(".cascade")
+                .join("hooks")
+                .join(&self.repo_id);
+            let cascade_hooks_path = cascade_hooks_dir.to_string_lossy().to_string();
+            
+            if current_hooks_path == cascade_hooks_path {
+                // Already pointing to Cascade hooks - no original to save
+                String::new()
+            } else {
+                current_hooks_path
+            }
         } else {
             // Empty string means it wasn't set
             String::new()
