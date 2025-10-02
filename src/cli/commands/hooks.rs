@@ -7,6 +7,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::debug;
 
 /// Git repository type detection
 #[derive(Debug, Clone, PartialEq)]
@@ -447,6 +448,35 @@ impl HooksManager {
             })?;
         }
 
+        // Also clean up any old Cascade hooks in .git/hooks/ (from before core.hooksPath)
+        // These might have been left behind from earlier versions
+        // IMPORTANT: Only remove hooks that have our EXACT wrapper pattern to avoid
+        // deleting user's custom hooks that might mention "Cascade"
+        let git_hooks_dir = self.repo_path.join(".git").join("hooks");
+        if git_hooks_dir.exists() {
+            for hook_type in &[
+                HookType::PostCommit,
+                HookType::PrePush,
+                HookType::CommitMsg,
+                HookType::PrepareCommitMsg,
+                HookType::PreCommit,
+            ] {
+                let hook_path = git_hooks_dir.join(hook_type.filename());
+                if hook_path.exists() {
+                    // Check if it's a Cascade WRAPPER hook by looking for our exact wrapper signature
+                    // This is different from user hooks that might just mention Cascade
+                    if let Ok(content) = fs::read_to_string(&hook_path) {
+                        if content.contains("# Cascade CLI Hook Wrapper") 
+                            && content.contains("cascade_logic()") 
+                            && content.contains("# Function to run Cascade logic") {
+                            debug!("Removing old Cascade wrapper hook from .git/hooks: {:?}", hook_path);
+                            fs::remove_file(&hook_path).ok(); // Ignore errors
+                        }
+                    }
+                }
+            }
+        }
+
         // Clean up config directory if empty
         let cascade_config_dir = self.get_cascade_config_dir()?;
         if cascade_config_dir.exists() {
@@ -825,25 +855,24 @@ impl HooksManager {
                  rem Check for force push\n\
                  echo %* | findstr /C:\"--force\" /C:\"--force-with-lease\" /C:\"-f\" >nul\n\
                  if %ERRORLEVEL% equ 0 (\n\
-                     echo ❌ Force push detected!\n\
-                     echo 🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity\n\
+                     echo ERROR: Force push detected\n\
+                     echo Cascade CLI uses stacked diffs - force pushes can break stack integrity\n\
                      echo.\n\
-                     echo 💡 Instead of force pushing, try these streamlined commands:\n\
-                     echo    • ca sync      - Sync with remote changes ^(handles rebasing^)\n\
-                     echo    • ca push      - Push all unpushed commits ^(new default^)\n\
-                     echo    • ca submit    - Submit all entries for review ^(new default^)\n\
-                     echo    • ca autoland  - Auto-merge when approved + builds pass\n\
+                     echo Instead, try these commands:\n\
+                     echo   ca sync      - Sync with remote changes ^(handles rebasing^)\n\
+                     echo   ca push      - Push all unpushed commits\n\
+                     echo   ca submit    - Submit all entries for review\n\
+                     echo   ca autoland  - Auto-merge when approved + builds pass\n\
                      echo.\n\
-                     echo 🚨 If you really need to force push, run:\n\
-                     echo    git push --force-with-lease [remote] [branch]\n\
-                     echo    ^(But consider if this will affect other stack entries^)\n\
+                     echo If you really need to force push:\n\
+                     echo   git push --force-with-lease [remote] [branch]\n\
+                     echo   ^(But consider if this will affect other stack entries^)\n\
                      exit /b 1\n\
                  )\n\n\
                  rem Find repository root and check if Cascade is initialized\n\
                  for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
                  if not exist \"%REPO_ROOT%\\.cascade\" (\n\
-                     echo ℹ️ Cascade not initialized, allowing push\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Validate stack state (silent unless error)\n\
@@ -864,24 +893,23 @@ impl HooksManager {
                  set -e\n\n\
                  # Check for force push\n\
                  if echo \"$*\" | grep -q -- \"--force\\|--force-with-lease\\|-f\"; then\n\
-                     echo \"❌ Force push detected!\"\n\
-                     echo \"🌊 Cascade CLI uses stacked diffs - force pushes can break stack integrity\"\n\
+                     echo \"ERROR: Force push detected\"\n\
+                     echo \"Cascade CLI uses stacked diffs - force pushes can break stack integrity\"\n\
                      echo \"\"\n\
-                     echo \"💡 Instead of force pushing, try these streamlined commands:\"\n\
-                     echo \"   • ca sync      - Sync with remote changes (handles rebasing)\"\n\
-                     echo \"   • ca push      - Push all unpushed commits (new default)\"\n\
-                     echo \"   • ca submit    - Submit all entries for review (new default)\"\n\
-                     echo \"   • ca autoland  - Auto-merge when approved + builds pass\"\n\
+                     echo \"Instead, try these commands:\"\n\
+                     echo \"  ca sync      - Sync with remote changes (handles rebasing)\"\n\
+                     echo \"  ca push      - Push all unpushed commits\"\n\
+                     echo \"  ca submit    - Submit all entries for review\"\n\
+                     echo \"  ca autoland  - Auto-merge when approved + builds pass\"\n\
                      echo \"\"\n\
-                     echo \"🚨 If you really need to force push, run:\"\n\
-                     echo \"   git push --force-with-lease [remote] [branch]\"\n\
-                     echo \"   (But consider if this will affect other stack entries)\"\n\
+                     echo \"If you really need to force push:\"\n\
+                     echo \"  git push --force-with-lease [remote] [branch]\"\n\
+                     echo \"  (But consider if this will affect other stack entries)\"\n\
                      exit 1\n\
                  fi\n\n\
                  # Find repository root and check if Cascade is initialized\n\
                  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
                  if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
-                     echo \"ℹ️ Cascade not initialized, allowing push\"\n\
                      exit 0\n\
                  fi\n\n\
                  # Validate stack state (silent unless error)\n\
