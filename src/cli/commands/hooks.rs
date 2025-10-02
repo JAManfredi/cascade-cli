@@ -846,20 +846,12 @@ impl HooksManager {
                      echo ℹ️ Cascade not initialized, allowing push\n\
                      exit /b 0\n\
                  )\n\n\
-                 rem Validate stack state\n\
-                 echo 🪝 Validating stack state before push...\n\
-                 \"{cascade_cli}\" stack validate\n\
-                 if %ERRORLEVEL% equ 0 (\n\
-                     echo ✅ Stack validation passed\n\
-                 ) else (\n\
-                     echo ❌ Stack validation failed\n\
-                     echo 💡 Fix validation errors before pushing:\n\
-                     echo    • ca doctor       - Check overall health\n\
-                     echo    • ca status       - Check current stack status\n\
-                     echo    • ca sync         - Sync with remote and rebase if needed\n\
+                 rem Validate stack state (silent unless error)\n\
+                 \"{cascade_cli}\" validate >nul 2>&1\n\
+                 if %ERRORLEVEL% neq 0 (\n\
+                     echo Stack validation failed - run 'ca validate' for details\n\
                      exit /b 1\n\
-                 )\n\n\
-                 echo ✅ Pre-push validation complete\n"
+                 )\n"
             )
         }
 
@@ -892,19 +884,11 @@ impl HooksManager {
                      echo \"ℹ️ Cascade not initialized, allowing push\"\n\
                      exit 0\n\
                  fi\n\n\
-                 # Validate stack state\n\
-                 echo \"🪝 Validating stack state before push...\"\n\
-                 if \"{cascade_cli}\" stack validate; then\n\
-                     echo \"✅ Stack validation passed\"\n\
-                 else\n\
-                     echo \"❌ Stack validation failed\"\n\
-                     echo \"💡 Fix validation errors before pushing:\"\n\
-                     echo \"   • ca doctor       - Check overall health\"\n\
-                     echo \"   • ca status       - Check current stack status\"\n\
-                     echo \"   • ca sync         - Sync with remote and rebase if needed\"\n\
+                 # Validate stack state (silent unless error)\n\
+                 if ! \"{cascade_cli}\" validate > /dev/null 2>&1; then\n\
+                     echo \"Stack validation failed - run 'ca validate' for details\"\n\
                      exit 1\n\
-                 fi\n\n\
-                 echo \"✅ Pre-push validation complete\"\n"
+                 fi\n"
             )
         }
     }
@@ -942,24 +926,8 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-rem Check for very long messages (approximate check in batch)
-echo %COMMIT_MSG% | findstr /R "^..................................................................................*" >nul
-if %ERRORLEVEL% equ 0 (
-    echo ⚠️ Warning: Commit message longer than 72 characters
-    echo 💡 Consider keeping the first line short for better readability
-)
-
-rem Check for conventional commit format (optional)
-echo %COMMIT_MSG% | findstr /R "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build)" >nul
-if %ERRORLEVEL% neq 0 (
-    echo 💡 Consider using conventional commit format:
-    echo    feat: add new feature
-    echo    fix: resolve bug
-    echo    docs: update documentation
-    echo    etc.
-)
-
-echo ✅ Commit message validation passed
+rem Validation passed (silent success)
+exit /b 0
 "#.to_string()
         }
 
@@ -992,21 +960,8 @@ if [ ${#COMMIT_MSG} -lt 10 ]; then
     exit 1
 fi
 
-if [ ${#COMMIT_MSG} -gt 72 ]; then
-    echo "⚠️ Warning: Commit message longer than 72 characters"
-    echo "💡 Consider keeping the first line short for better readability"
-fi
-
-# Check for conventional commit format (optional)
-if ! echo "$COMMIT_MSG" | grep -E "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build)(\(.+\))?: .+" > /dev/null; then
-    echo "💡 Consider using conventional commit format:"
-    echo "   feat: add new feature"
-    echo "   fix: resolve bug"
-    echo "   docs: update documentation"
-    echo "   etc."
-fi
-
-echo "✅ Commit message validation passed"
+# Validation passed (silent success)
+exit 0
 "#.to_string()
         }
     }

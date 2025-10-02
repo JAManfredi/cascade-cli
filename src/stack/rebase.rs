@@ -352,9 +352,31 @@ impl RebaseManager {
             }
         }
 
-        // Return to original working branch silently
-        if let Some(orig_branch) = original_branch {
-            if let Err(e) = self.git_repo.checkout_branch_silent(&orig_branch) {
+        // Update working branch to point to the top of the rebased stack
+        // This ensures subsequent `ca push` doesn't re-add old commits
+        if let Some(ref orig_branch) = original_branch {
+            // Get the last entry's branch (top of stack)
+            if let Some(last_entry) = stack.entries.last() {
+                let top_branch = &last_entry.branch;
+                
+                // Force-update working branch to point to same commit as top entry
+                if let Ok(top_commit) = self.git_repo.get_branch_head(top_branch) {
+                    debug!(
+                        "Updating working branch '{}' to match top of stack ({})",
+                        orig_branch, &top_commit[..8]
+                    );
+                    
+                    if let Err(e) = self.git_repo.update_branch_to_commit(orig_branch, &top_commit) {
+                        Output::warning(format!(
+                            "Could not update working branch '{}' to top of stack: {}",
+                            orig_branch, e
+                        ));
+                    }
+                }
+            }
+            
+            // Return to original working branch silently
+            if let Err(e) = self.git_repo.checkout_branch_silent(orig_branch) {
                 Output::warning(format!(
                     "Could not return to original branch '{}': {}",
                     orig_branch, e
