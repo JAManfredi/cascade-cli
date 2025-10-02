@@ -181,8 +181,27 @@ impl HooksManager {
 
         let original_path_file = config_dir.join("original-hooks-path");
 
-        // Only save if we haven't already saved it (don't overwrite on subsequent hook installs)
+        // Check if file exists and if it's corrupted (pointing to Cascade's own directory)
         if original_path_file.exists() {
+            // Self-healing: verify the saved path isn't Cascade's own directory
+            if let Ok(saved_path) = fs::read_to_string(&original_path_file) {
+                let saved_path = saved_path.trim();
+                let cascade_hooks_dir = dirs::home_dir()
+                    .ok_or_else(|| CascadeError::config("Could not find home directory".to_string()))?
+                    .join(".cascade")
+                    .join("hooks")
+                    .join(&self.repo_id);
+                let cascade_hooks_path = cascade_hooks_dir.to_string_lossy().to_string();
+                
+                if saved_path == cascade_hooks_path {
+                    // CORRUPTED: File contains Cascade's own path - fix it!
+                    fs::write(&original_path_file, "").map_err(|e| {
+                        CascadeError::config(format!("Failed to fix corrupted hooks path: {e}"))
+                    })?;
+                    return Ok(());
+                }
+            }
+            // File exists and is valid - don't overwrite
             return Ok(());
         }
 
