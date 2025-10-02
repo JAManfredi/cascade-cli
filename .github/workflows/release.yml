@@ -132,15 +132,24 @@ jobs:
     - name: Free disk space (Ubuntu ARM64)
       if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
       run: |
-        # ARM64 cross-compilation needs more space - clean up runner
+        # ARM64 cross-compilation needs more space - aggressive cleanup
         echo "Disk space before cleanup:"
         df -h
         
-        # Remove unnecessary packages and files
+        # Remove large unnecessary packages and files
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /opt/ghc
         sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/.ghcup
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        
+        # Clean apt cache
+        sudo apt-get clean
+        
+        # Remove docker images
         sudo docker image prune --all --force || true
         
         echo "Disk space after cleanup:"
