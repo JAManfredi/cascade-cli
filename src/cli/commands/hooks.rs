@@ -963,8 +963,8 @@ if not exist "%REPO_ROOT%\.cascade" exit /b 0
 rem Basic commit message validation
 echo %COMMIT_MSG% | findstr /R "^..........*" >nul
 if %ERRORLEVEL% neq 0 (
-    echo ❌ Commit message too short (minimum 10 characters)
-    echo 💡 Write a descriptive commit message for better stack management
+    echo ERROR: Commit message too short (minimum 10 characters)
+    echo TIP: Write a descriptive commit message for better stack management
     exit /b 1
 )
 
@@ -998,8 +998,8 @@ fi
 
 # Basic commit message validation
 if [ ${#COMMIT_MSG} -lt 10 ]; then
-    echo "❌ Commit message too short (minimum 10 characters)"
-    echo "💡 Write a descriptive commit message for better stack management"
+    echo "ERROR: Commit message too short (minimum 10 characters)"
+    echo "TIP: Write a descriptive commit message for better stack management"
     exit 1
 fi
 
