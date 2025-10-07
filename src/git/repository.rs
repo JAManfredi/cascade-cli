@@ -361,6 +361,9 @@ impl GitRepository {
             self.create_backup_branch(branch_name, &backup_info.remote_commit_id)?;
         }
 
+        // Ensure index is closed before CLI command to prevent lock conflicts
+        self.ensure_index_closed()?;
+
         // Force push using git CLI (more reliable than git2 for TLS)
         let output = std::process::Command::new("git")
             .args(["push", "--force", "origin", branch_name])
@@ -743,6 +746,23 @@ impl GitRepository {
         index.write().map_err(CascadeError::Git)?;
 
         tracing::debug!("Staged all changes");
+        Ok(())
+    }
+
+    /// Ensure the Git index is fully written and closed before external git CLI operations
+    /// This prevents "index is locked" errors when mixing libgit2 and git CLI commands
+    fn ensure_index_closed(&self) -> Result<()> {
+        // Open and immediately close the index to ensure any pending writes are flushed
+        // and file handles are released before we spawn git CLI processes
+        let mut index = self.repo.index().map_err(CascadeError::Git)?;
+        index.write().map_err(CascadeError::Git)?;
+        drop(index); // Explicit drop to release file handle
+        
+        // Give the OS a moment to release file handles
+        // This is necessary because even after Rust drops the index,
+        // the OS might not immediately release the lock
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
         Ok(())
     }
 
@@ -1579,6 +1599,9 @@ impl GitRepository {
     /// Fallback push method using git CLI instead of git2
     /// This is used when git2 has TLS/SSL or auth issues but git CLI works fine
     fn push_with_git_cli(&self, branch: &str) -> Result<()> {
+        // Ensure index is closed before CLI command
+        self.ensure_index_closed()?;
+
         let output = std::process::Command::new("git")
             .args(["push", "origin", branch])
             .current_dir(&self.path)
@@ -1612,6 +1635,9 @@ impl GitRepository {
     fn fetch_with_git_cli(&self) -> Result<()> {
         tracing::debug!("Using git CLI fallback for fetch operation");
 
+        // Ensure index is closed before CLI command
+        self.ensure_index_closed()?;
+
         let output = std::process::Command::new("git")
             .args(["fetch", "origin"])
             .current_dir(&self.path)
@@ -1641,6 +1667,9 @@ impl GitRepository {
     /// This is used when git2 has TLS/SSL issues but git CLI works fine
     fn pull_with_git_cli(&self, branch: &str) -> Result<()> {
         tracing::debug!("Using git CLI fallback for pull operation: {}", branch);
+
+        // Ensure index is closed before CLI command
+        self.ensure_index_closed()?;
 
         let output = std::process::Command::new("git")
             .args(["pull", "origin", branch])

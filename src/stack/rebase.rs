@@ -236,14 +236,14 @@ impl RebaseManager {
 
         let mut current_base = target_base.clone();
         let entry_count = stack.entries.len();
-        let mut pushed_count = 0;
-        let mut skipped_count = 0;
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
+        let mut branches_to_push: Vec<(String, String)> = Vec::new(); // (branch_name, pr_number)
 
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
         println!("📋 Rebasing {} {}", entry_count, plural);
 
+        // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
             let original_branch = &entry.branch;
 
@@ -268,30 +268,18 @@ impl RebaseManager {
                     self.git_repo
                         .update_branch_to_commit(original_branch, &rebased_commit_id)?;
 
-                    // Only force-push to REMOTE if this entry has a PR
-                    if entry.pull_request_id.is_some() {
-                        let pr_num = entry.pull_request_id.as_ref().unwrap();
-                        let tree_char = if index + 1 == entry_count {
-                            "└─"
-                        } else {
-                            "├─"
-                        };
-                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
-
-                        // NOW do the actual force-push to remote (git push --force origin <branch>)
-                        // This updates the PR with the rebased commits
-                        // Use auto-confirm version since user already confirmed sync operation
-                        self.git_repo
-                            .force_push_single_branch_auto(original_branch)?;
-                        pushed_count += 1;
+                    // Track which branches need to be pushed (only those with PRs)
+                    let tree_char = if index + 1 == entry_count {
+                        "└─"
                     } else {
-                        let tree_char = if index + 1 == entry_count {
-                            "└─"
-                        } else {
-                            "├─"
-                        };
+                        "├─"
+                    };
+
+                    if let Some(pr_num) = &entry.pull_request_id {
+                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
+                        branches_to_push.push((original_branch.clone(), pr_num.clone()));
+                    } else {
                         println!("   {} {} (not submitted)", tree_char, original_branch);
-                        skipped_count += 1;
                     }
 
                     result
@@ -348,6 +336,28 @@ impl RebaseManager {
             for temp_branch in &temp_branches {
                 if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
                     debug!("Could not delete temp branch {}: {}", temp_branch, e);
+                }
+            }
+        }
+
+        // Phase 2: Push all branches with PRs to remote (git CLI - after all libgit2 operations)
+        // This batch approach prevents index lock conflicts between libgit2 and git CLI
+        let pushed_count = branches_to_push.len();
+        let skipped_count = entry_count - pushed_count;
+
+        if !branches_to_push.is_empty() {
+            println!(); // Spacing before push phase
+            println!("🚀 Pushing {} branch{} to remote...", pushed_count, if pushed_count == 1 { "" } else { "es" });
+            
+            for (branch_name, _pr_num) in &branches_to_push {
+                match self.git_repo.force_push_single_branch_auto(branch_name) {
+                    Ok(_) => {
+                        debug!("Pushed {} successfully", branch_name);
+                    }
+                    Err(e) => {
+                        Output::warning(format!("Could not push '{}': {}", branch_name, e));
+                        // Continue pushing other branches even if one fails
+                    }
                 }
             }
         }
