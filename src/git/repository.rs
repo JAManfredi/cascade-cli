@@ -374,8 +374,10 @@ impl GitRepository {
         self.ensure_index_closed()?;
 
         // Force push using git CLI (more reliable than git2 for TLS)
+        // Set CASCADE_INTERNAL_PUSH env var to signal pre-push hook to allow this
         let output = std::process::Command::new("git")
             .args(["push", "--force", "origin", branch_name])
+            .env("CASCADE_INTERNAL_PUSH", "1")
             .current_dir(&self.path)
             .output()
             .map_err(|e| CascadeError::branch(format!("Failed to execute git push: {}", e)))?;

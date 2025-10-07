@@ -858,7 +858,11 @@ impl HooksManager {
                 "@echo off\n\
                  rem Cascade CLI Hook - Pre Push\n\
                  rem Prevents force pushes and validates stack state\n\n\
-                 rem Check for force push\n\
+                 rem Allow force pushes from Cascade internal commands (ca sync, ca submit, etc.)\n\
+                 if \"%CASCADE_INTERNAL_PUSH%\"==\"1\" (\n\
+                     exit /b 0\n\
+                 )\n\n\
+                 rem Check for force push from user\n\
                  echo %* | findstr /C:\"--force\" /C:\"--force-with-lease\" /C:\"-f\" >nul\n\
                  if %ERRORLEVEL% equ 0 (\n\
                      echo ERROR: Force push detected\n\
@@ -897,7 +901,11 @@ impl HooksManager {
                  # Cascade CLI Hook - Pre Push\n\
                  # Prevents force pushes and validates stack state\n\n\
                  set -e\n\n\
-                 # Check for force push\n\
+                 # Allow force pushes from Cascade internal commands (ca sync, ca submit, etc.)\n\
+                 if [ \"$CASCADE_INTERNAL_PUSH\" = \"1\" ]; then\n\
+                     exit 0\n\
+                 fi\n\n\
+                 # Check for force push from user\n\
                  if echo \"$*\" | grep -q -- \"--force\\|--force-with-lease\\|-f\"; then\n\
                      echo \"ERROR: Force push detected\"\n\
                      echo \"Cascade CLI uses stacked diffs - force pushes can break stack integrity\"\n\
@@ -922,7 +930,7 @@ impl HooksManager {
                  if ! \"{cascade_cli}\" validate > /dev/null 2>&1; then\n\
                      echo \"Stack validation failed - run 'ca validate' for details\"\n\
                      exit 1\n\
-                 fi\n"
+                     fi\n"
             )
         }
     }
