@@ -200,6 +200,11 @@ impl RebaseManager {
     fn rebase_with_force_push(&mut self, stack: &Stack) -> Result<RebaseResult> {
         use crate::cli::output::Output;
 
+        // Check if there's an in-progress cherry-pick from a previous failed sync
+        if self.has_in_progress_cherry_pick()? {
+            return self.handle_in_progress_cherry_pick(stack);
+        }
+
         Output::section(format!("Rebasing stack: {}", stack.name));
 
         let mut result = RebaseResult {
@@ -306,12 +311,28 @@ impl RebaseManager {
                         result.success = false;
                         result.error = Some(format!(
                             "Conflict in {}: {}\n\n\
-                            Auto-resolution is disabled. To enable it, use 'ca sync --auto-resolve'\n\n\
-                            Manual recovery:\n\
-                            1. Resolve conflicts in the listed files\n\
-                            2. Stage resolved files: 'git add <files>'\n\
-                            3. Continue: 'git cherry-pick --continue'\n\
-                            4. Or abort: 'git cherry-pick --abort' and retry 'ca sync'",
+                            MANUAL CONFLICT RESOLUTION REQUIRED\n\
+                            =====================================\n\n\
+                            Step 1: Analyze conflicts\n\
+                            → Run: ca conflicts\n\
+                            → This shows which conflicts are in which files\n\n\
+                            Step 2: Resolve conflicts in your editor\n\
+                            → Open conflicted files and edit them\n\
+                            → Remove conflict markers (<<<<<<, ======, >>>>>>)\n\
+                            → Keep the code you want\n\
+                            → Save the files\n\n\
+                            Step 3: Mark conflicts as resolved\n\
+                            → Run: git add <resolved-files>\n\
+                            → Or: git add -A (to stage all resolved files)\n\n\
+                            Step 4: Complete the sync\n\
+                            → Run: ca sync\n\
+                            → Cascade will detect resolved conflicts and continue\n\n\
+                            Alternative: Abort and start over\n\
+                            → Run: git cherry-pick --abort\n\
+                            → Then: ca sync (starts fresh)\n\n\
+                            TIP: Enable auto-resolution for simple conflicts:\n\
+                            → Run: ca sync --auto-resolve\n\
+                            → Only complex conflicts will require manual resolution",
                             entry.commit_hash, e
                         ));
                         break;
@@ -324,10 +345,30 @@ impl RebaseManager {
                                 result.success = false;
                                 result.error = Some(format!(
                                     "Could not auto-resolve all conflicts in {}\n\n\
-                                    Recovery options:\n\
-                                    1. Run 'ca conflicts' to see detailed conflict analysis\n\
-                                    2. Manually resolve conflicts and run 'ca sync' again\n\
-                                    3. Use 'git reset --hard HEAD' to abort and start fresh",
+                                    MANUAL CONFLICT RESOLUTION REQUIRED\n\
+                                    =====================================\n\n\
+                                    Some conflicts are too complex for auto-resolution.\n\n\
+                                    Step 1: Analyze remaining conflicts\n\
+                                    → Run: ca conflicts\n\
+                                    → Shows which files still have conflicts\n\
+                                    → Use --detailed flag for more info\n\n\
+                                    Step 2: Resolve conflicts in your editor\n\
+                                    → Open conflicted files (marked with ✋ in ca conflicts output)\n\
+                                    → Remove conflict markers (<<<<<<, ======, >>>>>>)\n\
+                                    → Keep the code you want\n\
+                                    → Save the files\n\n\
+                                    Step 3: Mark conflicts as resolved\n\
+                                    → Run: git add <resolved-files>\n\
+                                    → Or: git add -A (to stage all resolved files)\n\n\
+                                    Step 4: Complete the sync\n\
+                                    → Run: ca sync\n\
+                                    → Cascade will continue from where it left off\n\n\
+                                    Alternative: Abort and start over\n\
+                                    → Run: git cherry-pick --abort\n\
+                                    → Then: ca sync (starts fresh)\n\n\
+                                    BACKUP: If auto-resolution was wrong\n\
+                                    → Check for .cascade-backup files in your repo\n\
+                                    → These contain the original file content before auto-resolution",
                                     &entry.commit_hash[..8]
                                 ));
                                 break;
@@ -1357,6 +1398,128 @@ impl RebaseManager {
 
         info!("Rebase continued successfully");
         Ok(())
+    }
+    
+    /// Check if there's an in-progress cherry-pick operation
+    fn has_in_progress_cherry_pick(&self) -> Result<bool> {
+        let git_dir = self.git_repo.path().join(".git");
+        Ok(git_dir.join("CHERRY_PICK_HEAD").exists())
+    }
+    
+    /// Handle resuming an in-progress cherry-pick from a previous failed sync
+    fn handle_in_progress_cherry_pick(&mut self, stack: &Stack) -> Result<RebaseResult> {
+        use crate::cli::output::Output;
+        
+        let git_dir = self.git_repo.path().join(".git");
+        
+        Output::section("Resuming in-progress sync");
+        println!();
+        Output::info("Detected unfinished cherry-pick from previous sync");
+        println!();
+        
+        // Check if conflicts are resolved
+        if self.git_repo.has_conflicts()? {
+            let conflicted_files = self.git_repo.get_conflicted_files()?;
+            
+            let result = RebaseResult {
+                success: false,
+                branch_mapping: HashMap::new(),
+                conflicts: conflicted_files.clone(),
+                new_commits: Vec::new(),
+                error: Some(format!(
+                    "Cannot continue: {} file(s) still have unresolved conflicts\n\n\
+                    MANUAL CONFLICT RESOLUTION REQUIRED\n\
+                    =====================================\n\n\
+                    Conflicted files:\n{}\n\n\
+                    Step 1: Analyze conflicts\n\
+                    → Run: ca conflicts\n\
+                    → Shows detailed conflict analysis\n\n\
+                    Step 2: Resolve conflicts in your editor\n\
+                    → Open conflicted files and edit them\n\
+                    → Remove conflict markers (<<<<<<, ======, >>>>>>)\n\
+                    → Keep the code you want\n\
+                    → Save the files\n\n\
+                    Step 3: Mark conflicts as resolved\n\
+                    → Run: git add <resolved-files>\n\
+                    → Or: git add -A (to stage all resolved files)\n\n\
+                    Step 4: Complete the sync\n\
+                    → Run: ca sync\n\
+                    → Cascade will continue from where it left off\n\n\
+                    Alternative: Abort and start over\n\
+                    → Run: git cherry-pick --abort\n\
+                    → Then: ca sync (starts fresh)",
+                    conflicted_files.len(),
+                    conflicted_files.iter().map(|f| format!("  - {}", f)).collect::<Vec<_>>().join("\n")
+                )),
+                summary: "Sync paused - conflicts need resolution".to_string(),
+            };
+            
+            return Ok(result);
+        }
+        
+        // Conflicts are resolved - continue the cherry-pick
+        Output::info("Conflicts resolved, continuing cherry-pick...");
+        
+        // Stage all resolved files
+        self.git_repo.stage_conflict_resolved_files()?;
+        
+        // Complete the cherry-pick by committing
+        let cherry_pick_msg_file = git_dir.join("CHERRY_PICK_MSG");
+        let commit_message = if cherry_pick_msg_file.exists() {
+            std::fs::read_to_string(&cherry_pick_msg_file)
+                .unwrap_or_else(|_| "Resolved conflicts".to_string())
+        } else {
+            "Resolved conflicts".to_string()
+        };
+        
+        match self.git_repo.commit(&commit_message) {
+            Ok(new_commit_id) => {
+                Output::success("Cherry-pick completed");
+                
+                // Clean up cherry-pick state
+                if git_dir.join("CHERRY_PICK_HEAD").exists() {
+                    let _ = std::fs::remove_file(git_dir.join("CHERRY_PICK_HEAD"));
+                }
+                if cherry_pick_msg_file.exists() {
+                    let _ = std::fs::remove_file(&cherry_pick_msg_file);
+                }
+                
+                println!();
+                Output::info("Continuing with rest of stack...");
+                println!();
+                
+                // Now continue with the rest of the rebase
+                // We need to restart the full rebase since we don't track which entry we were on
+                self.rebase_with_force_push(stack)
+            }
+            Err(e) => {
+                let result = RebaseResult {
+                    success: false,
+                    branch_mapping: HashMap::new(),
+                    conflicts: Vec::new(),
+                    new_commits: Vec::new(),
+                    error: Some(format!(
+                        "Failed to complete cherry-pick: {}\n\n\
+                        This usually means:\n\
+                        - Git index is locked (another process accessing repo)\n\
+                        - File permissions issue\n\
+                        - Disk space issue\n\n\
+                        Recovery:\n\
+                        1. Check if another Git operation is running\n\
+                        2. Run 'rm -f .git/index.lock' if stale lock exists\n\
+                        3. Run 'git status' to check repo state\n\
+                        4. Retry 'ca sync' after fixing the issue\n\n\
+                        Or abort and start fresh:\n\
+                        → Run: git cherry-pick --abort\n\
+                        → Then: ca sync",
+                        e
+                    )),
+                    summary: "Failed to complete cherry-pick".to_string(),
+                };
+                
+                Ok(result)
+            }
+        }
     }
 }
 
