@@ -607,16 +607,16 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
         return Ok(());
     }
 
-    println!("📚 Stacks:");
+    println!("Stacks:");
     for (stack_id, name, status, entry_count, active_marker) in stacks {
         let status_icon = match status {
-            StackStatus::Clean => "✅",
-            StackStatus::Dirty => "🔄",
-            StackStatus::OutOfSync => "⚠️",
-            StackStatus::Conflicted => "❌",
-            StackStatus::Rebasing => "🔀",
-            StackStatus::NeedsSync => "🔄",
-            StackStatus::Corrupted => "💥",
+            StackStatus::Clean => "✓",
+            StackStatus::Dirty => "~",
+            StackStatus::OutOfSync => "!",
+            StackStatus::Conflicted => "✗",
+            StackStatus::Rebasing => "↔",
+            StackStatus::NeedsSync => "~",
+            StackStatus::Corrupted => "✗",
         };
 
         let active_indicator = if active_marker.is_some() {
@@ -651,7 +651,11 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
                     println!("    Branches:");
                     for (i, entry) in stack_obj.entries.iter().enumerate() {
                         let entry_num = i + 1;
-                        let submitted_indicator = if entry.is_submitted { "📤" } else { "📝" };
+                        let submitted_indicator = if entry.is_submitted {
+                            "[submitted]"
+                        } else {
+                            ""
+                        };
                         let branch_name = &entry.branch;
                         let short_message = if entry.message.len() > 40 {
                             format!("{}...", &entry.message[..37])
@@ -989,10 +993,10 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                             // Show build status
                             if let Some(build) = &enhanced.build_status {
                                 let build_icon = match build.state {
-                                    crate::bitbucket::pull_request::BuildState::Successful => "✅",
-                                    crate::bitbucket::pull_request::BuildState::Failed => "❌",
-                                    crate::bitbucket::pull_request::BuildState::InProgress => "🔄",
-                                    _ => "⚪",
+                                    crate::bitbucket::pull_request::BuildState::Successful => "✓",
+                                    crate::bitbucket::pull_request::BuildState::Failed => "✗",
+                                    crate::bitbucket::pull_request::BuildState::InProgress => "~",
+                                    _ => "○",
                                 };
                                 println!("      Build: {} {:?}", build_icon, build.state);
                             }
@@ -1037,7 +1041,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
         match integration.check_stack_status(&stack_id).await {
             Ok(status) => {
-                println!("\n📊 Pull Request Status:");
+                println!("\nPull Request Status:");
                 println!("   Total entries: {}", status.total_entries);
                 println!("   Submitted: {}", status.submitted_entries);
                 println!("   Open PRs: {}", status.open_prs);
@@ -1046,12 +1050,12 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                 println!("   Completion: {:.1}%", status.completion_percentage());
 
                 if !status.pull_requests.is_empty() {
-                    println!("\n📋 Pull Requests:");
+                    println!("\nPull Requests:");
                     for pr in &status.pull_requests {
                         let state_icon = match pr.state {
-                            crate::bitbucket::PullRequestState::Open => "🔄",
-                            crate::bitbucket::PullRequestState::Merged => "✅",
-                            crate::bitbucket::PullRequestState::Declined => "❌",
+                            crate::bitbucket::PullRequestState::Open => "○",
+                            crate::bitbucket::PullRequestState::Merged => "✓",
+                            crate::bitbucket::PullRequestState::Declined => "✗",
                         };
                         println!(
                             "   {} PR #{}: {} ({} -> {})",
@@ -1139,12 +1143,12 @@ async fn push_to_stack(
                     repo.create_branch(&feature_branch, None)?;
                     repo.checkout_branch(&feature_branch)?;
 
-                    println!("✅ Created and switched to '{feature_branch}'");
+                    Output::success(format!("Created and switched to '{feature_branch}'"));
                     println!("   You can now commit and push your changes safely");
 
                     // Continue with normal flow
                 } else {
-                    println!("\n💡 You have uncommitted changes. Here are your options:");
+                    println!("\nYou have uncommitted changes. Here are your options:");
                     println!("   1. Create a feature branch first:");
                     println!("      git checkout -b feature/my-work");
                     println!("      git commit -am \"your work\"");
@@ -1283,25 +1287,25 @@ async fn push_to_stack(
             let unpushed_count = get_unpushed_commits(&repo, active_stack)?.len();
 
             if unpushed_count == 0 {
-                println!("ℹ️  No unpushed commits to squash");
+                Output::info("  No unpushed commits to squash");
             } else if unpushed_count == 1 {
-                println!("ℹ️  Only 1 unpushed commit, no squashing needed");
+                Output::info("  Only 1 unpushed commit, no squashing needed");
             } else {
-                println!("🔄 Auto-detected {unpushed_count} unpushed commits, squashing...");
+                println!(" Auto-detected {unpushed_count} unpushed commits, squashing...");
                 squash_commits(&repo, unpushed_count, None).await?;
-                println!("✅ Squashed {unpushed_count} unpushed commits into one");
+                Output::success(" Squashed {unpushed_count} unpushed commits into one");
             }
         } else {
-            println!("🔄 Squashing last {squash_count} commits...");
+            println!(" Squashing last {squash_count} commits...");
             squash_commits(&repo, squash_count, None).await?;
-            println!("✅ Squashed {squash_count} commits into one");
+            Output::success(" Squashed {squash_count} commits into one");
         }
     } else if let Some(since_ref) = squash_since {
-        println!("🔄 Squashing commits since {since_ref}...");
+        println!(" Squashing commits since {since_ref}...");
         let since_commit = repo.resolve_reference(&since_ref)?;
         let commits_count = count_commits_since(&repo, &since_commit.id().to_string())?;
         squash_commits(&repo, commits_count, Some(since_ref.clone())).await?;
-        println!("✅ Squashed {commits_count} commits since {since_ref} into one");
+        Output::success(" Squashed {commits_count} commits since {since_ref} into one");
     }
 
     // Determine which commits to push
@@ -1394,7 +1398,7 @@ async fn push_to_stack(
     };
 
     if commits_to_push.is_empty() {
-        println!("ℹ️  No commits to push to stack");
+        Output::info("  No commits to push to stack");
         return Ok(());
     }
 
@@ -1942,12 +1946,12 @@ async fn list_pull_requests(state: Option<String>, verbose: bool) -> Result<()> 
                 return Ok(());
             }
 
-            println!("📋 Pull Requests ({} total):", pr_page.values.len());
+            println!("Pull Requests ({} total):", pr_page.values.len());
             for pr in &pr_page.values {
                 let state_icon = match pr.state {
-                    crate::bitbucket::PullRequestState::Open => "🔄",
-                    crate::bitbucket::PullRequestState::Merged => "✅",
-                    crate::bitbucket::PullRequestState::Declined => "❌",
+                    crate::bitbucket::PullRequestState::Open => "○",
+                    crate::bitbucket::PullRequestState::Merged => "✓",
+                    crate::bitbucket::PullRequestState::Declined => "✗",
                 };
                 println!("   {} PR #{}: {}", state_icon, pr.id, pr.title);
                 if verbose {
@@ -2426,7 +2430,7 @@ async fn rebase_stack(
         }
         Err(e) => {
             warn!("❌ Rebase failed: {}", e);
-            println!("💡 Tips for resolving rebase issues:");
+            Output::tip(" Tips for resolving rebase issues:");
             println!("   - Check for uncommitted changes with 'git status'");
             println!("   - Ensure base branch is up to date");
             println!("   - Try interactive mode: 'ca stack rebase --interactive'");
@@ -2450,19 +2454,19 @@ async fn continue_rebase() -> Result<()> {
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
     if !rebase_manager.is_rebase_in_progress() {
-        println!("ℹ️  No rebase in progress");
+        Output::info("  No rebase in progress");
         return Ok(());
     }
 
-    println!("🔄 Continuing rebase...");
+    println!(" Continuing rebase...");
     match rebase_manager.continue_rebase() {
         Ok(_) => {
-            println!("✅ Rebase continued successfully");
+            Output::success(" Rebase continued successfully");
             println!("   Check 'ca stack rebase-status' for current state");
         }
         Err(e) => {
             warn!("❌ Failed to continue rebase: {}", e);
-            println!("💡 You may need to resolve conflicts first:");
+            Output::tip(" You may need to resolve conflicts first:");
             println!("   1. Edit conflicted files");
             println!("   2. Stage resolved files with 'git add'");
             println!("   3. Run 'ca stack continue-rebase' again");
@@ -2485,14 +2489,14 @@ async fn abort_rebase() -> Result<()> {
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
     if !rebase_manager.is_rebase_in_progress() {
-        println!("ℹ️  No rebase in progress");
+        Output::info("  No rebase in progress");
         return Ok(());
     }
 
     println!("⚠️  Aborting rebase...");
     match rebase_manager.abort_rebase() {
         Ok(_) => {
-            println!("✅ Rebase aborted successfully");
+            Output::success(" Rebase aborted successfully");
             println!("   Repository restored to pre-rebase state");
         }
         Err(e) => {
@@ -2514,7 +2518,7 @@ async fn rebase_status() -> Result<()> {
     let stack_manager = StackManager::new(&repo_root)?;
     let git_repo = crate::git::GitRepository::open(&repo_root)?;
 
-    println!("📊 Rebase Status");
+    println!("Rebase Status");
 
     // Check if rebase is in progress by checking git state directly
     let git_dir = current_dir.join(".git");
@@ -2628,7 +2632,7 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
         // Basic structure validation first
         match stack.validate() {
             Ok(message) => {
-                println!("✅ Stack '{name}' structure validation: {message}");
+                Output::success(" Stack '{name}' structure validation: {message}");
             }
             Err(e) => {
                 println!("❌ Stack '{name}' structure validation failed: {e}");
@@ -2659,7 +2663,7 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
             let stack = manager.get_stack(&stack_id).unwrap();
             let stack_name = &stack.name;
 
-            println!("\n📋 Checking stack '{stack_name}':");
+            println!("\nChecking stack '{stack_name}':");
 
             // Basic structure validation
             match stack.validate() {
@@ -3120,7 +3124,7 @@ async fn land_stack(
 
                 // 🔄 AUTO-RETARGETING: After each merge, retarget remaining PRs
                 if landed_count < total_ready_prs {
-                    println!("🔄 Retargeting remaining PRs to latest base...");
+                    println!(" Retargeting remaining PRs to latest base...");
 
                     // 1️⃣ CRITICAL: Update base branch to get latest merged state
                     let base_branch = active_stack.base_branch.clone();
@@ -3239,7 +3243,7 @@ async fn land_stack(
     }
 
     if landed_count > 0 {
-        println!("✅ Landing operation completed!");
+        Output::success(" Landing operation completed!");
     } else {
         println!("❌ No PRs were successfully landed");
     }
@@ -3281,19 +3285,19 @@ async fn continue_land() -> Result<()> {
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
     if !rebase_manager.is_rebase_in_progress() {
-        println!("ℹ️  No rebase in progress");
+        Output::info("  No rebase in progress");
         return Ok(());
     }
 
-    println!("🔄 Continuing land operation...");
+    println!(" Continuing land operation...");
     match rebase_manager.continue_rebase() {
         Ok(_) => {
-            println!("✅ Land operation continued successfully");
+            Output::success(" Land operation continued successfully");
             println!("   Check 'ca stack land-status' for current state");
         }
         Err(e) => {
             warn!("❌ Failed to continue land operation: {}", e);
-            println!("💡 You may need to resolve conflicts first:");
+            Output::tip(" You may need to resolve conflicts first:");
             println!("   1. Edit conflicted files");
             println!("   2. Stage resolved files with 'git add'");
             println!("   3. Run 'ca stack continue-land' again");
@@ -3316,14 +3320,14 @@ async fn abort_land() -> Result<()> {
     let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
     if !rebase_manager.is_rebase_in_progress() {
-        println!("ℹ️  No rebase in progress");
+        Output::info("  No rebase in progress");
         return Ok(());
     }
 
     println!("⚠️  Aborting land operation...");
     match rebase_manager.abort_rebase() {
         Ok(_) => {
-            println!("✅ Land operation aborted successfully");
+            Output::success(" Land operation aborted successfully");
             println!("   Repository restored to pre-land state");
         }
         Err(e) => {
@@ -3345,7 +3349,7 @@ async fn land_status() -> Result<()> {
     let stack_manager = StackManager::new(&repo_root)?;
     let git_repo = crate::git::GitRepository::open(&repo_root)?;
 
-    println!("📊 Land Status");
+    println!("Land Status");
 
     // Check if land operation is in progress by checking git state directly
     let git_dir = repo_root.join(".git");
@@ -3420,8 +3424,8 @@ async fn repair_stack_data() -> Result<()> {
 
     stack_manager.repair_all_stacks()?;
 
-    println!("✅ Stack data consistency repaired successfully!");
-    println!("💡 Run 'ca stack --mergeable' to see updated status");
+    Output::success(" Stack data consistency repaired successfully!");
+    Output::tip(" Run 'ca stack --mergeable' to see updated status");
 
     Ok(())
 }
@@ -3685,7 +3689,7 @@ async fn analyze_commits_for_safeguards(
 
     // 🛡️ SAFEGUARD 4: Better range detection suggestions
     if commits_to_push.len() > 5 {
-        println!("💡 Tip: If you only want recent commits, use:");
+        Output::tip(" Tip: If you only want recent commits, use:");
         println!(
             "   ca push --since HEAD~{}  # pushes last {} commits",
             std::cmp::min(commits_to_push.len(), 5),
@@ -3707,7 +3711,7 @@ async fn analyze_commits_for_safeguards(
             let short_hash = &commit_hash[..std::cmp::min(commit_hash.len(), 7)];
             println!("  {}: {} ({})", i + 1, summary, short_hash);
         }
-        println!("💡 Run without --dry-run to actually push these commits.");
+        Output::tip(" Run without --dry-run to actually push these commits.");
     }
 
     Ok(())

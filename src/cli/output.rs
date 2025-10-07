@@ -42,7 +42,7 @@ impl Output {
 
     /// Print a tip/suggestion
     pub fn tip<T: Display>(message: T) {
-        println!("{} {}", style("💡").bright(), style(message).dim());
+        println!("{} {}", style("TIP:").cyan(), style(message).dim());
     }
 
     /// Print progress indicator
