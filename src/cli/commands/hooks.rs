@@ -1041,10 +1041,13 @@ exit 0
                      if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
                          echo Amending current entry...\n\
                          git add -A\n\
+                         rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
                          \\\"{0}\\\" entry amend --all\n\
                          exit /b %ERRORLEVEL%\n\
                      ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
                          echo Creating new stack entry...\n\
+                         echo The commit will proceed and post-commit hook will add it to your stack\n\
+                         rem Let commit proceed ^(Git will use -m flag or open editor^)\n\
                          exit /b 0\n\
                      ) else if /i \\\"%choice%\\\"==\\\"C\\\" (\n\
                          echo Commit cancelled\n\
@@ -1108,14 +1111,15 @@ exit 0
                 r#"                echo "Amending current entry...""#.to_string(),
                 "                # Stage all changes first (like git commit -a)".to_string(),
                 "                git add -A".to_string(),
-                "                # Use ca entry amend to properly update entry + working branch"
+                "                # Use ca entry amend to properly update entry + working branch (ignore any -m flag)"
                     .to_string(),
                 amend_line.replace("           ", "                "),
                 "                exit $?".to_string(),
                 "                ;;".to_string(),
                 "            [Nn])".to_string(),
                 r#"                echo "Creating new stack entry...""#.to_string(),
-                "                # Let the commit proceed normally (will create new commit)"
+                r#"                echo "The commit will proceed and post-commit hook will add it to your stack""#.to_string(),
+                "                # Let the commit proceed normally (Git will use -m flag or open editor)"
                     .to_string(),
                 "                exit 0".to_string(),
                 "                ;;".to_string(),
