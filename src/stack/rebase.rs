@@ -745,9 +745,18 @@ impl RebaseManager {
             let remaining_conflicts = self.parse_conflict_markers(&content)?;
 
             if remaining_conflicts.is_empty() {
+                // SAFETY: Create backup before writing resolved content
+                // This allows recovery if auto-resolution is incorrect
+                let backup_path = full_path.with_extension("cascade-backup");
+                if let Ok(original_content) = std::fs::read_to_string(&full_path) {
+                    let _ = std::fs::write(&backup_path, original_content);
+                    debug!("Created backup at {:?}", backup_path);
+                }
+                
                 // All conflicts resolved - write the file back atomically
                 crate::utils::atomic_file::write_string(&full_path, &content)?;
-
+                
+                debug!("Successfully resolved all conflicts in {}", file_path);
                 return Ok(ConflictResolution::Resolved);
             } else {
                 info!(
@@ -759,6 +768,22 @@ impl RebaseManager {
         }
 
         Ok(ConflictResolution::TooComplex)
+    }
+    
+    /// Helper to count whitespace consistency (lower is better)
+    fn count_whitespace_consistency(content: &str) -> usize {
+        let mut inconsistencies = 0;
+        let lines: Vec<&str> = content.lines().collect();
+        
+        for line in &lines {
+            // Check for mixed tabs and spaces
+            if line.contains('\t') && line.contains(' ') {
+                inconsistencies += 1;
+            }
+        }
+        
+        // Penalize for inconsistencies
+        lines.len().saturating_sub(inconsistencies)
     }
 
     /// Resolve a single conflict using enhanced analysis
@@ -778,11 +803,26 @@ impl RebaseManager {
 
         match conflict.conflict_type {
             ConflictType::Whitespace => {
-                // Use the version with better formatting
-                if conflict.our_content.trim().len() >= conflict.their_content.trim().len() {
-                    Ok(Some(conflict.our_content.clone()))
+                // SAFETY: Only resolve if the content is truly identical except for whitespace
+                // Otherwise, it might be intentional formatting changes
+                let our_normalized = conflict.our_content.split_whitespace().collect::<Vec<_>>().join(" ");
+                let their_normalized = conflict.their_content.split_whitespace().collect::<Vec<_>>().join(" ");
+                
+                if our_normalized == their_normalized {
+                    // Content is identical - prefer the version with more consistent formatting
+                    // (fewer mixed spaces/tabs, more consistent indentation)
+                    let our_consistency = Self::count_whitespace_consistency(&conflict.our_content);
+                    let their_consistency = Self::count_whitespace_consistency(&conflict.their_content);
+                    
+                    if our_consistency >= their_consistency {
+                        Ok(Some(conflict.our_content.clone()))
+                    } else {
+                        Ok(Some(conflict.their_content.clone()))
+                    }
                 } else {
-                    Ok(Some(conflict.their_content.clone()))
+                    // Content differs beyond whitespace - not safe to auto-resolve
+                    debug!("Whitespace conflict has content differences - requires manual resolution");
+                    Ok(None)
                 }
             }
             ConflictType::LineEnding => {
@@ -794,23 +834,52 @@ impl RebaseManager {
                 Ok(Some(normalized))
             }
             ConflictType::PureAddition => {
-                // Merge both additions
+                // SAFETY: Only merge if one side is empty (true addition)
+                // If both sides have content, it's not a pure addition - require manual resolution
                 if conflict.our_content.is_empty() {
                     Ok(Some(conflict.their_content.clone()))
                 } else if conflict.their_content.is_empty() {
                     Ok(Some(conflict.our_content.clone()))
                 } else {
-                    // Try to combine both
-                    let combined = format!("{}\n{}", conflict.our_content, conflict.their_content);
-                    Ok(Some(combined))
+                    // Both sides have content - this could be:
+                    // - Duplicate function definitions
+                    // - Conflicting logic
+                    // - Different implementations of same feature
+                    // Too risky to auto-merge - require manual resolution
+                    debug!(
+                        "PureAddition conflict has content on both sides - requires manual resolution"
+                    );
+                    Ok(None)
                 }
             }
             ConflictType::ImportMerge => {
-                // Sort and merge imports
-                let mut all_imports: Vec<&str> = conflict
-                    .our_content
-                    .lines()
-                    .chain(conflict.their_content.lines())
+                // SAFETY: Only merge simple single-line imports
+                // Multi-line imports or complex cases require manual resolution
+                
+                // Check if all imports are single-line and look like imports
+                let our_lines: Vec<&str> = conflict.our_content.lines().collect();
+                let their_lines: Vec<&str> = conflict.their_content.lines().collect();
+                
+                // Verify all lines look like simple imports (heuristic check)
+                let all_simple = our_lines.iter().chain(their_lines.iter())
+                    .all(|line| {
+                        let trimmed = line.trim();
+                        trimmed.starts_with("import ") || 
+                        trimmed.starts_with("from ") ||
+                        trimmed.starts_with("use ") ||
+                        trimmed.starts_with("#include") ||
+                        trimmed.is_empty()
+                    });
+                
+                if !all_simple {
+                    debug!("ImportMerge contains non-import lines - requires manual resolution");
+                    return Ok(None);
+                }
+                
+                // Merge and deduplicate imports
+                let mut all_imports: Vec<&str> = our_lines.into_iter()
+                    .chain(their_lines.into_iter())
+                    .filter(|line| !line.trim().is_empty())
                     .collect();
                 all_imports.sort();
                 all_imports.dedup();
