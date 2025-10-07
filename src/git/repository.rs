@@ -345,6 +345,15 @@ impl GitRepository {
         branch_name: &str,
         auto_confirm: bool,
     ) -> Result<()> {
+        // Validate branch exists before attempting push
+        // This provides a clearer error message than a failed git push
+        if self.get_branch_commit_hash(branch_name).is_err() {
+            return Err(CascadeError::branch(format!(
+                "Cannot push '{}': branch does not exist locally",
+                branch_name
+            )));
+        }
+        
         // Fetch first to ensure we have latest remote state for safety checks
         if let Err(e) = self.fetch() {
             tracing::warn!("Could not fetch before force push: {}", e);
