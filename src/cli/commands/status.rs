@@ -303,6 +303,18 @@ mod tests {
         // Initialize Cascade
         initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
 
+        // Commit the cascade config to avoid "untracked files" in status
+        std::process::Command::new("git")
+            .args(["add", ".cascade/"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "Initialize cascade"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         // Change to the repo directory (with proper error handling)
         let original_dir = env::current_dir().map_err(|_| "Failed to get current dir");
         match env::set_current_dir(&repo_path) {
