@@ -944,7 +944,7 @@ rem Validates commit message format
 
 set COMMIT_MSG_FILE=%1
 if "%COMMIT_MSG_FILE%"=="" (
-    echo ❌ No commit message file provided
+    echo ERROR: No commit message file provided
     exit /b 1
 )
 
