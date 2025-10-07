@@ -964,12 +964,17 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
     }
     if push {
         Output::bullet("Changes force-pushed to remote");
-    } else {
-        Output::tip("Use --push to automatically force-push after amending");
     }
 
-    if !restack && has_dependents {
-        Output::tip("Use --restack to automatically update dependent entries");
+    // Tips section (separated from summary)
+    if !push || (!restack && has_dependents) {
+        println!();
+        if !push {
+            Output::tip("Use --push to automatically force-push after amending");
+        }
+        if !restack && has_dependents {
+            Output::tip("Use --restack to automatically update dependent entries");
+        }
     }
 
     Ok(())

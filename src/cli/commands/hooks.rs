@@ -1042,8 +1042,8 @@ exit 0
                      \n\
                      if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
                          rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
-                         rem The --all flag will stage changes automatically\n\
-                         \\\"{0}\\\" entry amend --all\n\
+                         rem The --all flag will stage changes, --restack updates dependent entries\n\
+                         \\\"{0}\\\" entry amend --all --restack\n\
                          exit /b %ERRORLEVEL%\n\
                      ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
                          echo Creating new stack entry...\n\
@@ -1072,7 +1072,7 @@ exit 0
                 "EDIT_STATUS=$(\"{}\" entry status --quiet 2>/dev/null || echo \"inactive\")",
                 cascade_cli
             );
-            let amend_line = format!("           \"{}\" entry amend --all", cascade_cli);
+            let amend_line = format!("           \"{}\" entry amend --all --restack", cascade_cli);
 
             vec![
                 "#!/bin/sh".to_string(),
