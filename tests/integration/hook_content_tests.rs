@@ -206,15 +206,15 @@ async fn test_pre_commit_hook_contains_edit_mode_guidance() {
         "Pre-commit hook should provide edit mode message"
     );
     assert!(
-        hook_content.contains("[A] Amend: Modify the current entry"),
+        hook_content.contains("[a] amend: Modify the current entry"),
         "Pre-commit hook should explain amend option"
     );
     assert!(
-        hook_content.contains("[N] New:   Create new entry on top"),
+        hook_content.contains("[n] new:   Create new entry on top"),
         "Pre-commit hook should explain new commit option"
     );
     assert!(
-        hook_content.contains("[C] Cancel: Stop and think about it"),
+        hook_content.contains("[c] cancel: Stop and think about it"),
         "Pre-commit hook should provide cancel option"
     );
     assert!(

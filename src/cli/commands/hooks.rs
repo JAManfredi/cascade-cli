@@ -1022,6 +1022,8 @@ exit 0
                  for /f \\\"tokens=*\\\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \\\"%REPO_ROOT%\\\"==\\\"\\\" set REPO_ROOT=.\n\
                  if not exist \\\"%REPO_ROOT%\\.cascade\\\" exit /b 0\n\n\
+                 rem Skip hook if called from ca entry amend ^(avoid infinite loop^)\n\
+                 if \\\"%CASCADE_SKIP_HOOKS%\\\"==\\\"1\\\" exit /b 0\n\n\
                  rem Get edit status\n\
                  for /f \\\"tokens=*\\\" %%i in ('\\\"{0}\\\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
                  if \\\"%EDIT_STATUS%\\\"==\\\"\\\" set EDIT_STATUS=inactive\n\n\
@@ -1031,12 +1033,12 @@ exit 0
                      echo You're in EDIT MODE for a stack entry\n\
                      echo.\n\
                      echo Choose your action:\n\
-                     echo   [A] Amend: Modify the current entry ^(default^)\n\
-                     echo   [N] New:   Create new entry on top\n\
-                     echo   [C] Cancel: Stop and think about it\n\
+                     echo   [a] amend: Modify the current entry ^(default^)\n\
+                     echo   [n] new:   Create new entry on top\n\
+                     echo   [c] cancel: Stop and think about it\n\
                      echo.\n\
-                     set /p choice=\\\"Your choice (A/n/c): \\\" <CON\n\
-                     if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
+                     set /p choice=\\\"Your choice (a/n/c): \\\" <CON\n\
+                     if \\\"%choice%\\\"==\\\"\\\" set choice=a\n\
                      \n\
                      if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
                          rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
@@ -1085,6 +1087,11 @@ exit 0
                 "    exit 0".to_string(),
                 "fi".to_string(),
                 "".to_string(),
+                "# Skip hook if called from ca entry amend (avoid infinite loop)".to_string(),
+                r#"if [ "$CASCADE_SKIP_HOOKS" = "1" ]; then"#.to_string(),
+                "    exit 0".to_string(),
+                "fi".to_string(),
+                "".to_string(),
                 "# Check if we're in edit mode".to_string(),
                 r#"CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)"#.to_string(),
                 status_check,
@@ -1095,14 +1102,14 @@ exit 0
                 r#"        echo "You're in EDIT MODE for a stack entry""#.to_string(),
                 r#"        echo """#.to_string(),
                 r#"        echo "Choose your action:""#.to_string(),
-                r#"        echo "  [A] Amend: Modify the current entry (default)""#.to_string(),
-                r#"        echo "  [N] New:   Create new entry on top""#.to_string(),
-                r#"        echo "  [C] Cancel: Stop and think about it""#.to_string(),
+                r#"        echo "  [a] amend: Modify the current entry (default)""#.to_string(),
+                r#"        echo "  [n] new:   Create new entry on top""#.to_string(),
+                r#"        echo "  [c] cancel: Stop and think about it""#.to_string(),
                 r#"        echo """#.to_string(),
                 "        ".to_string(),
                 "        # Read user choice with default to amend".to_string(),
-                r#"        read -p "Your choice (A/n/c): " choice < /dev/tty"#.to_string(),
-                "        choice=${choice:-A}".to_string(),
+                r#"        read -p "Your choice (a/n/c): " choice < /dev/tty"#.to_string(),
+                "        choice=${choice:-a}".to_string(),
                 "        ".to_string(),
                 "        ".to_string(),
                 r#"        case "$choice" in"#.to_string(),

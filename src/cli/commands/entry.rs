@@ -839,8 +839,10 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
 
     debug!("Running git {}", amend_args.join(" "));
 
+    // Set environment variable to bypass pre-commit hook (avoid infinite loop)
     let output = std::process::Command::new("git")
         .args(&amend_args)
+        .env("CASCADE_SKIP_HOOKS", "1")
         .current_dir(&repo_root)
         .output()
         .map_err(CascadeError::Io)?;
