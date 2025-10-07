@@ -717,6 +717,7 @@ impl RebaseManager {
         }
 
         let mut resolved_count = 0;
+        let mut resolved_files = Vec::new(); // Track which files were actually resolved
         let mut failed_files = Vec::new();
 
         for file_analysis in &analysis.files {
@@ -727,6 +728,7 @@ impl RebaseManager {
                 ) {
                     Ok(ConflictResolution::Resolved) => {
                         resolved_count += 1;
+                        resolved_files.push(file_analysis.file_path.clone()); // Track successful resolution
                         info!("✅ Auto-resolved conflicts in {}", file_analysis.file_path);
                     }
                     Ok(ConflictResolution::TooComplex) => {
@@ -761,8 +763,10 @@ impl RebaseManager {
                 conflicted_files.len()
             );
 
-            // Stage all resolved files
-            self.git_repo.stage_conflict_resolved_files()?;
+            // CRITICAL: Only stage files that were successfully resolved
+            // This prevents staging files that still have conflict markers
+            let file_paths: Vec<&str> = resolved_files.iter().map(|s| s.as_str()).collect();
+            self.git_repo.stage_files(&file_paths)?;
         }
 
         // Return true only if ALL conflicts were resolved

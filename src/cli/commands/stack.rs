@@ -2132,7 +2132,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             interactive,
                             target_base: Some(base_branch.clone()),
                             preserve_merges: true,
-                            auto_resolve: false, // NEVER auto-resolve - too risky for data loss
+                            auto_resolve: !interactive, // Auto-resolve simple conflicts unless interactive
                             max_retries: 3,
                             skip_pull: Some(true), // Skip pull since we already pulled above
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
@@ -2333,7 +2333,7 @@ async fn rebase_stack(
         interactive,
         target_base: onto,
         preserve_merges: true,
-        auto_resolve: false, // NEVER auto-resolve - too risky for data loss
+        auto_resolve: !interactive, // Auto-resolve simple conflicts unless interactive
         max_retries: 3,
         skip_pull: None, // Normal rebase should pull latest changes
         original_working_branch: original_branch,
