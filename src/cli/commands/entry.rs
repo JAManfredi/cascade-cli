@@ -260,10 +260,7 @@ async fn checkout_entry(
 
     Output::section("Make your changes and commit normally");
     Output::bullet("Use 'ca entry status' to see edit mode info");
-    Output::bullet("When you commit, the pre-commit hook will guide you:");
-    Output::sub_item("  → Press Enter (or 'A') to amend this entry");
-    Output::sub_item("  → Type 'n' to create new entry on top");
-    Output::bullet("Run 'ca sync' after committing to update PRs");
+    Output::bullet("When you commit, the pre-commit hook will guide you");
 
     // Check if prepare-commit-msg hook is installed
     let hooks_dir = repo_root.join(".git/hooks");
