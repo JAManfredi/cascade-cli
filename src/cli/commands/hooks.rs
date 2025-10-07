@@ -1035,7 +1035,7 @@ exit 0
                      echo   [N] New:   Create new entry on top\n\
                      echo   [C] Cancel: Stop and think about it\n\
                      echo.\n\
-                     set /p choice=\\\"Your choice (A/n/c): \\\"\n\
+                     set /p choice=\\\"Your choice (A/n/c): \\\" <CON\n\
                      if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
                      \n\
                      if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
@@ -1089,35 +1089,18 @@ exit 0
                 "".to_string(),
                 "# If in edit mode, prompt for action".to_string(),
                 r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
-                "        # Proper edit mode - show options".to_string(),
+                "        # Proper edit mode - prompt user".to_string(),
                 r#"        echo "WARNING: You're in EDIT MODE for a stack entry""#.to_string(),
                 r#"        echo """#.to_string(),
+                r#"        echo "Choose your action:""#.to_string(),
+                r#"        echo "  [A] Amend: Modify the current entry (default)""#.to_string(),
+                r#"        echo "  [N] New:   Create new entry on top""#.to_string(),
+                r#"        echo "  [C] Cancel: Stop and think about it""#.to_string(),
+                r#"        echo """#.to_string(),
                 "        ".to_string(),
-                "        # Check if running interactively (stdin is a terminal)".to_string(),
-                "        if [ -t 0 ]; then".to_string(),
-                "            # Interactive mode - prompt user".to_string(),
-                r#"            echo "Choose your action:""#.to_string(),
-                r#"            echo "  [A] Amend: Modify the current entry (default)""#.to_string(),
-                r#"            echo "  [N] New:   Create new entry on top""#.to_string(),
-                r#"            echo "  [C] Cancel: Stop and think about it""#.to_string(),
-                r#"            echo """#.to_string(),
-                "            ".to_string(),
-                "            # Read user choice with default to amend".to_string(),
-                r#"            read -p "Your choice (A/n/c): " choice"#.to_string(),
-                "            choice=${choice:-A}".to_string(),
-                "        else".to_string(),
-                "            # Non-interactive (e.g., git commit -m) - block and provide guidance".to_string(),
-                r#"            echo """#.to_string(),
-                r#"            echo "ERROR: Cannot use 'git commit -m' while in edit mode""#.to_string(),
-                r#"            echo """#.to_string(),
-                r#"            echo "Choose one of these instead:""#.to_string(),
-                r#"            echo "  - git commit              (interactive: choose Amend/New)""#.to_string(),
-                format!("            echo \"  - {} entry amend -m 'msg'  (amend with message)\"", cascade_cli),
-                format!("            echo \"  - {} entry amend          (amend, edit message in editor)\"", cascade_cli),
-                r#"            echo "  - git checkout <branch>   (exit edit mode first)""#.to_string(),
-                r#"            echo """#.to_string(),
-                "            exit 1".to_string(),
-                "        fi".to_string(),
+                "        # Read user choice with default to amend".to_string(),
+                r#"        read -p "Your choice (A/n/c): " choice < /dev/tty"#.to_string(),
+                "        choice=${choice:-A}".to_string(),
                 "        ".to_string(),
                 "        ".to_string(),
                 r#"        case "$choice" in"#.to_string(),
@@ -1132,7 +1115,8 @@ exit 0
                 "                ;;".to_string(),
                 "            [Nn])".to_string(),
                 r#"                echo "Creating new stack entry...""#.to_string(),
-                "                # Let the commit proceed normally (will create new commit)".to_string(),
+                "                # Let the commit proceed normally (will create new commit)"
+                    .to_string(),
                 "                exit 0".to_string(),
                 "                ;;".to_string(),
                 "            [Cc])".to_string(),
