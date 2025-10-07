@@ -248,34 +248,12 @@ async fn test_prepare_commit_msg_hook_contains_edit_mode_guidance() {
         "Prepare-commit-msg hook should check edit mode status"
     );
     assert!(
-        hook_content.contains("[EDIT MODE] You're editing a stack entry"),
+        hook_content.contains("[EDIT MODE] Editing stack entry"),
         "Prepare-commit-msg hook should provide edit mode header"
     );
     assert!(
-        hook_content.contains("🔄 AMEND: To modify the current entry, use:"),
-        "Prepare-commit-msg hook should explain amend option"
-    );
-    assert!(
-        hook_content.contains("git commit --amend"),
-        "Prepare-commit-msg hook should show amend command"
-    );
-    assert!(
-        hook_content.contains("➕ NEW: To create a new entry on top, use:"),
-        "Prepare-commit-msg hook should explain new commit option"
-    );
-    // Check for platform-specific version of the command
-    #[cfg(windows)]
-    let expected_command = "git commit    ^(this command^)";
-    #[cfg(not(windows))]
-    let expected_command = "git commit    (this command)";
-
-    assert!(
-        hook_content.contains(expected_command),
-        "Prepare-commit-msg hook should explain current command creates new entry"
-    );
-    assert!(
-        hook_content.contains("💡 After committing, run 'ca sync' to update PRs"),
-        "Prepare-commit-msg hook should provide next steps guidance"
+        hook_content.contains("The pre-commit hook will prompt you for Amend/New choice"),
+        "Prepare-commit-msg hook should refer to pre-commit hook"
     );
 }
 

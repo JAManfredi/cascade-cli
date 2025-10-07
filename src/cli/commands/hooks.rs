@@ -1022,10 +1022,6 @@ exit 0
                  for /f \\\"tokens=*\\\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \\\"%REPO_ROOT%\\\"==\\\"\\\" set REPO_ROOT=.\n\
                  if not exist \\\"%REPO_ROOT%\\.cascade\\\" exit /b 0\n\n\
-                 rem Check if we're on an entry branch\n\
-                 for /f \\\"tokens=*\\\" %%i in ('git branch --show-current 2^>nul') do set CURRENT_BRANCH=%%i\n\
-                 echo %CURRENT_BRANCH% | findstr /r \\\".*-entry-[0-9][0-9]*$\\\" >nul\n\
-                 if %ERRORLEVEL% neq 0 exit /b 0\n\n\
                  rem Get edit status\n\
                  for /f \\\"tokens=*\\\" %%i in ('\\\"{0}\\\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
                  if \\\"%EDIT_STATUS%\\\"==\\\"\\\" set EDIT_STATUS=inactive\n\n\
@@ -1057,23 +1053,8 @@ exit 0
                          echo Invalid choice. Please choose A, n, or c\n\
                          exit /b 1\n\
                      )\n\
-                 ) else (\n\
-                     rem On entry branch but NOT in edit mode\n\
-                     echo.\n\
-                     echo WARNING: You're on a stack entry branch\n\
-                     echo.\n\
-                     echo Current branch: %CURRENT_BRANCH%\n\
-                     echo.\n\
-                     echo ERROR: Cannot commit directly to entry branches\n\
-                     echo.\n\
-                     echo Did you mean to:\n\
-                     echo   - {0} entry checkout ^<N^>  ^(enter proper edit mode^)\n\
-                     echo   - git checkout ^<working-branch^>  ^(switch to working branch^)\n\
-                     echo   - {0} stack list  ^(see your stacks^)\n\
-                     echo.\n\
-                     exit /b 1\n\
                  )\n\n\
-                 rem Not on entry branch, proceed normally\n\
+                 rem Not in edit mode, proceed normally\n\
                  exit /b 0\n",
                 cascade_cli
             )
@@ -1102,17 +1083,12 @@ exit 0
                 "    exit 0".to_string(),
                 "fi".to_string(),
                 "".to_string(),
-                "# Check if we're on an entry branch (even without edit mode set)".to_string(),
+                "# Check if we're in edit mode".to_string(),
                 r#"CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)"#.to_string(),
-                r#"IS_ENTRY_BRANCH=$(echo "$CURRENT_BRANCH" | grep -qE '\-entry\-[0-9]+$' && echo "yes" || echo "no")"#.to_string(),
-                "".to_string(),
-                "# If on entry branch, check if edit mode is properly set".to_string(),
-                r#"if [ "$IS_ENTRY_BRANCH" = "yes" ]; then"#.to_string(),
-                "    ".to_string(),
                 status_check,
-                "    ".to_string(),
-                "    # Check if edit mode is active".to_string(),
-                r#"    if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
+                "".to_string(),
+                "# If in edit mode, prompt for action".to_string(),
+                r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
                 "        # Proper edit mode - show options".to_string(),
                 r#"        echo "WARNING: You're in EDIT MODE for a stack entry""#.to_string(),
                 r#"        echo """#.to_string(),
@@ -1168,25 +1144,9 @@ exit 0
                 "                exit 1".to_string(),
                 "                ;;".to_string(),
                 "        esac".to_string(),
-                "    else".to_string(),
-                "        # On entry branch but NOT in edit mode - someone bypassed ca entry checkout!".to_string(),
-                r#"        echo """#.to_string(),
-                r#"        echo "WARNING: You're on a stack entry branch""#.to_string(),
-                r#"        echo """#.to_string(),
-                r#"        echo "Current branch: $CURRENT_BRANCH""#.to_string(),
-                r#"        echo """#.to_string(),
-                r#"        echo "ERROR: Cannot commit directly to entry branches""#.to_string(),
-                r#"        echo """#.to_string(),
-                r#"        echo "Did you mean to:""#.to_string(),
-                format!("        echo \"  - {} entry checkout <N>  (enter proper edit mode)\"", cascade_cli),
-                r#"        echo "  - git checkout <working-branch>  (switch to working branch)""#.to_string(),
-                format!("        echo \"  - {} stack list            (see your stacks)\"", cascade_cli),
-                r#"        echo """#.to_string(),
-                "        exit 1".to_string(),
-                "    fi".to_string(),
                 "fi".to_string(),
                 "".to_string(),
-                "# Not on entry branch, proceed normally".to_string(),
+                "# Not in edit mode, proceed normally".to_string(),
                 "exit 0".to_string(),
             ]
             .join("\n")
@@ -1213,23 +1173,15 @@ exit 0
                  for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
                  if \"%EDIT_STATUS%\"==\"\" set EDIT_STATUS=inactive\n\n\
                  if not \"%EDIT_STATUS%\"==\"inactive\" (\n\
-                     rem In edit mode - provide smart guidance\n\
+                     rem In edit mode - add minimal context\n\
                      set /p CURRENT_MSG=<%COMMIT_MSG_FILE%\n\n\
                      rem Skip if message already has edit guidance\n\
                      echo !CURRENT_MSG! | findstr \"[EDIT MODE]\" >nul\n\
                      if %ERRORLEVEL% equ 0 exit /b 0\n\n\
-                     rem Add edit mode guidance to commit message\n\
+                     rem Add simple edit mode marker\n\
                      echo.\n\
-                     echo # [EDIT MODE] You're editing a stack entry\n\
-                     echo #\n\
-                     echo # Choose your action:\n\
-                     echo #   🔄 AMEND: To modify the current entry, use:\n\
-                     echo #       git commit --amend\n\
-                     echo #\n\
-                     echo #   ➕ NEW: To create a new entry on top, use:\n\
-                     echo #       git commit    ^(this command^)\n\
-                     echo #\n\
-                     echo # 💡 After committing, run 'ca sync' to update PRs\n\
+                     echo # [EDIT MODE] Editing stack entry\n\
+                     echo # The pre-commit hook will prompt you for Amend/New choice\n\
                      echo.\n\
                      type \"%COMMIT_MSG_FILE%\"\n\
                  ) > \"%COMMIT_MSG_FILE%.tmp\" && (\n\
@@ -1278,7 +1230,7 @@ exit 0
                  EDIT_STATUS=$(\"{cascade_cli}\" entry status --quiet 2>/dev/null || echo \"inactive\")\n\
                  \n\
                  if [ \"$EDIT_STATUS\" != \"inactive\" ]; then\n\
-                     # In edit mode - provide smart guidance\n\
+                     # In edit mode - add minimal context\n\
                      CURRENT_MSG=$(cat \"$COMMIT_MSG_FILE\")\n\
                      \n\
                      # Skip if message already has edit guidance\n\
@@ -1287,16 +1239,8 @@ exit 0
                      fi\n\
                      \n\
                      echo \"\n\
-                 # [EDIT MODE] You're editing a stack entry\n\
-                 #\n\
-                 # Choose your action:\n\
-                 #   🔄 AMEND: To modify the current entry, use:\n\
-                 #       git commit --amend\n\
-                 #\n\
-                 #   ➕ NEW: To create a new entry on top, use:\n\
-                 #       git commit    (this command)\n\
-                 #\n\
-                 # 💡 After committing, run 'ca sync' to update PRs\n\
+                 # [EDIT MODE] Editing stack entry\n\
+                 # The pre-commit hook will prompt you for Amend/New choice\n\
                  \n\
                  $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
                  else\n\
