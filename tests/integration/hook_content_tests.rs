@@ -202,8 +202,8 @@ async fn test_pre_commit_hook_contains_edit_mode_guidance() {
         "Pre-commit hook should check edit mode status"
     );
     assert!(
-        hook_content.contains("WARNING: You're in EDIT MODE for a stack entry"),
-        "Pre-commit hook should provide edit mode warning"
+        hook_content.contains("You're in EDIT MODE for a stack entry"),
+        "Pre-commit hook should provide edit mode message"
     );
     assert!(
         hook_content.contains("[A] Amend: Modify the current entry"),
@@ -218,8 +218,8 @@ async fn test_pre_commit_hook_contains_edit_mode_guidance() {
         "Pre-commit hook should provide cancel option"
     );
     assert!(
-        hook_content.contains("Amending current entry..."),
-        "Pre-commit hook should show what happens when amending"
+        hook_content.contains("entry amend --all"),
+        "Pre-commit hook should call ca entry amend for amend option"
     );
     assert!(
         hook_content.contains("Creating new stack entry..."),

@@ -1028,7 +1028,7 @@ exit 0
                  rem Check if edit status is active\n\
                  echo %EDIT_STATUS% | findstr /b \\\"active:\\\" >nul\n\
                  if %ERRORLEVEL% equ 0 (\n\
-                     echo WARNING: You're in EDIT MODE for a stack entry\n\
+                     echo You're in EDIT MODE for a stack entry\n\
                      echo.\n\
                      echo Choose your action:\n\
                      echo   [A] Amend: Modify the current entry ^(default^)\n\
@@ -1039,9 +1039,8 @@ exit 0
                      if \\\"%choice%\\\"==\\\"\\\" set choice=A\n\
                      \n\
                      if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
-                         echo Amending current entry...\n\
-                         git add -A\n\
                          rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
+                         rem The --all flag will stage changes automatically\n\
                          \\\"{0}\\\" entry amend --all\n\
                          exit /b %ERRORLEVEL%\n\
                      ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
@@ -1093,7 +1092,7 @@ exit 0
                 "# If in edit mode, prompt for action".to_string(),
                 r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
                 "        # Proper edit mode - prompt user".to_string(),
-                r#"        echo "WARNING: You're in EDIT MODE for a stack entry""#.to_string(),
+                r#"        echo "You're in EDIT MODE for a stack entry""#.to_string(),
                 r#"        echo """#.to_string(),
                 r#"        echo "Choose your action:""#.to_string(),
                 r#"        echo "  [A] Amend: Modify the current entry (default)""#.to_string(),
@@ -1108,11 +1107,9 @@ exit 0
                 "        ".to_string(),
                 r#"        case "$choice" in"#.to_string(),
                 "            [Aa])".to_string(),
-                r#"                echo "Amending current entry...""#.to_string(),
-                "                # Stage all changes first (like git commit -a)".to_string(),
-                "                git add -A".to_string(),
                 "                # Use ca entry amend to properly update entry + working branch (ignore any -m flag)"
                     .to_string(),
+                "                # The --all flag will stage changes automatically".to_string(),
                 amend_line.replace("           ", "                "),
                 "                exit $?".to_string(),
                 "                ;;".to_string(),
