@@ -2132,7 +2132,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             interactive,
                             target_base: Some(base_branch.clone()),
                             preserve_merges: true,
-                            auto_resolve: !interactive,
+                            auto_resolve: false, // NEVER auto-resolve - too risky for data loss
                             max_retries: 3,
                             skip_pull: Some(true), // Skip pull since we already pulled above
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
@@ -2333,7 +2333,7 @@ async fn rebase_stack(
         interactive,
         target_base: onto,
         preserve_merges: true,
-        auto_resolve: !interactive, // Auto-resolve unless interactive
+        auto_resolve: false, // NEVER auto-resolve - too risky for data loss
         max_retries: 3,
         skip_pull: None, // Normal rebase should pull latest changes
         original_working_branch: original_branch,
@@ -2631,11 +2631,11 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
 
         // Basic structure validation first
         match stack.validate() {
-            Ok(message) => {
-                Output::success(" Stack '{name}' structure validation: {message}");
+            Ok(_message) => {
+                Output::success(format!("Stack '{}' structure validation passed", name));
             }
             Err(e) => {
-                println!("❌ Stack '{name}' structure validation failed: {e}");
+                println!("✗ Stack '{}' structure validation failed: {}", name, e);
                 return Err(CascadeError::config(e));
             }
         }
