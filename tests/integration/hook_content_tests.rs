@@ -142,8 +142,9 @@ async fn test_commit_msg_hook_contains_user_feedback() {
     // Verify essential validation (professional output, no emojis or conventional commit blurbs)
     // Note: We removed conventional commit format suggestions and emojis as per user request
     // The hook now focuses on essential validation only and exits 0 on success
+    // Windows uses "exit /b 0", Unix uses "exit 0"
     assert!(
-        hook_content.contains("exit 0"),
+        hook_content.contains("exit 0") || hook_content.contains("exit /b 0"),
         "Commit-msg hook should have success path"
     );
 }
