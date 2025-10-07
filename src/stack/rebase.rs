@@ -304,7 +304,16 @@ impl RebaseManager {
 
                     if !self.options.auto_resolve {
                         result.success = false;
-                        result.error = Some(format!("Conflict in {}: {}", entry.commit_hash, e));
+                        result.error = Some(format!(
+                            "Conflict in {}: {}\n\n\
+                            Auto-resolution is disabled. To enable it, use 'ca sync --auto-resolve'\n\n\
+                            Manual recovery:\n\
+                            1. Resolve conflicts in the listed files\n\
+                            2. Stage resolved files: 'git add <files>'\n\
+                            3. Continue: 'git cherry-pick --continue'\n\
+                            4. Or abort: 'git cherry-pick --abort' and retry 'ca sync'",
+                            entry.commit_hash, e
+                        ));
                         break;
                     }
 
@@ -314,7 +323,11 @@ impl RebaseManager {
                             if !fully_resolved {
                                 result.success = false;
                                 result.error = Some(format!(
-                                    "Could not auto-resolve all conflicts in {}",
+                                    "Could not auto-resolve all conflicts in {}\n\n\
+                                    Recovery options:\n\
+                                    1. Run 'ca conflicts' to see detailed conflict analysis\n\
+                                    2. Manually resolve conflicts and run 'ca sync' again\n\
+                                    3. Use 'git reset --hard HEAD' to abort and start fresh",
                                     &entry.commit_hash[..8]
                                 ));
                                 break;
@@ -364,7 +377,16 @@ impl RebaseManager {
                                 Err(commit_err) => {
                                     result.success = false;
                                     result.error = Some(format!(
-                                        "Could not commit auto-resolved conflicts: {}",
+                                        "Could not commit auto-resolved conflicts: {}\n\n\
+                                        This usually means:\n\
+                                        - Git index is locked (another process accessing repo)\n\
+                                        - File permissions issue\n\
+                                        - Disk space issue\n\n\
+                                        Recovery:\n\
+                                        1. Check if another Git operation is running\n\
+                                        2. Run 'rm -f .git/index.lock' if stale lock exists\n\
+                                        3. Run 'git status' to check repo state\n\
+                                        4. Retry 'ca sync' after fixing the issue",
                                         commit_err
                                     ));
                                     break;
@@ -373,8 +395,15 @@ impl RebaseManager {
                         }
                         Err(resolve_err) => {
                             result.success = false;
-                            result.error =
-                                Some(format!("Could not resolve conflicts: {resolve_err}"));
+                            result.error = Some(format!(
+                                "Could not resolve conflicts: {}\n\n\
+                                Recovery:\n\
+                                1. Check repo state: 'git status'\n\
+                                2. If files are staged, commit or reset them: 'git reset --hard HEAD'\n\
+                                3. Remove any lock files: 'rm -f .git/index.lock'\n\
+                                4. Retry 'ca sync'",
+                                resolve_err
+                            ));
                             break;
                         }
                     }
