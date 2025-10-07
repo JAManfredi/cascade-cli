@@ -465,21 +465,18 @@ impl RebaseManager {
         // Cleanup temp branches before returning to original branch
         // Must checkout away from temp branches first
         if !temp_branches.is_empty() {
-            // Reset working directory to clean state before checkout
-            // This prevents "uncommitted changes" warnings when switching branches
-            if let Err(e) = self.git_repo.reset_to_head() {
-                debug!("Could not reset working directory: {}", e);
-            }
-            
-            // Checkout base branch silently to allow temp branch deletion
-            if let Err(e) = self.git_repo.checkout_branch_silent(&target_base) {
+            // Force checkout to base branch to allow temp branch deletion
+            // Use unsafe checkout to bypass safety checks since we know this is cleanup
+            if let Err(e) = self.git_repo.checkout_branch_unsafe(&target_base) {
                 Output::warning(format!("Could not checkout base for cleanup: {}", e));
-            }
-
-            // Delete all temp branches
-            for temp_branch in &temp_branches {
-                if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
-                    debug!("Could not delete temp branch {}: {}", temp_branch, e);
+                // If we can't checkout, we can't delete temp branches
+                // This is non-critical - temp branches will be cleaned up eventually
+            } else {
+                // Successfully checked out - now delete temp branches
+                for temp_branch in &temp_branches {
+                    if let Err(e) = self.git_repo.delete_branch_unsafe(temp_branch) {
+                        debug!("Could not delete temp branch {}: {}", temp_branch, e);
+                    }
                 }
             }
         }
@@ -537,12 +534,14 @@ impl RebaseManager {
                 }
             }
 
-            // Return to original working branch silently
-            if let Err(e) = self.git_repo.checkout_branch_silent(orig_branch) {
-                Output::warning(format!(
+            // Return to original working branch
+            // Use unsafe checkout to force it (we're in cleanup phase, no uncommitted changes)
+            if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
+                debug!(
                     "Could not return to original branch '{}': {}",
                     orig_branch, e
-                ));
+                );
+                // Non-critical: User is left on base branch instead of working branch
             }
         }
 
