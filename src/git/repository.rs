@@ -373,9 +373,18 @@ impl GitRepository {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            
+            // Combine stderr and stdout for full error context
+            let full_error = if !stdout.is_empty() {
+                format!("{}\n{}", stderr.trim(), stdout.trim())
+            } else {
+                stderr.trim().to_string()
+            };
+            
             return Err(CascadeError::branch(format!(
-                "Force push failed for '{}': {}",
-                branch_name, stderr
+                "Force push failed for '{}':\n{}",
+                branch_name, full_error
             )));
         }
 

@@ -465,6 +465,12 @@ impl RebaseManager {
         // Cleanup temp branches before returning to original branch
         // Must checkout away from temp branches first
         if !temp_branches.is_empty() {
+            // Reset working directory to clean state before checkout
+            // This prevents "uncommitted changes" warnings when switching branches
+            if let Err(e) = self.git_repo.reset_to_head() {
+                debug!("Could not reset working directory: {}", e);
+            }
+            
             // Checkout base branch silently to allow temp branch deletion
             if let Err(e) = self.git_repo.checkout_branch_silent(&target_base) {
                 Output::warning(format!("Could not checkout base for cleanup: {}", e));
