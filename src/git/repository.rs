@@ -1989,7 +1989,8 @@ impl GitRepository {
                     }
 
                     // Interactive confirmation
-                    println!("\n⚠️  FORCE PUSH WARNING ⚠️");
+                    println!();
+                    Output::warning("FORCE PUSH WARNING");
                     println!("Force push to '{target_branch}' would overwrite {commits_to_lose} commits on remote:");
 
                     // Show the commits that would be lost
@@ -1997,7 +1998,8 @@ impl GitRepository {
                         .get_commits_between(&merge_base_oid.to_string(), &remote.id().to_string())
                     {
                         Ok(commits) => {
-                            println!("\nCommits that would be lost:");
+                            println!();
+                            println!("Commits that would be lost:");
                             for (i, commit) in commits.iter().take(5).enumerate() {
                                 let short_hash = &commit.id().to_string()[..8];
                                 let summary = commit.summary().unwrap_or("<no message>");
@@ -2012,7 +2014,10 @@ impl GitRepository {
                         }
                     }
 
-                    println!("\nA backup branch '{backup_branch_name}' will be created before proceeding.");
+                    println!();
+                    Output::info(format!(
+                        "A backup branch '{backup_branch_name}' will be created before proceeding."
+                    ));
 
                     let confirmed = Confirm::with_theme(&ColorfulTheme::default())
                         .with_prompt("Do you want to proceed with the force push?")
@@ -2234,7 +2239,8 @@ impl GitRepository {
         }
 
         // Interactive warning and confirmation
-        println!("\n⚠️  BRANCH DELETION WARNING ⚠️");
+        println!();
+        Output::warning("BRANCH DELETION WARNING");
         println!("Branch '{branch_name}' has potential issues:");
 
         if !safety_info.unpushed_commits.is_empty() {
@@ -2538,7 +2544,7 @@ impl GitRepository {
                             }
                             1 => {
                                 // Force checkout anyway
-                                println!("⚠️  Proceeding with force checkout - uncommitted changes will be lost!");
+                                Output::warning("Proceeding with force checkout - uncommitted changes will be lost!");
                             }
                             2 => {
                                 // Cancel
@@ -2553,7 +2559,9 @@ impl GitRepository {
             }
             1 => {
                 // Option 2: Force checkout (lose changes)
-                println!("⚠️  Proceeding with force checkout - uncommitted changes will be lost!");
+                Output::warning(
+                    "Proceeding with force checkout - uncommitted changes will be lost!",
+                );
             }
             2 => {
                 // Option 3: Cancel
