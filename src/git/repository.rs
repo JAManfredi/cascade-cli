@@ -757,12 +757,12 @@ impl GitRepository {
         let mut index = self.repo.index().map_err(CascadeError::Git)?;
         index.write().map_err(CascadeError::Git)?;
         drop(index); // Explicit drop to release file handle
-        
+
         // Give the OS a moment to release file handles
         // This is necessary because even after Rust drops the index,
         // the OS might not immediately release the lock
         std::thread::sleep(std::time::Duration::from_millis(10));
-        
+
         Ok(())
     }
 
@@ -2401,10 +2401,7 @@ impl GitRepository {
         println!("You have uncommitted changes that could be lost:");
 
         if !safety_info.modified_files.is_empty() {
-            println!(
-                "\nModified files ({}):",
-                safety_info.modified_files.len()
-            );
+            println!("\nModified files ({}):", safety_info.modified_files.len());
             for file in safety_info.modified_files.iter().take(10) {
                 println!("   - {file}");
             }
@@ -2424,10 +2421,7 @@ impl GitRepository {
         }
 
         if !safety_info.untracked_files.is_empty() {
-            println!(
-                "\nUntracked files ({}):",
-                safety_info.untracked_files.len()
-            );
+            println!("\nUntracked files ({}):", safety_info.untracked_files.len());
             for file in safety_info.untracked_files.iter().take(5) {
                 println!("   - {file}");
             }

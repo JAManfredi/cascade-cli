@@ -375,7 +375,8 @@ impl RebaseManager {
                             }
 
                             // Commit the resolved changes
-                            let commit_message = format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
+                            let commit_message =
+                                format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
                             match self.git_repo.commit(&commit_message) {
                                 Ok(new_commit_id) => {
                                     Output::success("Auto-resolved conflicts");
@@ -383,8 +384,10 @@ impl RebaseManager {
                                     let rebased_commit_id = new_commit_id;
 
                                     // Update the original branch to point to this rebased commit
-                                    self.git_repo
-                                        .update_branch_to_commit(original_branch, &rebased_commit_id)?;
+                                    self.git_repo.update_branch_to_commit(
+                                        original_branch,
+                                        &rebased_commit_id,
+                                    )?;
 
                                     // Track which branches need to be pushed (only those with PRs)
                                     let tree_char = if index + 1 == entry_count {
@@ -394,10 +397,17 @@ impl RebaseManager {
                                     };
 
                                     if let Some(pr_num) = &entry.pull_request_id {
-                                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
-                                        branches_to_push.push((original_branch.clone(), pr_num.clone()));
+                                        println!(
+                                            "   {} {} (PR #{})",
+                                            tree_char, original_branch, pr_num
+                                        );
+                                        branches_to_push
+                                            .push((original_branch.clone(), pr_num.clone()));
                                     } else {
-                                        println!("   {} {} (not submitted)", tree_char, original_branch);
+                                        println!(
+                                            "   {} {} (not submitted)",
+                                            tree_char, original_branch
+                                        );
                                     }
 
                                     result
@@ -475,8 +485,12 @@ impl RebaseManager {
 
         if !branches_to_push.is_empty() {
             println!(); // Spacing before push phase
-            println!("Pushing {} branch{} to remote...", pushed_count, if pushed_count == 1 { "" } else { "es" });
-            
+            println!(
+                "Pushing {} branch{} to remote...",
+                pushed_count,
+                if pushed_count == 1 { "" } else { "es" }
+            );
+
             for (branch_name, _pr_num) in &branches_to_push {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
                     Ok(_) => {
@@ -496,15 +510,19 @@ impl RebaseManager {
             // Get the last entry's branch (top of stack)
             if let Some(last_entry) = stack.entries.last() {
                 let top_branch = &last_entry.branch;
-                
+
                 // Force-update working branch to point to same commit as top entry
                 if let Ok(top_commit) = self.git_repo.get_branch_head(top_branch) {
                     debug!(
                         "Updating working branch '{}' to match top of stack ({})",
-                        orig_branch, &top_commit[..8]
+                        orig_branch,
+                        &top_commit[..8]
                     );
-                    
-                    if let Err(e) = self.git_repo.update_branch_to_commit(orig_branch, &top_commit) {
+
+                    if let Err(e) = self
+                        .git_repo
+                        .update_branch_to_commit(orig_branch, &top_commit)
+                    {
                         Output::warning(format!(
                             "Could not update working branch '{}' to top of stack: {}",
                             orig_branch, e
@@ -512,7 +530,7 @@ impl RebaseManager {
                     }
                 }
             }
-            
+
             // Return to original working branch silently
             if let Err(e) = self.git_repo.checkout_branch_silent(orig_branch) {
                 Output::warning(format!(
@@ -793,10 +811,10 @@ impl RebaseManager {
                     let _ = std::fs::write(&backup_path, original_content);
                     debug!("Created backup at {:?}", backup_path);
                 }
-                
+
                 // All conflicts resolved - write the file back atomically
                 crate::utils::atomic_file::write_string(&full_path, &content)?;
-                
+
                 debug!("Successfully resolved all conflicts in {}", file_path);
                 return Ok(ConflictResolution::Resolved);
             } else {
@@ -810,19 +828,19 @@ impl RebaseManager {
 
         Ok(ConflictResolution::TooComplex)
     }
-    
+
     /// Helper to count whitespace consistency (lower is better)
     fn count_whitespace_consistency(content: &str) -> usize {
         let mut inconsistencies = 0;
         let lines: Vec<&str> = content.lines().collect();
-        
+
         for line in &lines {
             // Check for mixed tabs and spaces
             if line.contains('\t') && line.contains(' ') {
                 inconsistencies += 1;
             }
         }
-        
+
         // Penalize for inconsistencies
         lines.len().saturating_sub(inconsistencies)
     }
@@ -846,15 +864,24 @@ impl RebaseManager {
             ConflictType::Whitespace => {
                 // SAFETY: Only resolve if the content is truly identical except for whitespace
                 // Otherwise, it might be intentional formatting changes
-                let our_normalized = conflict.our_content.split_whitespace().collect::<Vec<_>>().join(" ");
-                let their_normalized = conflict.their_content.split_whitespace().collect::<Vec<_>>().join(" ");
-                
+                let our_normalized = conflict
+                    .our_content
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let their_normalized = conflict
+                    .their_content
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
                 if our_normalized == their_normalized {
                     // Content is identical - prefer the version with more consistent formatting
                     // (fewer mixed spaces/tabs, more consistent indentation)
                     let our_consistency = Self::count_whitespace_consistency(&conflict.our_content);
-                    let their_consistency = Self::count_whitespace_consistency(&conflict.their_content);
-                    
+                    let their_consistency =
+                        Self::count_whitespace_consistency(&conflict.their_content);
+
                     if our_consistency >= their_consistency {
                         Ok(Some(conflict.our_content.clone()))
                     } else {
@@ -862,7 +889,9 @@ impl RebaseManager {
                     }
                 } else {
                     // Content differs beyond whitespace - not safe to auto-resolve
-                    debug!("Whitespace conflict has content differences - requires manual resolution");
+                    debug!(
+                        "Whitespace conflict has content differences - requires manual resolution"
+                    );
                     Ok(None)
                 }
             }
@@ -896,30 +925,30 @@ impl RebaseManager {
             ConflictType::ImportMerge => {
                 // SAFETY: Only merge simple single-line imports
                 // Multi-line imports or complex cases require manual resolution
-                
+
                 // Check if all imports are single-line and look like imports
                 let our_lines: Vec<&str> = conflict.our_content.lines().collect();
                 let their_lines: Vec<&str> = conflict.their_content.lines().collect();
-                
+
                 // Verify all lines look like simple imports (heuristic check)
-                let all_simple = our_lines.iter().chain(their_lines.iter())
-                    .all(|line| {
-                        let trimmed = line.trim();
-                        trimmed.starts_with("import ") || 
-                        trimmed.starts_with("from ") ||
-                        trimmed.starts_with("use ") ||
-                        trimmed.starts_with("#include") ||
-                        trimmed.is_empty()
-                    });
-                
+                let all_simple = our_lines.iter().chain(their_lines.iter()).all(|line| {
+                    let trimmed = line.trim();
+                    trimmed.starts_with("import ")
+                        || trimmed.starts_with("from ")
+                        || trimmed.starts_with("use ")
+                        || trimmed.starts_with("#include")
+                        || trimmed.is_empty()
+                });
+
                 if !all_simple {
                     debug!("ImportMerge contains non-import lines - requires manual resolution");
                     return Ok(None);
                 }
-                
+
                 // Merge and deduplicate imports
-                let mut all_imports: Vec<&str> = our_lines.into_iter()
-                    .chain(their_lines.into_iter())
+                let mut all_imports: Vec<&str> = our_lines
+                    .into_iter()
+                    .chain(their_lines)
                     .filter(|line| !line.trim().is_empty())
                     .collect();
                 all_imports.sort();
@@ -1399,28 +1428,28 @@ impl RebaseManager {
         info!("Rebase continued successfully");
         Ok(())
     }
-    
+
     /// Check if there's an in-progress cherry-pick operation
     fn has_in_progress_cherry_pick(&self) -> Result<bool> {
         let git_dir = self.git_repo.path().join(".git");
         Ok(git_dir.join("CHERRY_PICK_HEAD").exists())
     }
-    
+
     /// Handle resuming an in-progress cherry-pick from a previous failed sync
     fn handle_in_progress_cherry_pick(&mut self, stack: &Stack) -> Result<RebaseResult> {
         use crate::cli::output::Output;
-        
+
         let git_dir = self.git_repo.path().join(".git");
-        
+
         Output::section("Resuming in-progress sync");
         println!();
         Output::info("Detected unfinished cherry-pick from previous sync");
         println!();
-        
+
         // Check if conflicts are resolved
         if self.git_repo.has_conflicts()? {
             let conflicted_files = self.git_repo.get_conflicted_files()?;
-            
+
             let result = RebaseResult {
                 success: false,
                 branch_mapping: HashMap::new(),
@@ -1449,20 +1478,24 @@ impl RebaseManager {
                     → Run: git cherry-pick --abort\n\
                     → Then: ca sync (starts fresh)",
                     conflicted_files.len(),
-                    conflicted_files.iter().map(|f| format!("  - {}", f)).collect::<Vec<_>>().join("\n")
+                    conflicted_files
+                        .iter()
+                        .map(|f| format!("  - {}", f))
+                        .collect::<Vec<_>>()
+                        .join("\n")
                 )),
                 summary: "Sync paused - conflicts need resolution".to_string(),
             };
-            
+
             return Ok(result);
         }
-        
+
         // Conflicts are resolved - continue the cherry-pick
         Output::info("Conflicts resolved, continuing cherry-pick...");
-        
+
         // Stage all resolved files
         self.git_repo.stage_conflict_resolved_files()?;
-        
+
         // Complete the cherry-pick by committing
         let cherry_pick_msg_file = git_dir.join("CHERRY_PICK_MSG");
         let commit_message = if cherry_pick_msg_file.exists() {
@@ -1471,11 +1504,11 @@ impl RebaseManager {
         } else {
             "Resolved conflicts".to_string()
         };
-        
+
         match self.git_repo.commit(&commit_message) {
-            Ok(new_commit_id) => {
+            Ok(_new_commit_id) => {
                 Output::success("Cherry-pick completed");
-                
+
                 // Clean up cherry-pick state
                 if git_dir.join("CHERRY_PICK_HEAD").exists() {
                     let _ = std::fs::remove_file(git_dir.join("CHERRY_PICK_HEAD"));
@@ -1483,11 +1516,11 @@ impl RebaseManager {
                 if cherry_pick_msg_file.exists() {
                     let _ = std::fs::remove_file(&cherry_pick_msg_file);
                 }
-                
+
                 println!();
                 Output::info("Continuing with rest of stack...");
                 println!();
-                
+
                 // Now continue with the rest of the rebase
                 // We need to restart the full rebase since we don't track which entry we were on
                 self.rebase_with_force_push(stack)
@@ -1516,7 +1549,7 @@ impl RebaseManager {
                     )),
                     summary: "Failed to complete cherry-pick".to_string(),
                 };
-                
+
                 Ok(result)
             }
         }

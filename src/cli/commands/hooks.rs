@@ -188,12 +188,14 @@ impl HooksManager {
             if let Ok(saved_path) = fs::read_to_string(&original_path_file) {
                 let saved_path = saved_path.trim();
                 let cascade_hooks_dir = dirs::home_dir()
-                    .ok_or_else(|| CascadeError::config("Could not find home directory".to_string()))?
+                    .ok_or_else(|| {
+                        CascadeError::config("Could not find home directory".to_string())
+                    })?
                     .join(".cascade")
                     .join("hooks")
                     .join(&self.repo_id);
                 let cascade_hooks_path = cascade_hooks_dir.to_string_lossy().to_string();
-                
+
                 if saved_path == cascade_hooks_path {
                     // CORRUPTED: File contains Cascade's own path - fix it!
                     fs::write(&original_path_file, "").map_err(|e| {
@@ -214,7 +216,7 @@ impl HooksManager {
 
         let original_path = if output.status.success() {
             let current_hooks_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            
+
             // Don't save Cascade's own hooks directory as "original"
             // This prevents infinite loops in hook chaining
             let cascade_hooks_dir = dirs::home_dir()
@@ -223,7 +225,7 @@ impl HooksManager {
                 .join("hooks")
                 .join(&self.repo_id);
             let cascade_hooks_path = cascade_hooks_dir.to_string_lossy().to_string();
-            
+
             if current_hooks_path == cascade_hooks_path {
                 // Already pointing to Cascade hooks - no original to save
                 String::new()
@@ -466,10 +468,14 @@ impl HooksManager {
                     // Check if it's a Cascade WRAPPER hook by looking for our exact wrapper signature
                     // This is different from user hooks that might just mention Cascade
                     if let Ok(content) = fs::read_to_string(&hook_path) {
-                        if content.contains("# Cascade CLI Hook Wrapper") 
-                            && content.contains("cascade_logic()") 
-                            && content.contains("# Function to run Cascade logic") {
-                            debug!("Removing old Cascade wrapper hook from .git/hooks: {:?}", hook_path);
+                        if content.contains("# Cascade CLI Hook Wrapper")
+                            && content.contains("cascade_logic()")
+                            && content.contains("# Function to run Cascade logic")
+                        {
+                            debug!(
+                                "Removing old Cascade wrapper hook from .git/hooks: {:?}",
+                                hook_path
+                            );
                             fs::remove_file(&hook_path).ok(); // Ignore errors
                         }
                     }
@@ -956,7 +962,8 @@ if %ERRORLEVEL% neq 0 (
 
 rem Validation passed (silent success)
 exit /b 0
-"#.to_string()
+"#
+            .to_string()
         }
 
         #[cfg(not(windows))]
@@ -990,7 +997,8 @@ fi
 
 # Validation passed (silent success)
 exit 0
-"#.to_string()
+"#
+            .to_string()
         }
     }
 
