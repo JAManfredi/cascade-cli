@@ -2131,6 +2131,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             auto_resolve: !interactive,
                             max_retries: 3,
                             skip_pull: Some(true), // Skip pull since we already pulled above
+                            original_working_branch: original_branch.clone(), // Pass the saved working branch
                         };
 
                         let mut rebase_manager = crate::stack::RebaseManager::new(
@@ -2319,6 +2320,9 @@ async fn rebase_stack(
         crate::stack::RebaseStrategy::ForcePush
     };
 
+    // Save original branch before any operations
+    let original_branch = git_repo.get_current_branch().ok();
+
     // Create rebase options
     let options = crate::stack::RebaseOptions {
         strategy: rebase_strategy.clone(),
@@ -2328,6 +2332,7 @@ async fn rebase_stack(
         auto_resolve: !interactive, // Auto-resolve unless interactive
         max_retries: 3,
         skip_pull: None, // Normal rebase should pull latest changes
+        original_working_branch: original_branch,
     };
 
     debug!("   Strategy: {:?}", rebase_strategy);

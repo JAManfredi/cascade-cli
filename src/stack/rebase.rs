@@ -61,6 +61,9 @@ pub struct RebaseOptions {
     pub max_retries: usize,
     /// Skip pulling latest changes (when already done by caller)
     pub skip_pull: Option<bool>,
+    /// Original working branch to restore after rebase (if different from base)
+    /// This is critical to prevent updating the base branch when sync checks out to it
+    pub original_working_branch: Option<String>,
 }
 
 /// Result of a rebase operation
@@ -154,6 +157,7 @@ impl Default for RebaseOptions {
             auto_resolve: true,
             max_retries: 3,
             skip_pull: None,
+            original_working_branch: None,
         }
     }
 }
@@ -223,8 +227,25 @@ impl RebaseManager {
             .unwrap_or(&stack.base_branch)
             .clone(); // Clone to avoid borrow issues
 
-        // Save original working branch to restore later
-        let original_branch = self.git_repo.get_current_branch().ok();
+        // Use the original working branch passed in options, or detect current branch
+        // CRITICAL: sync_stack passes the original branch before it checks out to base
+        // This prevents us from thinking we started on the base branch
+        let original_branch = self
+            .options
+            .original_working_branch
+            .clone()
+            .or_else(|| self.git_repo.get_current_branch().ok());
+
+        // SAFETY: Warn if we're starting on the base branch (unusual but valid)
+        // This can happen if user manually runs rebase while on base branch
+        if let Some(ref orig) = original_branch {
+            if orig == &target_base {
+                debug!(
+                    "Original working branch is base branch '{}' - will skip working branch update",
+                    orig
+                );
+            }
+        }
 
         // Note: Caller (sync_stack) has already checked out base branch when skip_pull=true
         // Only pull if not already done by caller (like sync command)
@@ -510,38 +531,51 @@ impl RebaseManager {
         // Update working branch to point to the top of the rebased stack
         // This ensures subsequent `ca push` doesn't re-add old commits
         if let Some(ref orig_branch) = original_branch {
-            // Get the last entry's branch (top of stack)
-            if let Some(last_entry) = stack.entries.last() {
-                let top_branch = &last_entry.branch;
+            // CRITICAL: Never update the base branch! Only update working branches
+            if orig_branch != &target_base {
+                // Get the last entry's branch (top of stack)
+                if let Some(last_entry) = stack.entries.last() {
+                    let top_branch = &last_entry.branch;
 
-                // Force-update working branch to point to same commit as top entry
-                if let Ok(top_commit) = self.git_repo.get_branch_head(top_branch) {
-                    debug!(
-                        "Updating working branch '{}' to match top of stack ({})",
-                        orig_branch,
-                        &top_commit[..8]
-                    );
+                    // Force-update working branch to point to same commit as top entry
+                    if let Ok(top_commit) = self.git_repo.get_branch_head(top_branch) {
+                        debug!(
+                            "Updating working branch '{}' to match top of stack ({})",
+                            orig_branch,
+                            &top_commit[..8]
+                        );
 
-                    if let Err(e) = self
-                        .git_repo
-                        .update_branch_to_commit(orig_branch, &top_commit)
-                    {
-                        Output::warning(format!(
-                            "Could not update working branch '{}' to top of stack: {}",
-                            orig_branch, e
-                        ));
+                        if let Err(e) = self
+                            .git_repo
+                            .update_branch_to_commit(orig_branch, &top_commit)
+                        {
+                            Output::warning(format!(
+                                "Could not update working branch '{}' to top of stack: {}",
+                                orig_branch, e
+                            ));
+                        }
                     }
                 }
-            }
 
-            // Return to original working branch
-            // Use unsafe checkout to force it (we're in cleanup phase, no uncommitted changes)
-            if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
+                // Return to original working branch
+                // Use unsafe checkout to force it (we're in cleanup phase, no uncommitted changes)
+                if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
+                    debug!(
+                        "Could not return to original branch '{}': {}",
+                        orig_branch, e
+                    );
+                    // Non-critical: User is left on base branch instead of working branch
+                }
+            } else {
+                // User was on base branch - this is unusual but valid
+                // Don't update base branch, just checkout back to it
                 debug!(
-                    "Could not return to original branch '{}': {}",
-                    orig_branch, e
+                    "Skipping working branch update - user was on base branch '{}'",
+                    orig_branch
                 );
-                // Non-critical: User is left on base branch instead of working branch
+                if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
+                    debug!("Could not return to base branch '{}': {}", orig_branch, e);
+                }
             }
         }
 

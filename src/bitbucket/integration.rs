@@ -592,10 +592,11 @@ impl BitbucketIntegration {
             Ok(_new_branch_head) => {
                 // Branch exists and has a HEAD commit - this is sufficient for rebased branches
                 // The rebase process ensures the content is correct, even though commit IDs changed
-                
+
                 tracing::debug!(
                     "Validation passed: new branch '{}' exists and has commits (rebased from '{}')",
-                    new_branch, original_branch
+                    new_branch,
+                    original_branch
                 );
                 Ok(())
             }
