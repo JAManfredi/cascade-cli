@@ -873,6 +873,7 @@ impl RebaseManager {
     }
 
     /// Helper to count whitespace consistency (lower is better)
+    #[allow(dead_code)]
     fn count_whitespace_consistency(content: &str) -> usize {
         let mut inconsistencies = 0;
         let lines: Vec<&str> = content.lines().collect();
@@ -919,17 +920,11 @@ impl RebaseManager {
                     .join(" ");
 
                 if our_normalized == their_normalized {
-                    // Content is identical - prefer the version with more consistent formatting
-                    // (fewer mixed spaces/tabs, more consistent indentation)
-                    let our_consistency = Self::count_whitespace_consistency(&conflict.our_content);
-                    let their_consistency =
-                        Self::count_whitespace_consistency(&conflict.their_content);
-
-                    if our_consistency >= their_consistency {
-                        Ok(Some(conflict.our_content.clone()))
-                    } else {
-                        Ok(Some(conflict.their_content.clone()))
-                    }
+                    // Content is identical - in cherry-pick context, ALWAYS prefer THEIRS
+                    // CRITICAL: In cherry-pick, OURS=base branch, THEIRS=commit being applied
+                    // We must keep the commit's changes (THEIRS), not the base (OURS)
+                    // Otherwise we delete the user's code!
+                    Ok(Some(conflict.their_content.clone()))
                 } else {
                     // Content differs beyond whitespace - not safe to auto-resolve
                     debug!(
@@ -947,12 +942,18 @@ impl RebaseManager {
                 Ok(Some(normalized))
             }
             ConflictType::PureAddition => {
-                // SAFETY: Only merge if one side is empty (true addition)
-                // If both sides have content, it's not a pure addition - require manual resolution
-                if conflict.our_content.is_empty() {
+                // CRITICAL: In cherry-pick, OURS=base, THEIRS=commit being applied
+                // We must respect what the commit does (THEIRS), not what the base has (OURS)
+
+                if conflict.our_content.is_empty() && !conflict.their_content.is_empty() {
+                    // Base is empty, commit adds content → keep the addition
                     Ok(Some(conflict.their_content.clone()))
-                } else if conflict.their_content.is_empty() {
-                    Ok(Some(conflict.our_content.clone()))
+                } else if conflict.their_content.is_empty() && !conflict.our_content.is_empty() {
+                    // Base has content, commit removes it → keep it removed (empty)
+                    Ok(Some(String::new()))
+                } else if conflict.our_content.is_empty() && conflict.their_content.is_empty() {
+                    // Both empty → keep empty
+                    Ok(Some(String::new()))
                 } else {
                     // Both sides have content - this could be:
                     // - Duplicate function definitions
