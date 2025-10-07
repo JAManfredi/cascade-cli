@@ -241,7 +241,7 @@ impl RebaseManager {
 
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
-        println!("📋 Rebasing {} {}", entry_count, plural);
+        println!("Rebasing {} {}...", entry_count, plural);
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
@@ -310,8 +310,66 @@ impl RebaseManager {
 
                     // Try to resolve automatically
                     match self.auto_resolve_conflicts(&entry.commit_hash) {
-                        Ok(_) => {
-                            Output::success("Auto-resolved conflicts");
+                        Ok(fully_resolved) => {
+                            if !fully_resolved {
+                                result.success = false;
+                                result.error = Some(format!(
+                                    "Could not auto-resolve all conflicts in {}",
+                                    &entry.commit_hash[..8]
+                                ));
+                                break;
+                            }
+
+                            // Commit the resolved changes
+                            let commit_message = format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
+                            match self.git_repo.commit(&commit_message) {
+                                Ok(new_commit_id) => {
+                                    Output::success("Auto-resolved conflicts");
+                                    result.new_commits.push(new_commit_id.clone());
+                                    let rebased_commit_id = new_commit_id;
+
+                                    // Update the original branch to point to this rebased commit
+                                    self.git_repo
+                                        .update_branch_to_commit(original_branch, &rebased_commit_id)?;
+
+                                    // Track which branches need to be pushed (only those with PRs)
+                                    let tree_char = if index + 1 == entry_count {
+                                        "└─"
+                                    } else {
+                                        "├─"
+                                    };
+
+                                    if let Some(pr_num) = &entry.pull_request_id {
+                                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
+                                        branches_to_push.push((original_branch.clone(), pr_num.clone()));
+                                    } else {
+                                        println!("   {} {} (not submitted)", tree_char, original_branch);
+                                    }
+
+                                    result
+                                        .branch_mapping
+                                        .insert(original_branch.clone(), original_branch.clone());
+
+                                    // Update stack entry with new commit hash
+                                    self.update_stack_entry(
+                                        stack.id,
+                                        &entry.id,
+                                        original_branch,
+                                        &rebased_commit_id,
+                                    )?;
+
+                                    // This branch becomes the base for the next entry
+                                    current_base = original_branch.clone();
+                                }
+                                Err(commit_err) => {
+                                    result.success = false;
+                                    result.error = Some(format!(
+                                        "Could not commit auto-resolved conflicts: {}",
+                                        commit_err
+                                    ));
+                                    break;
+                                }
+                            }
                         }
                         Err(resolve_err) => {
                             result.success = false;
@@ -347,7 +405,7 @@ impl RebaseManager {
 
         if !branches_to_push.is_empty() {
             println!(); // Spacing before push phase
-            println!("🚀 Pushing {} branch{} to remote...", pushed_count, if pushed_count == 1 { "" } else { "es" });
+            println!("Pushing {} branch{} to remote...", pushed_count, if pushed_count == 1 { "" } else { "es" });
             
             for (branch_name, _pr_num) in &branches_to_push {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
@@ -442,7 +500,7 @@ impl RebaseManager {
             summary: String::new(),
         };
 
-        println!("🔄 Interactive Rebase for Stack: {}", stack.name);
+        println!("Interactive Rebase for Stack: {}", stack.name);
         println!("   Base branch: {}", stack.base_branch);
         println!("   Entries: {}", stack.entries.len());
 

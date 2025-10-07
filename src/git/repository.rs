@@ -2396,12 +2396,13 @@ impl GitRepository {
         }
 
         // Interactive warning and confirmation
-        println!("\n⚠️  CHECKOUT WARNING ⚠️");
+        println!("\nCHECKOUT WARNING");
+        println!("Attempting to checkout: {}", target);
         println!("You have uncommitted changes that could be lost:");
 
         if !safety_info.modified_files.is_empty() {
             println!(
-                "\n📝 Modified files ({}):",
+                "\nModified files ({}):",
                 safety_info.modified_files.len()
             );
             for file in safety_info.modified_files.iter().take(10) {
@@ -2413,7 +2414,7 @@ impl GitRepository {
         }
 
         if !safety_info.staged_files.is_empty() {
-            println!("\n📁 Staged files ({}):", safety_info.staged_files.len());
+            println!("\nStaged files ({}):", safety_info.staged_files.len());
             for file in safety_info.staged_files.iter().take(10) {
                 println!("   - {file}");
             }
@@ -2424,7 +2425,7 @@ impl GitRepository {
 
         if !safety_info.untracked_files.is_empty() {
             println!(
-                "\n❓ Untracked files ({}):",
+                "\nUntracked files ({}):",
                 safety_info.untracked_files.len()
             );
             for file in safety_info.untracked_files.iter().take(5) {
@@ -2435,7 +2436,7 @@ impl GitRepository {
             }
         }
 
-        println!("\n🔄 Options:");
+        println!("\nOptions:");
         println!("1. Stash changes and checkout (recommended)");
         println!("2. Force checkout (WILL LOSE UNCOMMITTED CHANGES)");
         println!("3. Cancel checkout");
