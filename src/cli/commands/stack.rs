@@ -2081,14 +2081,59 @@ async fn continue_sync() -> Result<()> {
     Output::success("Cherry-pick continued successfully");
     println!();
     
-    // Now the user needs to manually finalize the rebase
-    Output::info("The cherry-pick is complete. To finish the rebase:");
-    println!("  1. Make sure you're on your working branch");
-    println!("  2. Run: ca sync");
+    // Now we need to:
+    // 1. Figure out which stack branch this temp branch belongs to
+    // 2. Force-push the temp branch to the actual stack branch
+    // 3. Checkout to the working branch
+    // 4. Continue with sync_stack() to process remaining entries
+    
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
+    let current_branch = git_repo.get_current_branch()?;
+    
+    // Parse temp branch name to get the original branch
+    // Format: {original-branch}-temp-{timestamp}
+    let stack_branch = if let Some(idx) = current_branch.rfind("-temp-") {
+        current_branch[..idx].to_string()
+    } else {
+        return Err(CascadeError::config(format!(
+            "Current branch '{}' doesn't appear to be a temp branch created by cascade.\n\
+             Expected format: <branch>-temp-<timestamp>",
+            current_branch
+        )));
+    };
+    
+    Output::info(format!("Updating stack branch: {}", stack_branch));
+    
+    // Force-push temp branch to stack branch
+    std::process::Command::new("git")
+        .args(["branch", "-f", &stack_branch])
+        .current_dir(&repo_root)
+        .output()
+        .map_err(CascadeError::Io)?;
+    
+    // Load stack to get working branch
+    let mut manager = crate::stack::StackManager::new(&repo_root)?;
+    let active_stack = manager
+        .get_active_stack()
+        .ok_or_else(|| CascadeError::config("No active stack found"))?;
+    
+    let working_branch = active_stack
+        .working_branch
+        .as_ref()
+        .ok_or_else(|| CascadeError::config("Active stack has no working branch"))?
+        .clone();
+    
+    Output::info(format!("Checking out to working branch: {}", working_branch));
+    
+    // Checkout to working branch
+    git_repo.checkout_branch_unsafe(&working_branch)?;
+    
     println!();
-    Output::tip("This will continue rebasing remaining entries and push updates");
-
-    Ok(())
+    Output::info("Resuming sync to complete the rebase...");
+    println!();
+    
+    // Continue with the full sync to process remaining entries
+    sync_stack(false, false, false).await
 }
 
 async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()> {
