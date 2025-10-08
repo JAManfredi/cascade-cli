@@ -367,11 +367,10 @@ impl RebaseManager {
                                 result.error = Some(format!(
                                     "Conflicts in commit {} require manual resolution.\n\n\
                                     To resolve:\n\
-                                    1. Fix conflicts in your editor (look for <<<<<<, ======, >>>>>>)\n\
+                                    1. Fix conflicts in your editor\n\
                                     2. Run: ca sync --continue\n\n\
-                                    Or abort and start over:\n\
-                                    → Run: git cherry-pick --abort\n\
-                                    → Then: ca sync",
+                                    Or abort:\n\
+                                    → Run: git cherry-pick --abort",
                                     &entry.commit_hash[..8]
                                 ));
                                 break;
@@ -515,7 +514,7 @@ impl RebaseManager {
             // Force checkout to base branch to allow temp branch deletion
             // Use unsafe checkout to bypass safety checks since we know this is cleanup
             if let Err(e) = self.git_repo.checkout_branch_unsafe(&target_base) {
-                Output::warning(format!("Could not checkout base for cleanup: {}", e));
+                debug!("Could not checkout base for cleanup: {}", e);
                 // If we can't checkout, we can't delete temp branches
                 // This is non-critical - temp branches will be cleaned up eventually
             } else {
@@ -770,14 +769,14 @@ impl RebaseManager {
             .conflict_analyzer
             .analyze_conflicts(&conflicted_files, self.git_repo.path())?;
 
-        info!(
+        debug!(
             "Conflict analysis: {} total conflicts, {} auto-resolvable",
             analysis.total_conflicts, analysis.auto_resolvable_count
         );
 
         // Display recommendations
         for recommendation in &analysis.recommendations {
-            info!("{}", recommendation);
+            debug!("{}", recommendation);
         }
 
         let mut resolved_count = 0;

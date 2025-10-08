@@ -1299,9 +1299,7 @@ impl GitRepository {
         if index.has_conflicts() {
             // CRITICAL: Write the conflicted state to disk so auto-resolve can see it!
             // Without this, conflicts only exist in memory and Git's index stays clean
-            tracing::warn!(
-                "Cherry-pick has conflicts - writing conflicted state to disk for resolution"
-            );
+            debug!("Cherry-pick has conflicts - writing conflicted state to disk for resolution");
 
             // The merge_trees() index is in-memory only. We need to:
             // 1. Get the repository's actual index
@@ -1335,7 +1333,7 @@ impl GitRepository {
                 .map_err(CascadeError::Io)?;
 
             if !cherry_pick_output.status.success() {
-                tracing::warn!("Git CLI cherry-pick failed as expected (has conflicts)");
+                debug!("Git CLI cherry-pick failed as expected (has conflicts)");
                 // This is expected - the cherry-pick failed due to conflicts
                 // The conflicts are now in the working directory and index
             }
@@ -1347,7 +1345,7 @@ impl GitRepository {
                 .and_then(|mut idx| idx.read(true).map(|_| ()))
                 .map_err(CascadeError::Git)?;
 
-            tracing::warn!("Conflicted state written and index reloaded - auto-resolve can now process conflicts");
+            debug!("Conflicted state written and index reloaded - auto-resolve can now process conflicts");
 
             return Err(CascadeError::branch(format!(
                 "Cherry-pick of {commit_hash} has conflicts that need manual resolution"

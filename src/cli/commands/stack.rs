@@ -2249,11 +2249,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                                 }
                             }
                             Err(e) => {
-                                Output::error(format!("Rebase failed: {e}"));
-                                Output::tip("To resolve conflicts:");
-                                Output::bullet("Fix conflicts in the affected files");
-                                Output::bullet("Stage resolved files: git add <files>");
-                                Output::bullet("Continue: ca stack continue-rebase");
+                                // Error already contains instructions, just propagate it
                                 return Err(e);
                             }
                         }
