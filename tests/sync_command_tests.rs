@@ -369,8 +369,8 @@ fn test_sync_with_conflicts() {
     // Should either:
     // 1. Auto-resolve and succeed (shows "Sync completed successfully" or "Auto-resolved")
     // 2. Report conflicts for manual resolution (contains "conflict")
-    let handled_gracefully = success 
-        && (stdout.to_lowercase().contains("sync completed") 
+    let handled_gracefully = success
+        && (stdout.to_lowercase().contains("sync completed")
             || stdout.to_lowercase().contains("auto-resolved")
             || stdout.to_lowercase().contains("conflict")
             || stderr.to_lowercase().contains("conflict"));

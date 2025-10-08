@@ -845,36 +845,44 @@ impl GitRepository {
     /// Check if a commit is already correctly based on a given parent
     /// Returns true if the commit's parent matches the expected base
     pub fn is_commit_based_on(&self, commit_hash: &str, expected_base: &str) -> Result<bool> {
-        let commit_oid = Oid::from_str(commit_hash)
-            .map_err(|e| CascadeError::branch(format!("Invalid commit hash '{}': {}", commit_hash, e)))?;
-        
-        let commit = self.repo.find_commit(commit_oid)
-            .map_err(|e| CascadeError::branch(format!("Commit '{}' not found: {}", commit_hash, e)))?;
-        
+        let commit_oid = Oid::from_str(commit_hash).map_err(|e| {
+            CascadeError::branch(format!("Invalid commit hash '{}': {}", commit_hash, e))
+        })?;
+
+        let commit = self.repo.find_commit(commit_oid).map_err(|e| {
+            CascadeError::branch(format!("Commit '{}' not found: {}", commit_hash, e))
+        })?;
+
         // Get the commit's parent (first parent for merge commits)
         if commit.parent_count() == 0 {
             // Root commit has no parent
             return Ok(false);
         }
-        
-        let parent = commit.parent(0)
-            .map_err(|e| CascadeError::branch(format!("Could not get parent of commit '{}': {}", commit_hash, e)))?;
+
+        let parent = commit.parent(0).map_err(|e| {
+            CascadeError::branch(format!(
+                "Could not get parent of commit '{}': {}",
+                commit_hash, e
+            ))
+        })?;
         let parent_hash = parent.id().to_string();
-        
+
         // Check if expected_base is a commit hash or a branch name
         let expected_base_oid = if let Ok(oid) = Oid::from_str(expected_base) {
             oid
         } else {
             // Try to resolve as a branch name
             let branch_ref = format!("refs/heads/{}", expected_base);
-            let reference = self.repo.find_reference(&branch_ref)
-                .map_err(|e| CascadeError::branch(format!("Could not find base '{}': {}", expected_base, e)))?;
-            reference.target()
-                .ok_or_else(|| CascadeError::branch(format!("Base '{}' has no target commit", expected_base)))?
+            let reference = self.repo.find_reference(&branch_ref).map_err(|e| {
+                CascadeError::branch(format!("Could not find base '{}': {}", expected_base, e))
+            })?;
+            reference.target().ok_or_else(|| {
+                CascadeError::branch(format!("Base '{}' has no target commit", expected_base))
+            })?
         };
-        
+
         let expected_base_hash = expected_base_oid.to_string();
-        
+
         tracing::debug!(
             "Checking if commit {} is based on {}: parent={}, expected={}",
             &commit_hash[..8],
@@ -882,7 +890,7 @@ impl GitRepository {
             &parent_hash[..8],
             &expected_base_hash[..8]
         );
-        
+
         Ok(parent_hash == expected_base_hash)
     }
 

@@ -270,13 +270,13 @@ impl RebaseManager {
             println!(); // Spacing
             Output::info("Stack has no entries yet");
             Output::tip("Use 'ca push' to add commits to this stack");
-            
+
             result.summary = "Stack is empty".to_string();
-            
+
             // Print success with summary (consistent with non-empty path)
             println!(); // Spacing
             Output::success(&result.summary);
-            
+
             // Save metadata and return
             self.stack_manager.save_to_disk()?;
             return Ok(result);
@@ -292,7 +292,11 @@ impl RebaseManager {
 
             // Check if this entry is already correctly based on the current base
             // If so, skip rebasing it (avoids creating duplicate commits)
-            if self.git_repo.is_commit_based_on(&entry.commit_hash, &current_base).unwrap_or(false) {
+            if self
+                .git_repo
+                .is_commit_based_on(&entry.commit_hash, &current_base)
+                .unwrap_or(false)
+            {
                 tracing::debug!(
                     "Entry '{}' is already correctly based on '{}', skipping rebase",
                     original_branch,

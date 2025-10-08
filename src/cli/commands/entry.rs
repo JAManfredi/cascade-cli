@@ -970,7 +970,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
 
     // Tips section (separated from summary)
     // Note: restack auto-pushes, so don't show push tip if restack is enabled
-    if (!push && !restack) || (!restack && has_dependents) {
+    if (has_dependents || !push) && !restack {
         println!();
         if !push && !restack {
             Output::tip("Use --push to automatically force-push after amending");
