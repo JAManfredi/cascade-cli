@@ -1321,6 +1321,11 @@ impl GitRepository {
             
             // Use git CLI to do the actual cherry-pick with conflicts
             // This is more reliable than trying to manually construct the conflicted index
+            
+            // First, ensure our libgit2 index is closed so git CLI can work
+            drop(repo_index);
+            self.ensure_index_closed()?;
+            
             let cherry_pick_output = std::process::Command::new("git")
                 .args(["cherry-pick", commit_hash])
                 .current_dir(self.path())
@@ -1333,7 +1338,13 @@ impl GitRepository {
                 // The conflicts are now in the working directory and index
             }
             
-            tracing::warn!("Conflicted state written - auto-resolve can now process conflicts");
+            // CRITICAL: Reload the index from disk so libgit2 sees the conflicts
+            // Git CLI wrote the conflicts to disk, but our in-memory index doesn't know yet
+            self.repo.index()
+                .and_then(|mut idx| idx.read(true).map(|_| ()))
+                .map_err(CascadeError::Git)?;
+            
+            tracing::warn!("Conflicted state written and index reloaded - auto-resolve can now process conflicts");
             
             return Err(CascadeError::branch(format!(
                 "Cherry-pick of {commit_hash} has conflicts that need manual resolution"
