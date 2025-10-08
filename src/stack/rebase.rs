@@ -847,6 +847,15 @@ impl RebaseManager {
             let remaining_conflicts = self.parse_conflict_markers(&content)?;
 
             if remaining_conflicts.is_empty() {
+                // CRITICAL SAFETY CHECK: Don't write empty files!
+                if content.trim().is_empty() {
+                    warn!(
+                        "SAFETY: Resolved content for {} is empty! This would delete the file. Aborting auto-resolve.",
+                        file_path
+                    );
+                    return Ok(ConflictResolution::TooComplex);
+                }
+
                 // SAFETY: Create backup before writing resolved content
                 // This allows recovery if auto-resolution is incorrect
                 let backup_path = full_path.with_extension("cascade-backup");
@@ -858,7 +867,11 @@ impl RebaseManager {
                 // All conflicts resolved - write the file back atomically
                 crate::utils::atomic_file::write_string(&full_path, &content)?;
 
-                debug!("Successfully resolved all conflicts in {}", file_path);
+                debug!(
+                    "Successfully resolved all conflicts in {} ({} bytes written)",
+                    file_path,
+                    content.len()
+                );
                 return Ok(ConflictResolution::Resolved);
             } else {
                 info!(
@@ -1004,81 +1017,6 @@ impl RebaseManager {
                 Ok(None)
             }
         }
-    }
-
-    /// Resolve conflicts in a single file using smart strategies
-    #[allow(dead_code)]
-    fn resolve_file_conflicts(&self, file_path: &str) -> Result<ConflictResolution> {
-        let repo_path = self.git_repo.path();
-        let full_path = repo_path.join(file_path);
-
-        // Read the file content with conflict markers
-        let content = std::fs::read_to_string(&full_path)
-            .map_err(|e| CascadeError::config(format!("Failed to read file {file_path}: {e}")))?;
-
-        // Parse conflicts from the file
-        let conflicts = self.parse_conflict_markers(&content)?;
-
-        if conflicts.is_empty() {
-            // No conflict markers found - file might already be resolved
-            return Ok(ConflictResolution::Resolved);
-        }
-
-        info!(
-            "Found {} conflict regions in {}",
-            conflicts.len(),
-            file_path
-        );
-
-        // Try to resolve each conflict using our strategies
-        let mut resolved_content = content;
-        let mut any_resolved = false;
-
-        // Process conflicts in reverse order to maintain string indices
-        for conflict in conflicts.iter().rev() {
-            match self.resolve_single_conflict(conflict, file_path) {
-                Ok(Some(resolution)) => {
-                    // Replace the conflict region with the resolved content
-                    let before = &resolved_content[..conflict.start];
-                    let after = &resolved_content[conflict.end..];
-                    resolved_content = format!("{before}{resolution}{after}");
-                    any_resolved = true;
-                    debug!(
-                        "✅ Resolved conflict at lines {}-{} in {}",
-                        conflict.start_line, conflict.end_line, file_path
-                    );
-                }
-                Ok(None) => {
-                    debug!(
-                        "⚠️  Conflict at lines {}-{} in {} too complex for auto-resolution",
-                        conflict.start_line, conflict.end_line, file_path
-                    );
-                }
-                Err(e) => {
-                    debug!("❌ Failed to resolve conflict in {}: {}", file_path, e);
-                }
-            }
-        }
-
-        if any_resolved {
-            // Check if we resolved ALL conflicts in this file
-            let remaining_conflicts = self.parse_conflict_markers(&resolved_content)?;
-
-            if remaining_conflicts.is_empty() {
-                // All conflicts resolved - write the file back atomically
-                crate::utils::atomic_file::write_string(&full_path, &resolved_content)?;
-
-                return Ok(ConflictResolution::Resolved);
-            } else {
-                info!(
-                    "⚠️  Partially resolved conflicts in {} ({} remaining)",
-                    file_path,
-                    remaining_conflicts.len()
-                );
-            }
-        }
-
-        Ok(ConflictResolution::TooComplex)
     }
 
     /// Parse conflict markers from file content
