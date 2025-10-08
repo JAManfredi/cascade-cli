@@ -844,6 +844,8 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
         .args(&amend_args)
         .env("CASCADE_SKIP_HOOKS", "1")
         .current_dir(&repo_root)
+        .stdout(std::process::Stdio::null()) // Suppress Git's output
+        .stderr(std::process::Stdio::piped()) // Capture errors
         .output()
         .map_err(CascadeError::Io)?;
 
@@ -900,7 +902,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
     // 5. Auto-restack dependent entries if requested
     if restack && has_dependents {
         println!();
-        Output::section("Auto-restacking dependent entries");
+        Output::info("Auto-restacking dependent entries");
 
         // Create fresh instances for rebase manager
         let rebase_manager_stack = StackManager::new(&repo_root)?;
@@ -967,9 +969,10 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
     }
 
     // Tips section (separated from summary)
-    if !push || (!restack && has_dependents) {
+    // Note: restack auto-pushes, so don't show push tip if restack is enabled
+    if (!push && !restack) || (!restack && has_dependents) {
         println!();
-        if !push {
+        if !push && !restack {
             Output::tip("Use --push to automatically force-push after amending");
         }
         if !restack && has_dependents {

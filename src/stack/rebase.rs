@@ -273,6 +273,38 @@ impl RebaseManager {
         for (index, entry) in stack.entries.iter().enumerate() {
             let original_branch = &entry.branch;
 
+            // Check if this entry is already correctly based on the current base
+            // If so, skip rebasing it (avoids creating duplicate commits)
+            if self.git_repo.is_commit_based_on(&entry.commit_hash, &current_base).unwrap_or(false) {
+                tracing::debug!(
+                    "Entry '{}' is already correctly based on '{}', skipping rebase",
+                    original_branch,
+                    current_base
+                );
+
+                // Track which branches need to be pushed (only those with PRs)
+                let tree_char = if index + 1 == entry_count {
+                    "└─"
+                } else {
+                    "├─"
+                };
+
+                if let Some(pr_num) = &entry.pull_request_id {
+                    println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
+                    branches_to_push.push((original_branch.clone(), pr_num.clone()));
+                } else {
+                    println!("   {} {} (not submitted)", tree_char, original_branch);
+                }
+
+                result
+                    .branch_mapping
+                    .insert(original_branch.clone(), original_branch.clone());
+
+                // This branch becomes the base for the next entry
+                current_base = original_branch.clone();
+                continue;
+            }
+
             // Create a temporary branch from the current base
             // This avoids committing directly to protected branches like develop/main
             let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
