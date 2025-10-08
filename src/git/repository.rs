@@ -1297,6 +1297,31 @@ impl GitRepository {
 
         // Check for conflicts
         if index.has_conflicts() {
+            // CRITICAL: Write the conflicted state to disk so auto-resolve can see it!
+            // Without this, conflicts only exist in memory and Git's index stays clean
+            tracing::warn!(
+                "Cherry-pick has conflicts - writing conflicted state to disk for resolution"
+            );
+            
+            // Write the in-memory merge index to the repository's index
+            // This makes the conflicts visible to Git commands and our auto-resolver
+            index.write().map_err(CascadeError::Git)?;
+            
+            // Checkout the conflicted files to working directory with conflict markers
+            self.repo
+                .checkout_index(
+                    Some(&mut index),
+                    Some(
+                        git2::build::CheckoutBuilder::new()
+                            .allow_conflicts(true)
+                            .conflict_style_merge(true)
+                            .force(),
+                    ),
+                )
+                .map_err(CascadeError::Git)?;
+            
+            tracing::warn!("Conflicted state written - auto-resolve can now process conflicts");
+            
             return Err(CascadeError::branch(format!(
                 "Cherry-pick of {commit_hash} has conflicts that need manual resolution"
             )));
