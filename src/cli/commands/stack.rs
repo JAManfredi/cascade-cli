@@ -528,8 +528,17 @@ pub async fn autoland(
     auto_land_stack(force, dry_run, wait_for_builds, strategy, build_timeout).await
 }
 
-pub async fn sync(force: bool, skip_cleanup: bool, interactive: bool) -> Result<()> {
-    sync_stack(force, skip_cleanup, interactive).await
+pub async fn sync(
+    force: bool,
+    skip_cleanup: bool,
+    interactive: bool,
+    r#continue: bool,
+) -> Result<()> {
+    if r#continue {
+        continue_sync().await
+    } else {
+        sync_stack(force, skip_cleanup, interactive).await
+    }
 }
 
 pub async fn rebase(

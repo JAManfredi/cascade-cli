@@ -214,6 +214,9 @@ pub enum Commands {
         /// Interactive mode for conflict resolution
         #[arg(long, short)]
         interactive: bool,
+        /// Continue from in-progress cherry-pick after resolving conflicts
+        #[arg(long)]
+        r#continue: bool,
     },
 
     /// Rebase stack on updated base branch (shortcut for 'stack rebase')
@@ -619,7 +622,8 @@ impl Cli {
                 force,
                 cleanup,
                 interactive,
-            } => commands::stack::sync(force, cleanup, interactive).await,
+                r#continue,
+            } => commands::stack::sync(force, cleanup, interactive, r#continue).await,
 
             Commands::Rebase {
                 interactive,
