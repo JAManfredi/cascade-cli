@@ -1302,50 +1302,53 @@ impl GitRepository {
             tracing::warn!(
                 "Cherry-pick has conflicts - writing conflicted state to disk for resolution"
             );
-            
+
             // The merge_trees() index is in-memory only. We need to:
             // 1. Get the repository's actual index
             // 2. Read entries from the merge result into it
             // 3. Write the repository index to disk
-            
+
             let mut repo_index = self.repo.index().map_err(CascadeError::Git)?;
-            
+
             // Clear the current index and read from the merge result
             repo_index.clear().map_err(CascadeError::Git)?;
-            repo_index.read_tree(&head_tree).map_err(CascadeError::Git)?;
-            
+            repo_index
+                .read_tree(&head_tree)
+                .map_err(CascadeError::Git)?;
+
             // Now merge the commit tree into the repo index (this will create conflicts)
             repo_index
                 .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
                 .map_err(CascadeError::Git)?;
-            
+
             // Use git CLI to do the actual cherry-pick with conflicts
             // This is more reliable than trying to manually construct the conflicted index
-            
+
             // First, ensure our libgit2 index is closed so git CLI can work
             drop(repo_index);
             self.ensure_index_closed()?;
-            
+
             let cherry_pick_output = std::process::Command::new("git")
                 .args(["cherry-pick", commit_hash])
                 .current_dir(self.path())
                 .output()
                 .map_err(CascadeError::Io)?;
-            
+
             if !cherry_pick_output.status.success() {
                 tracing::warn!("Git CLI cherry-pick failed as expected (has conflicts)");
                 // This is expected - the cherry-pick failed due to conflicts
                 // The conflicts are now in the working directory and index
             }
-            
+
             // CRITICAL: Reload the index from disk so libgit2 sees the conflicts
             // Git CLI wrote the conflicts to disk, but our in-memory index doesn't know yet
-            self.repo.index()
+            self.repo
+                .index()
                 .and_then(|mut idx| idx.read(true).map(|_| ()))
                 .map_err(CascadeError::Git)?;
-            
+
             tracing::warn!("Conflicted state written and index reloaded - auto-resolve can now process conflicts");
-            
+
             return Err(CascadeError::branch(format!(
                 "Cherry-pick of {commit_hash} has conflicts that need manual resolution"
             )));

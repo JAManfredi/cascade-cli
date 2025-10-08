@@ -184,6 +184,9 @@ pub enum StackAction {
         /// Interactive mode for conflict resolution
         #[arg(long, short)]
         interactive: bool,
+        /// Continue from in-progress cherry-pick after resolving conflicts
+        #[arg(long)]
+        r#continue: bool,
     },
 
     /// Rebase stack on updated base branch
@@ -384,7 +387,14 @@ pub async fn run(action: StackAction) -> Result<()> {
             force,
             cleanup,
             interactive,
-        } => sync_stack(force, cleanup, interactive).await,
+            r#continue,
+        } => {
+            if r#continue {
+                continue_sync().await
+            } else {
+                sync_stack(force, cleanup, interactive).await
+            }
+        }
         StackAction::Rebase {
             interactive,
             onto,
@@ -2011,6 +2021,63 @@ async fn check_stack(_force: bool) -> Result<()> {
     Output::success("Stack check completed successfully");
 
     Ok(())
+}
+
+async fn continue_sync() -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)?;
+
+    Output::section("Continuing sync from where it left off");
+    println!();
+
+    // Check if there's an in-progress cherry-pick
+    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    if !cherry_pick_head.exists() {
+        return Err(CascadeError::config(
+            "No in-progress cherry-pick found. Nothing to continue.\n\n\
+             Use 'ca sync' to start a new sync."
+                .to_string(),
+        ));
+    }
+
+    Output::info("Staging all resolved files");
+
+    // Stage all resolved files
+    std::process::Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&repo_root)
+        .output()
+        .map_err(CascadeError::Io)?;
+
+    Output::info("Continuing cherry-pick");
+
+    // Continue the cherry-pick
+    let continue_output = std::process::Command::new("git")
+        .args(["cherry-pick", "--continue"])
+        .current_dir(&repo_root)
+        .output()
+        .map_err(CascadeError::Io)?;
+
+    if !continue_output.status.success() {
+        let stderr = String::from_utf8_lossy(&continue_output.stderr);
+        return Err(CascadeError::Branch(format!(
+            "Failed to continue cherry-pick: {}\n\n\
+             Make sure all conflicts are resolved.",
+            stderr
+        )));
+    }
+
+    Output::success("Cherry-pick continued successfully");
+    println!();
+
+    // Automatically continue with the full sync to complete the rebase
+    Output::info("Resuming sync to complete the rebase...");
+    println!();
+
+    // Call sync_stack with the same defaults as a normal sync
+    sync_stack(false, false, false).await
 }
 
 async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()> {

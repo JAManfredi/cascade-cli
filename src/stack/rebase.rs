@@ -365,31 +365,13 @@ impl RebaseManager {
                             if !fully_resolved {
                                 result.success = false;
                                 result.error = Some(format!(
-                                    "Could not auto-resolve all conflicts in {}\n\n\
-                                    MANUAL CONFLICT RESOLUTION REQUIRED\n\
-                                    =====================================\n\n\
-                                    Some conflicts are too complex for auto-resolution.\n\n\
-                                    Step 1: Analyze remaining conflicts\n\
-                                    → Run: ca conflicts\n\
-                                    → Shows which files still have conflicts\n\
-                                    → Use --detailed flag for more info\n\n\
-                                    Step 2: Resolve conflicts in your editor\n\
-                                    → Open conflicted files (marked with ✋ in ca conflicts output)\n\
-                                    → Remove conflict markers (<<<<<<, ======, >>>>>>)\n\
-                                    → Keep the code you want\n\
-                                    → Save the files\n\n\
-                                    Step 3: Mark conflicts as resolved\n\
-                                    → Run: git add <resolved-files>\n\
-                                    → Or: git add -A (to stage all resolved files)\n\n\
-                                    Step 4: Complete the sync\n\
-                                    → Run: ca sync\n\
-                                    → Cascade will continue from where it left off\n\n\
-                                    Alternative: Abort and start over\n\
+                                    "Conflicts in commit {} require manual resolution.\n\n\
+                                    To resolve:\n\
+                                    1. Fix conflicts in your editor (look for <<<<<<, ======, >>>>>>)\n\
+                                    2. Run: ca sync --continue\n\n\
+                                    Or abort and start over:\n\
                                     → Run: git cherry-pick --abort\n\
-                                    → Then: ca sync (starts fresh)\n\n\
-                                    BACKUP: If auto-resolution was wrong\n\
-                                    → Check for .cascade-backup files in your repo\n\
-                                    → These contain the original file content before auto-resolution",
+                                    → Then: ca sync",
                                     &entry.commit_hash[..8]
                                 ));
                                 break;
@@ -398,11 +380,11 @@ impl RebaseManager {
                             // Commit the resolved changes
                             let commit_message =
                                 format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
-                            
+
                             // CRITICAL: Check if there are actually changes to commit
-                            warn!("AUTO-RESOLVE DEBUG: About to commit. Checking staged files...");
+                            debug!("Checking staged files before commit");
                             let staged_files = self.git_repo.get_staged_files()?;
-                            
+
                             if staged_files.is_empty() {
                                 // NO FILES STAGED! This means auto-resolve didn't actually stage anything
                                 // This is the bug - cherry-pick failed, but has_conflicts() returned false
@@ -430,39 +412,20 @@ impl RebaseManager {
                                     → Manually resolve conflicts as they appear",
                                     &entry.commit_hash[..8]
                                 ));
-                                warn!("AUTO-RESOLVE DEBUG: CRITICAL - No files staged after auto-resolve!");
+                                warn!("CRITICAL - No files staged after auto-resolve!");
                                 break;
                             }
-                            
-                            // DEBUG: Show what's staged
-                            warn!("AUTO-RESOLVE DEBUG: {} files staged: {:?}", staged_files.len(), staged_files);
-                            if let Ok(status) = std::process::Command::new("git")
-                                .args(["diff", "--cached", "--stat"])
-                                .current_dir(self.git_repo.path())
-                                .output()
-                            {
-                                let stat_output = String::from_utf8_lossy(&status.stdout);
-                                warn!("AUTO-RESOLVE DEBUG: Staged changes:\n{}", stat_output);
-                            }
-                            
+
+                            debug!("{} files staged", staged_files.len());
+
                             match self.git_repo.commit(&commit_message) {
                                 Ok(new_commit_id) => {
-                                    warn!(
-                                        "AUTO-RESOLVE DEBUG: Created commit {} with message '{}'",
+                                    debug!(
+                                        "Created commit {} with message '{}'",
                                         &new_commit_id[..8],
                                         commit_message
                                     );
-                                    
-                                    // DEBUG: Check what's in the commit
-                                    if let Ok(show) = std::process::Command::new("git")
-                                        .args(["show", "--stat", &new_commit_id])
-                                        .current_dir(self.git_repo.path())
-                                        .output()
-                                    {
-                                        let show_output = String::from_utf8_lossy(&show.stdout);
-                                        warn!("AUTO-RESOLVE DEBUG: Commit contents:\n{}", show_output);
-                                    }
-                                    
+
                                     Output::success("Auto-resolved conflicts");
                                     result.new_commits.push(new_commit_id.clone());
                                     let rebased_commit_id = new_commit_id;
@@ -755,42 +718,29 @@ impl RebaseManager {
 
     /// Attempt to automatically resolve conflicts
     fn auto_resolve_conflicts(&self, commit_hash: &str) -> Result<bool> {
-        warn!("=== AUTO-RESOLVE DEBUG: Starting for commit {} ===", commit_hash);
+        debug!("Starting auto-resolve for commit {}", commit_hash);
 
         // Check if there are actually conflicts
         let has_conflicts = self.git_repo.has_conflicts()?;
-        warn!("AUTO-RESOLVE DEBUG: has_conflicts() = {}", has_conflicts);
-        
-        // CRITICAL DEBUG: Check working directory state
-        if let Ok(status_output) = std::process::Command::new("git")
-            .args(["status", "--short"])
-            .current_dir(self.git_repo.path())
-            .output()
-        {
-            let status_str = String::from_utf8_lossy(&status_output.stdout);
-            warn!("AUTO-RESOLVE DEBUG: git status --short:\n{}", status_str);
-        }
-        
+        debug!("has_conflicts() = {}", has_conflicts);
+
         // Check if cherry-pick is in progress
         let cherry_pick_head = self.git_repo.path().join(".git").join("CHERRY_PICK_HEAD");
         let cherry_pick_in_progress = cherry_pick_head.exists();
-        warn!("AUTO-RESOLVE DEBUG: CHERRY_PICK_HEAD exists = {}", cherry_pick_in_progress);
-        
+
         if !has_conflicts {
-            warn!("AUTO-RESOLVE DEBUG: No conflicts detected by Git index");
-            warn!("AUTO-RESOLVE DEBUG: But cherry-pick may have failed - checking working directory...");
-            
+            debug!("No conflicts detected by Git index");
+
             // If cherry-pick is in progress but no conflicts detected, something is wrong
             if cherry_pick_in_progress {
-                warn!("AUTO-RESOLVE DEBUG: CHERRY_PICK_HEAD exists but no conflicts in index!");
-                warn!("AUTO-RESOLVE DEBUG: This indicates a Git state issue - aborting cherry-pick");
-                
+                warn!("CHERRY_PICK_HEAD exists but no conflicts in index - aborting cherry-pick");
+
                 // Abort the cherry-pick to clean up
                 let _ = std::process::Command::new("git")
                     .args(["cherry-pick", "--abort"])
                     .current_dir(self.git_repo.path())
                     .output();
-                
+
                 return Err(CascadeError::Branch(format!(
                     "Cherry-pick failed for {} but Git index shows no conflicts. \
                      This usually means the cherry-pick was aborted or failed in an unexpected way. \
@@ -798,19 +748,19 @@ impl RebaseManager {
                     &commit_hash[..8]
                 )));
             }
-            
+
             return Ok(true);
         }
 
         let conflicted_files = self.git_repo.get_conflicted_files()?;
 
         if conflicted_files.is_empty() {
-            warn!("AUTO-RESOLVE DEBUG: Conflicted files list is empty");
+            debug!("Conflicted files list is empty");
             return Ok(true);
         }
 
-        warn!(
-            "AUTO-RESOLVE DEBUG: Found conflicts in {} files: {:?}",
+        debug!(
+            "Found conflicts in {} files: {:?}",
             conflicted_files.len(),
             conflicted_files
         );
@@ -821,13 +771,13 @@ impl RebaseManager {
             .analyze_conflicts(&conflicted_files, self.git_repo.path())?;
 
         info!(
-            "🔍 Conflict analysis: {} total conflicts, {} auto-resolvable",
+            "Conflict analysis: {} total conflicts, {} auto-resolvable",
             analysis.total_conflicts, analysis.auto_resolvable_count
         );
 
         // Display recommendations
         for recommendation in &analysis.recommendations {
-            info!("💡 {}", recommendation);
+            info!("{}", recommendation);
         }
 
         let mut resolved_count = 0;
@@ -835,8 +785,8 @@ impl RebaseManager {
         let mut failed_files = Vec::new();
 
         for file_analysis in &analysis.files {
-            warn!(
-                "AUTO-RESOLVE DEBUG: Processing file: {} (auto_resolvable: {}, conflicts: {})",
+            debug!(
+                "Processing file: {} (auto_resolvable: {}, conflicts: {})",
                 file_analysis.file_path,
                 file_analysis.auto_resolvable,
                 file_analysis.conflicts.len()
@@ -850,30 +800,24 @@ impl RebaseManager {
                     Ok(ConflictResolution::Resolved) => {
                         resolved_count += 1;
                         resolved_files.push(file_analysis.file_path.clone());
-                        warn!(
-                            "AUTO-RESOLVE DEBUG: Successfully resolved {}",
-                            file_analysis.file_path
-                        );
+                        debug!("Successfully resolved {}", file_analysis.file_path);
                     }
                     Ok(ConflictResolution::TooComplex) => {
-                        warn!(
-                            "AUTO-RESOLVE DEBUG: {} too complex for auto-resolution",
+                        debug!(
+                            "{} too complex for auto-resolution",
                             file_analysis.file_path
                         );
                         failed_files.push(file_analysis.file_path.clone());
                     }
                     Err(e) => {
-                        warn!(
-                            "AUTO-RESOLVE DEBUG: Failed to resolve {}: {}",
-                            file_analysis.file_path, e
-                        );
+                        debug!("Failed to resolve {}: {}", file_analysis.file_path, e);
                         failed_files.push(file_analysis.file_path.clone());
                     }
                 }
             } else {
                 failed_files.push(file_analysis.file_path.clone());
-                warn!(
-                    "AUTO-RESOLVE DEBUG: {} requires manual resolution ({} conflicts)",
+                debug!(
+                    "{} requires manual resolution ({} conflicts)",
                     file_analysis.file_path,
                     file_analysis.conflicts.len()
                 );
@@ -881,39 +825,36 @@ impl RebaseManager {
         }
 
         if resolved_count > 0 {
-            warn!(
-                "AUTO-RESOLVE DEBUG: Resolved {}/{} files",
+            debug!(
+                "Resolved {}/{} files",
                 resolved_count,
                 conflicted_files.len()
             );
-            warn!("AUTO-RESOLVE DEBUG: Resolved files: {:?}", resolved_files);
+            debug!("Resolved files: {:?}", resolved_files);
 
             // CRITICAL: Only stage files that were successfully resolved
             // This prevents staging files that still have conflict markers
             let file_paths: Vec<&str> = resolved_files.iter().map(|s| s.as_str()).collect();
-            warn!("AUTO-RESOLVE DEBUG: Staging {} files", file_paths.len());
+            debug!("Staging {} files", file_paths.len());
             self.git_repo.stage_files(&file_paths)?;
-            warn!("AUTO-RESOLVE DEBUG: Files staged successfully");
+            debug!("Files staged successfully");
         } else {
-            warn!("AUTO-RESOLVE DEBUG: No files were resolved (resolved_count = 0)");
+            debug!("No files were resolved (resolved_count = 0)");
         }
 
         // Return true only if ALL conflicts were resolved
         let all_resolved = failed_files.is_empty();
 
-        warn!(
-            "AUTO-RESOLVE DEBUG: all_resolved = {}, failed_files = {:?}",
+        debug!(
+            "all_resolved = {}, failed_files = {:?}",
             all_resolved, failed_files
         );
 
         if !all_resolved {
-            warn!(
-                "AUTO-RESOLVE DEBUG: {} files still need manual resolution",
-                failed_files.len()
-            );
+            debug!("{} files still need manual resolution", failed_files.len());
         }
 
-        warn!("AUTO-RESOLVE DEBUG: Returning all_resolved = {}", all_resolved);
+        debug!("Returning all_resolved = {}", all_resolved);
         Ok(all_resolved)
     }
 
@@ -981,8 +922,8 @@ impl RebaseManager {
             let remaining_conflicts = self.parse_conflict_markers(&content)?;
 
             if remaining_conflicts.is_empty() {
-                warn!(
-                    "AUTO-RESOLVE DEBUG: All conflicts resolved in {}, content length: {} bytes",
+                debug!(
+                    "All conflicts resolved in {}, content length: {} bytes",
                     file_path,
                     content.len()
                 );
@@ -990,7 +931,7 @@ impl RebaseManager {
                 // CRITICAL SAFETY CHECK: Don't write empty files!
                 if content.trim().is_empty() {
                     warn!(
-                        "AUTO-RESOLVE DEBUG: SAFETY CHECK TRIGGERED! Resolved content for {} is empty! Aborting.",
+                        "SAFETY CHECK: Resolved content for {} is empty! Aborting auto-resolution.",
                         file_path
                     );
                     return Ok(ConflictResolution::TooComplex);
@@ -999,8 +940,8 @@ impl RebaseManager {
                 // SAFETY: Create backup before writing resolved content
                 let backup_path = full_path.with_extension("cascade-backup");
                 if let Ok(original_content) = std::fs::read_to_string(&full_path) {
-                    warn!(
-                        "AUTO-RESOLVE DEBUG: Backup for {} (original: {} bytes, resolved: {} bytes)",
+                    debug!(
+                        "Backup for {} (original: {} bytes, resolved: {} bytes)",
                         file_path,
                         original_content.len(),
                         content.len()
@@ -1011,15 +952,11 @@ impl RebaseManager {
                 // All conflicts resolved - write the file back atomically
                 crate::utils::atomic_file::write_string(&full_path, &content)?;
 
-                warn!(
-                    "AUTO-RESOLVE DEBUG: Wrote {} bytes to {}",
-                    content.len(),
-                    file_path
-                );
+                debug!("Wrote {} bytes to {}", content.len(), file_path);
                 return Ok(ConflictResolution::Resolved);
             } else {
                 info!(
-                    "⚠️  Partially resolved conflicts in {} ({} remaining)",
+                    "Partially resolved conflicts in {} ({} remaining)",
                     file_path,
                     remaining_conflicts.len()
                 );
@@ -1213,210 +1150,6 @@ impl RebaseManager {
         }
 
         Ok(conflicts)
-    }
-
-    /// Resolve a single conflict using smart strategies
-    fn resolve_single_conflict(
-        &self,
-        conflict: &ConflictRegion,
-        file_path: &str,
-    ) -> Result<Option<String>> {
-        debug!(
-            "Analyzing conflict in {} (lines {}-{})",
-            file_path, conflict.start_line, conflict.end_line
-        );
-
-        // Strategy 1: Whitespace-only differences
-        if let Some(resolved) = self.resolve_whitespace_conflict(conflict)? {
-            debug!("Resolved as whitespace-only conflict");
-            return Ok(Some(resolved));
-        }
-
-        // Strategy 2: Line ending differences
-        if let Some(resolved) = self.resolve_line_ending_conflict(conflict)? {
-            debug!("Resolved as line ending conflict");
-            return Ok(Some(resolved));
-        }
-
-        // Strategy 3: Pure addition conflicts (no overlapping changes)
-        if let Some(resolved) = self.resolve_addition_conflict(conflict)? {
-            debug!("Resolved as pure addition conflict");
-            return Ok(Some(resolved));
-        }
-
-        // Strategy 4: Import/dependency reordering
-        if let Some(resolved) = self.resolve_import_conflict(conflict, file_path)? {
-            debug!("Resolved as import reordering conflict");
-            return Ok(Some(resolved));
-        }
-
-        // No strategy could resolve this conflict
-        Ok(None)
-    }
-
-    /// Resolve conflicts that only differ by whitespace
-    fn resolve_whitespace_conflict(&self, conflict: &ConflictRegion) -> Result<Option<String>> {
-        let our_normalized = self.normalize_whitespace(&conflict.our_content);
-        let their_normalized = self.normalize_whitespace(&conflict.their_content);
-
-        if our_normalized == their_normalized {
-            // Only whitespace differences - prefer the version with better formatting
-            let resolved =
-                if conflict.our_content.trim().len() >= conflict.their_content.trim().len() {
-                    conflict.our_content.clone()
-                } else {
-                    conflict.their_content.clone()
-                };
-
-            return Ok(Some(resolved));
-        }
-
-        Ok(None)
-    }
-
-    /// Resolve conflicts that only differ by line endings
-    fn resolve_line_ending_conflict(&self, conflict: &ConflictRegion) -> Result<Option<String>> {
-        let our_normalized = conflict
-            .our_content
-            .replace("\r\n", "\n")
-            .replace('\r', "\n");
-        let their_normalized = conflict
-            .their_content
-            .replace("\r\n", "\n")
-            .replace('\r', "\n");
-
-        if our_normalized == their_normalized {
-            // Only line ending differences - prefer Unix line endings
-            return Ok(Some(our_normalized));
-        }
-
-        Ok(None)
-    }
-
-    /// Resolve conflicts where both sides only add lines (no overlapping edits)
-    fn resolve_addition_conflict(&self, conflict: &ConflictRegion) -> Result<Option<String>> {
-        let our_lines: Vec<&str> = conflict.our_content.lines().collect();
-        let their_lines: Vec<&str> = conflict.their_content.lines().collect();
-
-        // Check if one side is a subset of the other (pure addition)
-        if our_lines.is_empty() {
-            return Ok(Some(conflict.their_content.clone()));
-        }
-        if their_lines.is_empty() {
-            return Ok(Some(conflict.our_content.clone()));
-        }
-
-        // Try to merge additions intelligently
-        let mut merged_lines = Vec::new();
-        let mut our_idx = 0;
-        let mut their_idx = 0;
-
-        while our_idx < our_lines.len() || their_idx < their_lines.len() {
-            if our_idx >= our_lines.len() {
-                // Only their lines left
-                merged_lines.extend_from_slice(&their_lines[their_idx..]);
-                break;
-            } else if their_idx >= their_lines.len() {
-                // Only our lines left
-                merged_lines.extend_from_slice(&our_lines[our_idx..]);
-                break;
-            } else if our_lines[our_idx] == their_lines[their_idx] {
-                // Same line - add once
-                merged_lines.push(our_lines[our_idx]);
-                our_idx += 1;
-                their_idx += 1;
-            } else {
-                // Different lines - this might be too complex
-                return Ok(None);
-            }
-        }
-
-        Ok(Some(merged_lines.join("\n")))
-    }
-
-    /// Resolve import/dependency conflicts by sorting and merging
-    fn resolve_import_conflict(
-        &self,
-        conflict: &ConflictRegion,
-        file_path: &str,
-    ) -> Result<Option<String>> {
-        // Only apply to likely import sections in common file types
-        let is_import_file = file_path.ends_with(".rs")
-            || file_path.ends_with(".py")
-            || file_path.ends_with(".js")
-            || file_path.ends_with(".ts")
-            || file_path.ends_with(".go")
-            || file_path.ends_with(".java")
-            || file_path.ends_with(".swift")
-            || file_path.ends_with(".kt")
-            || file_path.ends_with(".cs");
-
-        if !is_import_file {
-            return Ok(None);
-        }
-
-        let our_lines: Vec<&str> = conflict.our_content.lines().collect();
-        let their_lines: Vec<&str> = conflict.their_content.lines().collect();
-
-        // Check if all lines look like imports/uses
-        let our_imports = our_lines
-            .iter()
-            .all(|line| self.is_import_line(line, file_path));
-        let their_imports = their_lines
-            .iter()
-            .all(|line| self.is_import_line(line, file_path));
-
-        if our_imports && their_imports {
-            // Merge and sort imports
-            let mut all_imports: Vec<&str> = our_lines.into_iter().chain(their_lines).collect();
-            all_imports.sort();
-            all_imports.dedup();
-
-            return Ok(Some(all_imports.join("\n")));
-        }
-
-        Ok(None)
-    }
-
-    /// Check if a line looks like an import statement
-    fn is_import_line(&self, line: &str, file_path: &str) -> bool {
-        let trimmed = line.trim();
-
-        if trimmed.is_empty() {
-            return true; // Empty lines are OK in import sections
-        }
-
-        if file_path.ends_with(".rs") {
-            return trimmed.starts_with("use ") || trimmed.starts_with("extern crate");
-        } else if file_path.ends_with(".py") {
-            return trimmed.starts_with("import ") || trimmed.starts_with("from ");
-        } else if file_path.ends_with(".js") || file_path.ends_with(".ts") {
-            return trimmed.starts_with("import ")
-                || trimmed.starts_with("const ")
-                || trimmed.starts_with("require(");
-        } else if file_path.ends_with(".go") {
-            return trimmed.starts_with("import ") || trimmed == "import (" || trimmed == ")";
-        } else if file_path.ends_with(".java") {
-            return trimmed.starts_with("import ");
-        } else if file_path.ends_with(".swift") {
-            return trimmed.starts_with("import ") || trimmed.starts_with("@testable import ");
-        } else if file_path.ends_with(".kt") {
-            return trimmed.starts_with("import ") || trimmed.starts_with("@file:");
-        } else if file_path.ends_with(".cs") {
-            return trimmed.starts_with("using ") || trimmed.starts_with("extern alias ");
-        }
-
-        false
-    }
-
-    /// Normalize whitespace for comparison
-    fn normalize_whitespace(&self, content: &str) -> String {
-        content
-            .lines()
-            .map(|line| line.trim())
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n")
     }
 
     /// Update a stack entry with new commit information
@@ -1867,35 +1600,5 @@ mod tests {
         assert!(result.success);
         assert!(result.has_conflicts());
         assert_eq!(result.success_count(), 1);
-    }
-
-    #[test]
-    fn test_import_line_detection() {
-        let (_temp_dir, repo_path) = create_test_repo();
-        let git_repo = crate::git::GitRepository::open(&repo_path).unwrap();
-        let stack_manager = crate::stack::StackManager::new(&repo_path).unwrap();
-        let options = RebaseOptions::default();
-        let rebase_manager = RebaseManager::new(stack_manager, git_repo, options);
-
-        // Test Swift import detection
-        assert!(rebase_manager.is_import_line("import Foundation", "test.swift"));
-        assert!(rebase_manager.is_import_line("@testable import MyModule", "test.swift"));
-        assert!(!rebase_manager.is_import_line("class MyClass {", "test.swift"));
-
-        // Test Kotlin import detection
-        assert!(rebase_manager.is_import_line("import kotlin.collections.*", "test.kt"));
-        assert!(rebase_manager.is_import_line("@file:JvmName(\"Utils\")", "test.kt"));
-        assert!(!rebase_manager.is_import_line("fun myFunction() {", "test.kt"));
-
-        // Test C# import detection
-        assert!(rebase_manager.is_import_line("using System;", "test.cs"));
-        assert!(rebase_manager.is_import_line("using System.Collections.Generic;", "test.cs"));
-        assert!(rebase_manager.is_import_line("extern alias GridV1;", "test.cs"));
-        assert!(!rebase_manager.is_import_line("namespace MyNamespace {", "test.cs"));
-
-        // Test empty lines are allowed in import sections
-        assert!(rebase_manager.is_import_line("", "test.swift"));
-        assert!(rebase_manager.is_import_line("   ", "test.kt"));
-        assert!(rebase_manager.is_import_line("", "test.cs"));
     }
 }
