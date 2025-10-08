@@ -1303,22 +1303,35 @@ impl GitRepository {
                 "Cherry-pick has conflicts - writing conflicted state to disk for resolution"
             );
             
-            // Write the in-memory merge index to the repository's index
-            // This makes the conflicts visible to Git commands and our auto-resolver
-            index.write().map_err(CascadeError::Git)?;
+            // The merge_trees() index is in-memory only. We need to:
+            // 1. Get the repository's actual index
+            // 2. Read entries from the merge result into it
+            // 3. Write the repository index to disk
             
-            // Checkout the conflicted files to working directory with conflict markers
-            self.repo
-                .checkout_index(
-                    Some(&mut index),
-                    Some(
-                        git2::build::CheckoutBuilder::new()
-                            .allow_conflicts(true)
-                            .conflict_style_merge(true)
-                            .force(),
-                    ),
-                )
+            let mut repo_index = self.repo.index().map_err(CascadeError::Git)?;
+            
+            // Clear the current index and read from the merge result
+            repo_index.clear().map_err(CascadeError::Git)?;
+            repo_index.read_tree(&head_tree).map_err(CascadeError::Git)?;
+            
+            // Now merge the commit tree into the repo index (this will create conflicts)
+            repo_index
+                .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
                 .map_err(CascadeError::Git)?;
+            
+            // Use git CLI to do the actual cherry-pick with conflicts
+            // This is more reliable than trying to manually construct the conflicted index
+            let cherry_pick_output = std::process::Command::new("git")
+                .args(["cherry-pick", commit_hash])
+                .current_dir(self.path())
+                .output()
+                .map_err(CascadeError::Io)?;
+            
+            if !cherry_pick_output.status.success() {
+                tracing::warn!("Git CLI cherry-pick failed as expected (has conflicts)");
+                // This is expected - the cherry-pick failed due to conflicts
+                // The conflicts are now in the working directory and index
+            }
             
             tracing::warn!("Conflicted state written - auto-resolve can now process conflicts");
             
