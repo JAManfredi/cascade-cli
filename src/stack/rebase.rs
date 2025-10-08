@@ -399,8 +399,43 @@ impl RebaseManager {
                             let commit_message =
                                 format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
                             
-                            // DEBUG: Check what's staged before committing
+                            // CRITICAL: Check if there are actually changes to commit
                             warn!("AUTO-RESOLVE DEBUG: About to commit. Checking staged files...");
+                            let staged_files = self.git_repo.get_staged_files()?;
+                            
+                            if staged_files.is_empty() {
+                                // NO FILES STAGED! This means auto-resolve didn't actually stage anything
+                                // This is the bug - cherry-pick failed, but has_conflicts() returned false
+                                // so auto-resolve exited early without staging anything
+                                result.success = false;
+                                result.error = Some(format!(
+                                    "CRITICAL BUG DETECTED: Cherry-pick failed but no files were staged!\n\n\
+                                    This indicates a Git state issue after cherry-pick failure.\n\n\
+                                    RECOVERY STEPS:\n\
+                                    ================\n\n\
+                                    Step 1: Check Git status\n\
+                                    → Run: git status\n\
+                                    → Check if there are any changes in working directory\n\n\
+                                    Step 2: Check for conflicts manually\n\
+                                    → Run: git diff\n\
+                                    → Look for conflict markers (<<<<<<, ======, >>>>>>)\n\n\
+                                    Step 3: Abort the cherry-pick\n\
+                                    → Run: git cherry-pick --abort\n\n\
+                                    Step 4: Report this bug\n\
+                                    → This is a known issue we're investigating\n\
+                                    → Cherry-pick failed for commit {}\n\
+                                    → But Git reported no conflicts and no staged files\n\n\
+                                    Step 5: Try manual resolution\n\
+                                    → Run: ca sync --no-auto-resolve\n\
+                                    → Manually resolve conflicts as they appear",
+                                    &entry.commit_hash[..8]
+                                ));
+                                warn!("AUTO-RESOLVE DEBUG: CRITICAL - No files staged after auto-resolve!");
+                                break;
+                            }
+                            
+                            // DEBUG: Show what's staged
+                            warn!("AUTO-RESOLVE DEBUG: {} files staged: {:?}", staged_files.len(), staged_files);
                             if let Ok(status) = std::process::Command::new("git")
                                 .args(["diff", "--cached", "--stat"])
                                 .current_dir(self.git_repo.path())
@@ -713,8 +748,47 @@ impl RebaseManager {
         warn!("=== AUTO-RESOLVE DEBUG: Starting for commit {} ===", commit_hash);
 
         // Check if there are actually conflicts
-        if !self.git_repo.has_conflicts()? {
-            warn!("AUTO-RESOLVE DEBUG: No conflicts detected by Git");
+        let has_conflicts = self.git_repo.has_conflicts()?;
+        warn!("AUTO-RESOLVE DEBUG: has_conflicts() = {}", has_conflicts);
+        
+        // CRITICAL DEBUG: Check working directory state
+        if let Ok(status_output) = std::process::Command::new("git")
+            .args(["status", "--short"])
+            .current_dir(self.git_repo.path())
+            .output()
+        {
+            let status_str = String::from_utf8_lossy(&status_output.stdout);
+            warn!("AUTO-RESOLVE DEBUG: git status --short:\n{}", status_str);
+        }
+        
+        // Check if cherry-pick is in progress
+        let cherry_pick_head = self.git_repo.path().join(".git").join("CHERRY_PICK_HEAD");
+        let cherry_pick_in_progress = cherry_pick_head.exists();
+        warn!("AUTO-RESOLVE DEBUG: CHERRY_PICK_HEAD exists = {}", cherry_pick_in_progress);
+        
+        if !has_conflicts {
+            warn!("AUTO-RESOLVE DEBUG: No conflicts detected by Git index");
+            warn!("AUTO-RESOLVE DEBUG: But cherry-pick may have failed - checking working directory...");
+            
+            // If cherry-pick is in progress but no conflicts detected, something is wrong
+            if cherry_pick_in_progress {
+                warn!("AUTO-RESOLVE DEBUG: CHERRY_PICK_HEAD exists but no conflicts in index!");
+                warn!("AUTO-RESOLVE DEBUG: This indicates a Git state issue - aborting cherry-pick");
+                
+                // Abort the cherry-pick to clean up
+                let _ = std::process::Command::new("git")
+                    .args(["cherry-pick", "--abort"])
+                    .current_dir(self.git_repo.path())
+                    .output();
+                
+                return Err(CascadeError::Branch(format!(
+                    "Cherry-pick failed for {} but Git index shows no conflicts. \
+                     This usually means the cherry-pick was aborted or failed in an unexpected way. \
+                     Please try manual resolution.",
+                    &commit_hash[..8]
+                )));
+            }
+            
             return Ok(true);
         }
 
