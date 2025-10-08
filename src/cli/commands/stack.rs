@@ -2236,6 +2236,14 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
         Ok(_) => {
             // Check the updated status
             if let Some(updated_stack) = updated_stack_manager.get_stack(&stack_id) {
+                // Check for empty stack first
+                if updated_stack.entries.is_empty() {
+                    println!(); // Spacing
+                    Output::info("Stack has no entries yet");
+                    Output::tip("Use 'ca push' to add commits to this stack");
+                    return Ok(());
+                }
+
                 match &updated_stack.status {
                     crate::stack::StackStatus::NeedsSync => {
                         // Load configuration for Bitbucket integration

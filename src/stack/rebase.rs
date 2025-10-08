@@ -265,6 +265,23 @@ impl RebaseManager {
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
         let mut branches_to_push: Vec<(String, String)> = Vec::new(); // (branch_name, pr_number)
 
+        // Handle empty stack early
+        if entry_count == 0 {
+            println!(); // Spacing
+            Output::info("Stack has no entries yet");
+            Output::tip("Use 'ca push' to add commits to this stack");
+            
+            result.summary = "Stack is empty".to_string();
+            
+            // Print success with summary (consistent with non-empty path)
+            println!(); // Spacing
+            Output::success(&result.summary);
+            
+            // Save metadata and return
+            self.stack_manager.save_to_disk()?;
+            return Ok(result);
+        }
+
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
         println!("Rebasing {} {}...", entry_count, plural);
@@ -671,7 +688,9 @@ impl RebaseManager {
         // CRITICAL: Return error if rebase failed
         // Don't return Ok(result) with result.success = false - that's confusing!
         if !result.success {
-            return Err(CascadeError::Branch("Rebase failed".to_string()));
+            // Include the detailed error message (which contains conflict info)
+            let detailed_error = result.error.as_deref().unwrap_or("Rebase failed");
+            return Err(CascadeError::Branch(detailed_error.to_string()));
         }
 
         Ok(result)

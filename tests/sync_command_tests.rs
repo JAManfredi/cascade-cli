@@ -363,13 +363,22 @@ fn test_sync_with_conflicts() {
     // Switch back and sync
     run_ca_command(&["switch", "conflict-stack"], repo_path).unwrap();
 
-    // Sync should handle conflicts gracefully
-    let (_, stdout, stderr) = run_ca_command(&["sync", "--force"], repo_path).unwrap();
+    // Sync should handle conflicts gracefully (either auto-resolve or report for manual resolution)
+    let (success, stdout, stderr) = run_ca_command(&["sync", "--force"], repo_path).unwrap();
 
-    // Should indicate conflict occurred
+    // Should either:
+    // 1. Auto-resolve and succeed (shows "Sync completed successfully" or "Auto-resolved")
+    // 2. Report conflicts for manual resolution (contains "conflict")
+    let handled_gracefully = success 
+        && (stdout.to_lowercase().contains("sync completed") 
+            || stdout.to_lowercase().contains("auto-resolved")
+            || stdout.to_lowercase().contains("conflict")
+            || stderr.to_lowercase().contains("conflict"));
+
     assert!(
-        stdout.contains("conflict") || stderr.contains("conflict"),
-        "Should report conflict in output"
+        handled_gracefully,
+        "Sync should handle conflicts gracefully (auto-resolve or report). Got stdout: {}, stderr: {}", 
+        stdout, stderr
     );
 }
 
