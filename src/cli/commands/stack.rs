@@ -1072,7 +1072,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     println!("\nPull Requests:");
                     for pr in &status.pull_requests {
                         let state_icon = match pr.state {
-                            crate::bitbucket::PullRequestState::Open => "○",
+                            crate::bitbucket::PullRequestState::Open => "→",
                             crate::bitbucket::PullRequestState::Merged => "✓",
                             crate::bitbucket::PullRequestState::Declined => "✗",
                         };
