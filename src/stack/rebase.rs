@@ -674,6 +674,16 @@ impl RebaseManager {
         // Save the updated stack metadata to disk
         self.stack_manager.save_to_disk()?;
 
+        // CRITICAL: Return error if rebase failed
+        // Don't return Ok(result) with result.success = false - that's confusing!
+        if !result.success {
+            return Err(CascadeError::Branch(
+                result
+                    .error
+                    .unwrap_or_else(|| "Rebase failed for unknown reason".to_string()),
+            ));
+        }
+
         Ok(result)
     }
 
