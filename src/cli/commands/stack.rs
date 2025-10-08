@@ -2163,16 +2163,15 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
     })?;
 
     let base_branch = active_stack.base_branch.clone();
-    let stack_name = active_stack.name.clone();
+    let _stack_name = active_stack.name.clone();
 
     // Save the original working branch before any checkouts
     let original_branch = git_repo.get_current_branch().ok();
 
-    // Single progress message for the entire sync operation
-    println!("Syncing stack '{stack_name}' with remote...");
+    // Sync starts silently - user will see the rebase output
 
     // Step 1: Pull latest changes from base branch (silent unless error)
-    match git_repo.checkout_branch(&base_branch) {
+    match git_repo.checkout_branch_silent(&base_branch) {
         Ok(_) => {
             match git_repo.pull(&base_branch) {
                 Ok(_) => {

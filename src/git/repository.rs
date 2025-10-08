@@ -414,7 +414,7 @@ impl GitRepository {
 
     /// Switch to a branch with force option to bypass safety checks
     pub fn checkout_branch_unsafe(&self, name: &str) -> Result<()> {
-        self.checkout_branch_with_options(name, true, true)
+        self.checkout_branch_with_options(name, true, false)
     }
 
     /// Internal branch checkout implementation with safety options

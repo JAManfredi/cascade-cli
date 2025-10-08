@@ -279,7 +279,7 @@ impl RebaseManager {
             temp_branches.push(temp_branch.clone()); // Track for cleanup
             self.git_repo
                 .create_branch(&temp_branch, Some(&current_base))?;
-            self.git_repo.checkout_branch(&temp_branch)?;
+            self.git_repo.checkout_branch_silent(&temp_branch)?;
 
             // Cherry-pick the commit onto the temp branch (NOT the protected base!)
             match self.cherry_pick_commit(&entry.commit_hash) {
@@ -533,12 +533,7 @@ impl RebaseManager {
         let skipped_count = entry_count - pushed_count;
 
         if !branches_to_push.is_empty() {
-            println!(); // Spacing before push phase
-            println!(
-                "Pushing {} branch{} to remote...",
-                pushed_count,
-                if pushed_count == 1 { "" } else { "es" }
-            );
+            // Push branches silently - user will see the summary
 
             for (branch_name, _pr_num) in &branches_to_push {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
