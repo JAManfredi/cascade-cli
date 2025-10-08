@@ -324,12 +324,11 @@ impl RebaseManager {
                     current_base = original_branch.clone();
                 }
                 Err(e) => {
-                    println!(); // Spacing before error
-                    // Just show the error, don't prepend "Conflict in X:"
-                    Output::error(e.to_string());
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
+                        println!(); // Spacing before error
+                        Output::error(e.to_string());
                         result.success = false;
                         result.error = Some(format!(
                             "Conflict in {}: {}\n\n\
