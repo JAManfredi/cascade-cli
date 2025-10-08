@@ -2080,13 +2080,15 @@ async fn continue_sync() -> Result<()> {
 
     Output::success("Cherry-pick continued successfully");
     println!();
-
-    // Automatically continue with the full sync to complete the rebase
-    Output::info("Resuming sync to complete the rebase...");
+    
+    // Now the user needs to manually finalize the rebase
+    Output::info("The cherry-pick is complete. To finish the rebase:");
+    println!("  1. Make sure you're on your working branch");
+    println!("  2. Run: ca sync");
     println!();
+    Output::tip("This will continue rebasing remaining entries and push updates");
 
-    // Call sync_stack with the same defaults as a normal sync
-    sync_stack(false, false, false).await
+    Ok(())
 }
 
 async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()> {

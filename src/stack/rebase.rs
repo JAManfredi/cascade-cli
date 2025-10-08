@@ -325,7 +325,8 @@ impl RebaseManager {
                 }
                 Err(e) => {
                     println!(); // Spacing before error
-                    Output::error(format!("Conflict in {}: {}", &entry.commit_hash[..8], e));
+                    // Just show the error, don't prepend "Conflict in X:"
+                    Output::error(e.to_string());
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
@@ -629,9 +630,8 @@ impl RebaseManager {
         println!(); // Spacing after tree
         if result.success {
             Output::success(&result.summary);
-        } else {
-            Output::error(format!("Rebase failed: {:?}", result.error));
         }
+        // If not successful, error was already displayed during the rebase loop
 
         // Save the updated stack metadata to disk
         self.stack_manager.save_to_disk()?;
