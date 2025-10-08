@@ -365,7 +365,7 @@ impl RebaseManager {
                             if !fully_resolved {
                                 result.success = false;
                                 result.error = Some(format!(
-                                    "Conflicts in commit {} require manual resolution.\n\n\
+                                    "Conflicts in commit {}\n\n\
                                     To resolve:\n\
                                     1. Fix conflicts in your editor\n\
                                     2. Run: ca sync --continue\n\n\
@@ -629,8 +629,14 @@ impl RebaseManager {
         println!(); // Spacing after tree
         if result.success {
             Output::success(&result.summary);
+        } else {
+            // Display error with proper icon
+            let error_msg = result
+                .error
+                .as_deref()
+                .unwrap_or("Rebase failed for unknown reason");
+            Output::error(error_msg);
         }
-        // If not successful, error was already displayed during the rebase loop
 
         // Save the updated stack metadata to disk
         self.stack_manager.save_to_disk()?;
@@ -638,11 +644,7 @@ impl RebaseManager {
         // CRITICAL: Return error if rebase failed
         // Don't return Ok(result) with result.success = false - that's confusing!
         if !result.success {
-            return Err(CascadeError::Branch(
-                result
-                    .error
-                    .unwrap_or_else(|| "Rebase failed for unknown reason".to_string()),
-            ));
+            return Err(CascadeError::Branch("Rebase failed".to_string()));
         }
 
         Ok(result)
