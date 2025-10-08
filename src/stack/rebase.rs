@@ -398,8 +398,36 @@ impl RebaseManager {
                             // Commit the resolved changes
                             let commit_message =
                                 format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
+                            
+                            // DEBUG: Check what's staged before committing
+                            warn!("AUTO-RESOLVE DEBUG: About to commit. Checking staged files...");
+                            if let Ok(status) = std::process::Command::new("git")
+                                .args(["diff", "--cached", "--stat"])
+                                .current_dir(self.git_repo.path())
+                                .output()
+                            {
+                                let stat_output = String::from_utf8_lossy(&status.stdout);
+                                warn!("AUTO-RESOLVE DEBUG: Staged changes:\n{}", stat_output);
+                            }
+                            
                             match self.git_repo.commit(&commit_message) {
                                 Ok(new_commit_id) => {
+                                    warn!(
+                                        "AUTO-RESOLVE DEBUG: Created commit {} with message '{}'",
+                                        &new_commit_id[..8],
+                                        commit_message
+                                    );
+                                    
+                                    // DEBUG: Check what's in the commit
+                                    if let Ok(show) = std::process::Command::new("git")
+                                        .args(["show", "--stat", &new_commit_id])
+                                        .current_dir(self.git_repo.path())
+                                        .output()
+                                    {
+                                        let show_output = String::from_utf8_lossy(&show.stdout);
+                                        warn!("AUTO-RESOLVE DEBUG: Commit contents:\n{}", show_output);
+                                    }
+                                    
                                     Output::success("Auto-resolved conflicts");
                                     result.new_commits.push(new_commit_id.clone());
                                     let rebased_commit_id = new_commit_id;
@@ -682,21 +710,23 @@ impl RebaseManager {
 
     /// Attempt to automatically resolve conflicts
     fn auto_resolve_conflicts(&self, commit_hash: &str) -> Result<bool> {
-        debug!("Attempting to auto-resolve conflicts for {}", commit_hash);
+        warn!("=== AUTO-RESOLVE DEBUG: Starting for commit {} ===", commit_hash);
 
         // Check if there are actually conflicts
         if !self.git_repo.has_conflicts()? {
+            warn!("AUTO-RESOLVE DEBUG: No conflicts detected by Git");
             return Ok(true);
         }
 
         let conflicted_files = self.git_repo.get_conflicted_files()?;
 
         if conflicted_files.is_empty() {
+            warn!("AUTO-RESOLVE DEBUG: Conflicted files list is empty");
             return Ok(true);
         }
 
-        info!(
-            "Found conflicts in {} files: {:?}",
+        warn!(
+            "AUTO-RESOLVE DEBUG: Found conflicts in {} files: {:?}",
             conflicted_files.len(),
             conflicted_files
         );
@@ -721,6 +751,13 @@ impl RebaseManager {
         let mut failed_files = Vec::new();
 
         for file_analysis in &analysis.files {
+            warn!(
+                "AUTO-RESOLVE DEBUG: Processing file: {} (auto_resolvable: {}, conflicts: {})",
+                file_analysis.file_path,
+                file_analysis.auto_resolvable,
+                file_analysis.conflicts.len()
+            );
+
             if file_analysis.auto_resolvable {
                 match self.resolve_file_conflicts_enhanced(
                     &file_analysis.file_path,
@@ -728,19 +765,22 @@ impl RebaseManager {
                 ) {
                     Ok(ConflictResolution::Resolved) => {
                         resolved_count += 1;
-                        resolved_files.push(file_analysis.file_path.clone()); // Track successful resolution
-                        info!("✅ Auto-resolved conflicts in {}", file_analysis.file_path);
+                        resolved_files.push(file_analysis.file_path.clone());
+                        warn!(
+                            "AUTO-RESOLVE DEBUG: Successfully resolved {}",
+                            file_analysis.file_path
+                        );
                     }
                     Ok(ConflictResolution::TooComplex) => {
-                        debug!(
-                            "⚠️  Conflicts in {} are too complex for auto-resolution",
+                        warn!(
+                            "AUTO-RESOLVE DEBUG: {} too complex for auto-resolution",
                             file_analysis.file_path
                         );
                         failed_files.push(file_analysis.file_path.clone());
                     }
                     Err(e) => {
                         warn!(
-                            "❌ Failed to resolve conflicts in {}: {}",
+                            "AUTO-RESOLVE DEBUG: Failed to resolve {}: {}",
                             file_analysis.file_path, e
                         );
                         failed_files.push(file_analysis.file_path.clone());
@@ -748,8 +788,8 @@ impl RebaseManager {
                 }
             } else {
                 failed_files.push(file_analysis.file_path.clone());
-                info!(
-                    "⚠️  {} requires manual resolution ({} conflicts)",
+                warn!(
+                    "AUTO-RESOLVE DEBUG: {} requires manual resolution ({} conflicts)",
                     file_analysis.file_path,
                     file_analysis.conflicts.len()
                 );
@@ -757,29 +797,39 @@ impl RebaseManager {
         }
 
         if resolved_count > 0 {
-            info!(
-                "🎉 Auto-resolved conflicts in {}/{} files",
+            warn!(
+                "AUTO-RESOLVE DEBUG: Resolved {}/{} files",
                 resolved_count,
                 conflicted_files.len()
             );
+            warn!("AUTO-RESOLVE DEBUG: Resolved files: {:?}", resolved_files);
 
             // CRITICAL: Only stage files that were successfully resolved
             // This prevents staging files that still have conflict markers
             let file_paths: Vec<&str> = resolved_files.iter().map(|s| s.as_str()).collect();
+            warn!("AUTO-RESOLVE DEBUG: Staging {} files", file_paths.len());
             self.git_repo.stage_files(&file_paths)?;
+            warn!("AUTO-RESOLVE DEBUG: Files staged successfully");
+        } else {
+            warn!("AUTO-RESOLVE DEBUG: No files were resolved (resolved_count = 0)");
         }
 
         // Return true only if ALL conflicts were resolved
         let all_resolved = failed_files.is_empty();
 
+        warn!(
+            "AUTO-RESOLVE DEBUG: all_resolved = {}, failed_files = {:?}",
+            all_resolved, failed_files
+        );
+
         if !all_resolved {
-            info!(
-                "⚠️  {} files still need manual resolution: {:?}",
-                failed_files.len(),
-                failed_files
+            warn!(
+                "AUTO-RESOLVE DEBUG: {} files still need manual resolution",
+                failed_files.len()
             );
         }
 
+        warn!("AUTO-RESOLVE DEBUG: Returning all_resolved = {}", all_resolved);
         Ok(all_resolved)
     }
 
@@ -847,30 +897,40 @@ impl RebaseManager {
             let remaining_conflicts = self.parse_conflict_markers(&content)?;
 
             if remaining_conflicts.is_empty() {
+                warn!(
+                    "AUTO-RESOLVE DEBUG: All conflicts resolved in {}, content length: {} bytes",
+                    file_path,
+                    content.len()
+                );
+
                 // CRITICAL SAFETY CHECK: Don't write empty files!
                 if content.trim().is_empty() {
                     warn!(
-                        "SAFETY: Resolved content for {} is empty! This would delete the file. Aborting auto-resolve.",
+                        "AUTO-RESOLVE DEBUG: SAFETY CHECK TRIGGERED! Resolved content for {} is empty! Aborting.",
                         file_path
                     );
                     return Ok(ConflictResolution::TooComplex);
                 }
 
                 // SAFETY: Create backup before writing resolved content
-                // This allows recovery if auto-resolution is incorrect
                 let backup_path = full_path.with_extension("cascade-backup");
                 if let Ok(original_content) = std::fs::read_to_string(&full_path) {
+                    warn!(
+                        "AUTO-RESOLVE DEBUG: Backup for {} (original: {} bytes, resolved: {} bytes)",
+                        file_path,
+                        original_content.len(),
+                        content.len()
+                    );
                     let _ = std::fs::write(&backup_path, original_content);
-                    debug!("Created backup at {:?}", backup_path);
                 }
 
                 // All conflicts resolved - write the file back atomically
                 crate::utils::atomic_file::write_string(&full_path, &content)?;
 
-                debug!(
-                    "Successfully resolved all conflicts in {} ({} bytes written)",
-                    file_path,
-                    content.len()
+                warn!(
+                    "AUTO-RESOLVE DEBUG: Wrote {} bytes to {}",
+                    content.len(),
+                    file_path
                 );
                 return Ok(ConflictResolution::Resolved);
             } else {
