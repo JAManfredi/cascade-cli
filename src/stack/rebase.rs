@@ -610,8 +610,49 @@ impl RebaseManager {
                 if let Some(last_entry) = stack.entries.last() {
                     let top_branch = &last_entry.branch;
 
-                    // Force-update working branch to point to same commit as top entry
-                    if let Ok(top_commit) = self.git_repo.get_branch_head(top_branch) {
+                    // SAFETY CHECK: Detect if working branch has commits beyond the last stack entry
+                    // If it does, we need to preserve them - don't force-update the working branch
+                    if let (Ok(working_head), Ok(top_commit)) = (
+                        self.git_repo.get_branch_head(orig_branch),
+                        self.git_repo.get_branch_head(top_branch),
+                    ) {
+                        // Check if working branch is ahead of top stack entry
+                        if working_head != top_commit {
+                            // Get commits between top of stack and working branch head
+                            if let Ok(commits) = self.git_repo.get_commits_between(&top_commit, &working_head) {
+                                if !commits.is_empty() {
+                                    // Working branch has extra commits!
+                                    Output::error(format!(
+                                        "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
+                                        orig_branch,
+                                        commits.len()
+                                    ));
+                                    println!();
+                                    Output::sub_item("These commits would be lost if we proceed:");
+                                    for (i, commit) in commits.iter().take(5).enumerate() {
+                                        let message = commit.summary().unwrap_or("(no message)");
+                                        Output::sub_item(format!("  {}. {} - {}", i + 1, &commit.id().to_string()[..8], message));
+                                    }
+                                    if commits.len() > 5 {
+                                        Output::sub_item(format!("  ... and {} more", commits.len() - 5));
+                                    }
+                                    println!();
+                                    Output::tip("Add these commits to the stack first:");
+                                    Output::bullet(format!("Run: ca stack push"));
+                                    Output::bullet(format!("Then run: ca sync"));
+                                    println!();
+                                    
+                                    return Err(CascadeError::validation(
+                                        format!(
+                                            "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
+                                            orig_branch, commits.len()
+                                        )
+                                    ));
+                                }
+                            }
+                        }
+
+                        // Safe to update - working branch matches top of stack or is behind
                         debug!(
                             "Updating working branch '{}' to match top of stack ({})",
                             orig_branch,
