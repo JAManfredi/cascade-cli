@@ -373,16 +373,24 @@ impl StackManager {
         }
 
         // Check for duplicate commit messages within the same stack
-        if let Some(duplicate_entry) = stack.entries.iter().find(|entry| entry.message == message) {
+        // Trim both messages for comparison to handle trailing whitespace/newlines
+        let message_trimmed = message.trim();
+        if let Some(duplicate_entry) = stack
+            .entries
+            .iter()
+            .find(|entry| entry.message.trim() == message_trimmed)
+        {
             return Err(CascadeError::validation(format!(
-                "Duplicate commit message in stack: \"{message}\"\n\n\
+                "Duplicate commit message in stack: \"{}\"\n\n\
                  This message already exists in entry {} (commit: {})\n\n\
                  💡 Consider using a more specific message:\n\
-                    • Add context: \"{message} - add validation\"\n\
+                    • Add context: \"{} - add validation\"\n\
                     • Be more specific: \"Fix user authentication timeout bug\"\n\
                     • Or amend the previous commit: git commit --amend",
+                message_trimmed,
                 duplicate_entry.id,
-                &duplicate_entry.commit_hash[..8]
+                &duplicate_entry.commit_hash[..8],
+                message_trimmed
             )));
         }
 
