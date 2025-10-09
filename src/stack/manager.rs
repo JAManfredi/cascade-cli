@@ -1059,10 +1059,7 @@ impl StackManager {
 
         // Show detected modifications
         println!();
-        Output::section(format!(
-            "Branch modifications detected in '{}'",
-            stack.name
-        ));
+        Output::section(format!("Branch modifications detected in '{}'", stack.name));
         for (i, modification) in modifications.iter().enumerate() {
             match modification {
                 BranchModification::Missing { branch, .. } => {
@@ -1129,7 +1126,7 @@ impl StackManager {
         }
 
         self.save_to_disk()?;
-        
+
         // Show appropriate summary based on what was done
         if skipped_count == 0 {
             Output::success("All branch modifications resolved");
@@ -1141,7 +1138,7 @@ impl StackManager {
         } else {
             Output::warning("All modifications skipped - integrity issues remain");
         }
-        
+
         Ok(())
     }
 

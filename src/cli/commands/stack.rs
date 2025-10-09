@@ -2782,7 +2782,10 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
                 Output::success(format!("Stack '{}' structure validation passed", name));
             }
             Err(e) => {
-                Output::error(format!("Stack '{}' structure validation failed: {}", name, e));
+                Output::error(format!(
+                    "Stack '{}' structure validation failed: {}",
+                    name, e
+                ));
                 return Err(CascadeError::config(e));
             }
         }
