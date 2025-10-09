@@ -367,15 +367,13 @@ impl Stack {
                 Ok(branch_head) => {
                     if branch_head != entry.commit_hash {
                         issues.push(format!(
-                            "🚨 BRANCH MODIFICATION DETECTED: Branch '{}' has been manually modified!\n   \
+                            "Branch '{}' has diverged from stack metadata\n   \
                              Expected commit: {} (from stack entry)\n   \
                              Actual commit:   {} (current branch HEAD)\n   \
-                             💡 Someone may have checked out '{}' and added commits.\n   \
-                             This breaks stack integrity!",
+                             The branch may have been modified outside of cascade",
                             entry.branch,
                             &entry.commit_hash[..8],
-                            &branch_head[..8],
-                            entry.branch
+                            &branch_head[..8]
                         ));
                     }
                 }

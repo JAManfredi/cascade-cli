@@ -316,18 +316,51 @@ impl StackManager {
             .active_stack_id
             .ok_or_else(|| CascadeError::config("No active stack"))?;
 
+        // 🆕 RECONCILE METADATA: Sync entry commit hashes with current branch HEADs before validation
+        // This prevents false "branch modification" errors from stale metadata (e.g., after ca sync)
+        let mut reconciled = false;
+        {
+            let stack = self
+                .stacks
+                .get_mut(&stack_id)
+                .ok_or_else(|| CascadeError::config("Active stack not found"))?;
+
+            if !stack.entries.is_empty() {
+                for entry in &mut stack.entries {
+                    if let Ok(current_commit) = self.repo.get_branch_head(&entry.branch) {
+                        if entry.commit_hash != current_commit {
+                            debug!(
+                                "Reconciling stale metadata for '{}': updating hash from {} to {} (current branch HEAD)",
+                                entry.branch,
+                                &entry.commit_hash[..8],
+                                &current_commit[..8]
+                            );
+                            entry.commit_hash = current_commit;
+                            reconciled = true;
+                        }
+                    }
+                }
+            }
+        } // End of reconciliation scope - stack borrow dropped here
+        
+        // Save reconciled metadata before validation
+        if reconciled {
+            debug!("Saving reconciled metadata before validation");
+            self.save_to_disk()?;
+        }
+
+        // 🆕 VALIDATE GIT INTEGRITY BEFORE PUSHING (after reconciliation)
         let stack = self
             .stacks
             .get_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Active stack not found"))?;
 
-        // 🆕 VALIDATE GIT INTEGRITY BEFORE PUSHING (if stack is not empty)
         if !stack.entries.is_empty() {
             if let Err(integrity_error) = stack.validate_git_integrity(&self.repo) {
                 return Err(CascadeError::validation(format!(
-                    "Cannot push to corrupted stack '{}':\n{}\n\n\
-                     💡 Fix the stack integrity issues first using 'ca stack validate {}' for details.",
-                    stack.name, integrity_error, stack.name
+                    "Git integrity validation failed:\n{}\n\n\
+                     Fix the stack integrity issues first using 'ca stack validate {}' for details.",
+                    integrity_error, stack.name
                 )));
             }
         }
