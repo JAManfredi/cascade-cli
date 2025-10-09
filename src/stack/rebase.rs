@@ -1284,6 +1284,11 @@ impl RebaseManager {
             // CRITICAL: Keep the original branch name to preserve PR mapping
             // Only update the commit hash to point to the new rebased commit
             entry.commit_hash = new_commit_hash.to_string();
+            
+            // Also update entry_map to keep it in sync
+            if let Some(map_entry) = stack.entry_map.get_mut(entry_id) {
+                map_entry.commit_hash = new_commit_hash.to_string();
+            }
 
             // Note: Stack will be saved by the caller (StackManager) after rebase completes
 

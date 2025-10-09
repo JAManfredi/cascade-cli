@@ -1312,6 +1312,7 @@ impl StackManager {
         if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == entry_id) {
             let new_head = self.repo.get_branch_head(branch)?;
             let old_commit = entry.commit_hash[..8].to_string(); // Clone to avoid borrowing issue
+            let entry_id = entry.id; // Save for later
 
             // Get the extra commits for message update
             let extra_commits = self
@@ -1322,6 +1323,11 @@ impl StackManager {
             // Note: We intentionally do NOT append commit messages here
             // The entry's message should describe the feature/change, not list all commits
             entry.commit_hash = new_head.clone();
+            
+            // Also update entry_map to keep it in sync
+            if let Some(map_entry) = stack.entry_map.get_mut(&entry_id) {
+                map_entry.commit_hash = new_head.clone();
+            }
 
             Output::success(format!(
                 "Incorporated {} commit(s) into entry '{}'",
