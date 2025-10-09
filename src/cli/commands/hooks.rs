@@ -1155,8 +1155,8 @@ exit 0
                  set COMMIT_MSG_FILE=%1\n\
                  set COMMIT_SOURCE=%2\n\
                  set COMMIT_SHA=%3\n\n\
-                 rem Only modify message if it's a regular commit (not merge, template, etc.)\n\
-                 if not \"%COMMIT_SOURCE%\"==\"\" if not \"%COMMIT_SOURCE%\"==\"message\" exit /b 0\n\n\
+                 rem Skip if user provided message via -m flag, merge commit, etc.\n\
+                 if not \"%COMMIT_SOURCE%\"==\"\" exit /b 0\n\n\
                  rem Find repository root and check if Cascade is initialized\n\
                  for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
@@ -1209,8 +1209,8 @@ exit 0
                  COMMIT_MSG_FILE=\"$1\"\n\
                  COMMIT_SOURCE=\"$2\"\n\
                  COMMIT_SHA=\"$3\"\n\n\
-                 # Only modify message if it's a regular commit (not merge, template, etc.)\n\
-                 if [ \"$COMMIT_SOURCE\" != \"\" ] && [ \"$COMMIT_SOURCE\" != \"message\" ]; then\n\
+                 # Skip if user provided message via -m flag, merge commit, etc.\n\
+                 if [ \"$COMMIT_SOURCE\" != \"\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
                  # Find repository root and check if Cascade is initialized\n\
