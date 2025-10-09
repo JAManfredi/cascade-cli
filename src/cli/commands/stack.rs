@@ -1090,7 +1090,8 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     }
                 }
 
-                println!("\n💡 Use 'ca stack --mergeable' to see detailed status including build and review information");
+                println!();
+                Output::tip("Use 'ca stack --mergeable' to see detailed status including build and review information");
             }
             Err(e) => {
                 warn!("Failed to check stack status: {}", e);

@@ -8,7 +8,7 @@ use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use tracing::debug;
 use uuid::Uuid;
 
 /// Types of branch modifications detected during Git integrity checks
@@ -1010,7 +1010,7 @@ impl StackManager {
             .get_mut(stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
-        info!("Checking Git integrity for stack '{}'", stack.name);
+        debug!("Checking Git integrity for stack '{}'", stack.name);
 
         // Detect all modifications
         let mut modifications = Vec::new();
@@ -1053,16 +1053,14 @@ impl StackManager {
         }
 
         if modifications.is_empty() {
-            Output::success(format!(
-                "Stack '{}' has no Git integrity issues",
-                stack.name
-            ));
+            // Silent success - no issues to report
             return Ok(());
         }
 
         // Show detected modifications
-        Output::check_start(format!(
-            "Detected branch modifications in stack '{}':",
+        println!();
+        Output::section(format!(
+            "Branch modifications detected in '{}'",
             stack.name
         ));
         for (i, modification) in modifications.iter().enumerate() {
@@ -1119,35 +1117,56 @@ impl StackManager {
         }
 
         // Interactive mode - ask user for each modification
-        for modification in modifications {
-            self.handle_single_modification(stack_id, &modification)?;
+        let mut handled_count = 0;
+        let mut skipped_count = 0;
+        for modification in modifications.iter() {
+            let was_skipped = self.handle_single_modification(stack_id, modification)?;
+            if was_skipped {
+                skipped_count += 1;
+            } else {
+                handled_count += 1;
+            }
         }
 
         self.save_to_disk()?;
-        Output::success("All branch modifications handled successfully!");
+        
+        // Show appropriate summary based on what was done
+        if skipped_count == 0 {
+            Output::success("All branch modifications resolved");
+        } else if handled_count > 0 {
+            Output::warning(format!(
+                "Resolved {} modification(s), {} skipped",
+                handled_count, skipped_count
+            ));
+        } else {
+            Output::warning("All modifications skipped - integrity issues remain");
+        }
+        
         Ok(())
     }
 
     /// Handle a single branch modification interactively
+    /// Returns true if the modification was skipped, false if handled
     fn handle_single_modification(
         &mut self,
         stack_id: &Uuid,
         modification: &BranchModification,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         match modification {
             BranchModification::Missing {
                 branch,
                 expected_commit,
                 ..
             } => {
-                Output::info(format!("🔧 Missing branch '{branch}'"));
+                Output::info(format!("Missing branch '{branch}'"));
                 Output::sub_item(format!(
-                    "This will create the branch at commit {}",
+                    "Will create the branch at commit {}",
                     &expected_commit[..8]
                 ));
 
                 self.repo.create_branch(branch, Some(expected_commit))?;
                 Output::success(format!("Created branch '{branch}'"));
+                Ok(false) // Not skipped
             }
 
             BranchModification::ExtraCommits {
@@ -1157,14 +1176,16 @@ impl StackManager {
                 extra_commit_count,
                 ..
             } => {
+                println!();
                 Output::info(format!(
-                    "🤔 Branch '{branch}' has {extra_commit_count} extra commit(s). What would you like to do?"
+                    "Branch '{}' has {} extra commit(s)",
+                    branch, extra_commit_count
                 ));
                 let options = vec![
-                    "📝 Incorporate - Update stack entry to include extra commits",
-                    "➕ Split - Create new stack entry for extra commits",
-                    "🗑️  Reset - Remove extra commits (DESTRUCTIVE)",
-                    "⏭️  Skip - Leave as-is for now",
+                    "Incorporate - Update stack entry to include extra commits",
+                    "Split - Create new stack entry for extra commits",
+                    "Reset - Remove extra commits (DESTRUCTIVE)",
+                    "Skip - Leave as-is for now",
                 ];
 
                 let choice = Select::with_theme(&ColorfulTheme::default())
@@ -1177,26 +1198,27 @@ impl StackManager {
                 match choice {
                     0 => {
                         self.incorporate_extra_commits(stack_id, *entry_id, branch)?;
+                        Ok(false) // Not skipped
                     }
                     1 => {
                         self.split_extra_commits(stack_id, *entry_id, branch)?;
+                        Ok(false) // Not skipped
                     }
                     2 => {
                         self.reset_branch_destructive(branch, expected_commit)?;
+                        Ok(false) // Not skipped
                     }
                     3 => {
-                        Output::sub_item(format!(
-                            "⏭️  Skipping '{branch}' (integrity issue remains)"
-                        ));
+                        Output::warning(format!("Skipped '{branch}' - integrity issue remains"));
+                        Ok(true) // Skipped
                     }
                     _ => {
-                        Output::sub_item(format!("❌ Invalid choice. Skipping '{branch}'"));
+                        Output::warning(format!("Invalid choice - skipped '{branch}'"));
+                        Ok(true) // Skipped
                     }
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Apply automatic fix based on mode
