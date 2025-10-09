@@ -1274,21 +1274,24 @@ impl RebaseManager {
             .get_stack_mut(&stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
-        // Find and update the entry
-        if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == *entry_id) {
+        // Get entry info before mutation
+        let entry_exists = stack.entries.iter().any(|e| e.id == *entry_id);
+        
+        if entry_exists {
+            let old_hash = stack.entries.iter()
+                .find(|e| e.id == *entry_id)
+                .map(|e| e.commit_hash.clone())
+                .unwrap();
+            
             debug!(
-                "Found entry {} - updating commit from '{}' to '{}' (keeping original branch '{}')",
-                entry_id, entry.commit_hash, new_commit_hash, entry.branch
+                "Found entry {} - updating commit from '{}' to '{}' (keeping original branch)",
+                entry_id, old_hash, new_commit_hash
             );
 
             // CRITICAL: Keep the original branch name to preserve PR mapping
-            // Only update the commit hash to point to the new rebased commit
-            entry.commit_hash = new_commit_hash.to_string();
-            
-            // Also update entry_map to keep it in sync
-            if let Some(map_entry) = stack.entry_map.get_mut(entry_id) {
-                map_entry.commit_hash = new_commit_hash.to_string();
-            }
+            // Only update the commit hash to point to the new rebased commit using safe wrapper
+            stack.update_entry_commit_hash(entry_id, new_commit_hash.to_string())
+                .map_err(|e| CascadeError::config(e))?;
 
             // Note: Stack will be saved by the caller (StackManager) after rebase completes
 

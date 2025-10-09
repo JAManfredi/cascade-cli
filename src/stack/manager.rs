@@ -326,7 +326,9 @@ impl StackManager {
                 .ok_or_else(|| CascadeError::config("Active stack not found"))?;
 
             if !stack.entries.is_empty() {
-                for entry in &mut stack.entries {
+                // Collect updates first to avoid borrow checker issues
+                let mut updates = Vec::new();
+                for entry in &stack.entries {
                     if let Ok(current_commit) = self.repo.get_branch_head(&entry.branch) {
                         if entry.commit_hash != current_commit {
                             debug!(
@@ -335,16 +337,16 @@ impl StackManager {
                                 &entry.commit_hash[..8],
                                 &current_commit[..8]
                             );
-                            entry.commit_hash = current_commit.clone();
-                            
-                            // Also update entry_map to keep it in sync
-                            if let Some(map_entry) = stack.entry_map.get_mut(&entry.id) {
-                                map_entry.commit_hash = current_commit;
-                            }
-                            
-                            reconciled = true;
+                            updates.push((entry.id, current_commit));
                         }
                     }
+                }
+                
+                // Apply updates using the safe wrapper function
+                for (entry_id, new_hash) in updates {
+                    stack.update_entry_commit_hash(&entry_id, new_hash)
+                        .map_err(|e| CascadeError::config(e))?;
+                    reconciled = true;
                 }
             }
         } // End of reconciliation scope - stack borrow dropped here
@@ -1309,30 +1311,30 @@ impl StackManager {
             .get_mut(stack_id)
             .ok_or_else(|| CascadeError::config(format!("Stack not found: {}", stack_id)))?;
 
-        if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == entry_id) {
+        // Find entry and get info we need before mutation
+        let entry_info = stack.entries.iter()
+            .find(|e| e.id == entry_id)
+            .map(|e| (e.commit_hash.clone(), e.id));
+        
+        if let Some((old_commit_hash, entry_id)) = entry_info {
             let new_head = self.repo.get_branch_head(branch)?;
-            let old_commit = entry.commit_hash[..8].to_string(); // Clone to avoid borrowing issue
-            let entry_id = entry.id; // Save for later
+            let old_commit = old_commit_hash[..8].to_string();
 
             // Get the extra commits for message update
             let extra_commits = self
                 .repo
-                .get_commits_between(&entry.commit_hash, &new_head)?;
+                .get_commits_between(&old_commit_hash, &new_head)?;
 
-            // Update the entry to point to the new HEAD
+            // Update the entry to point to the new HEAD using safe wrapper
             // Note: We intentionally do NOT append commit messages here
             // The entry's message should describe the feature/change, not list all commits
-            entry.commit_hash = new_head.clone();
-            
-            // Also update entry_map to keep it in sync
-            if let Some(map_entry) = stack.entry_map.get_mut(&entry_id) {
-                map_entry.commit_hash = new_head.clone();
-            }
+            stack.update_entry_commit_hash(&entry_id, new_head.clone())
+                .map_err(|e| CascadeError::config(e))?;
 
             Output::success(format!(
                 "Incorporated {} commit(s) into entry '{}'",
                 extra_commits.len(),
-                entry.short_hash()
+                &new_head[..8]
             ));
             Output::sub_item(format!("Updated: {} -> {}", old_commit, &new_head[..8]));
         }
