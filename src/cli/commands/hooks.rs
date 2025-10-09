@@ -789,27 +789,27 @@ impl HooksManager {
                  for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
                  if not exist \"%REPO_ROOT%\\.cascade\" (\n\
-                     echo ℹ️ Cascade not initialized, skipping stack management\n\
-                     echo 💡 Run 'ca init' to start using stacked diffs\n\
+                     echo \"Cascade not initialized, skipping stack management\"\n\
+                     echo \"Run 'ca init' to start using stacked diffs\"\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Check if there's an active stack\n\
                  \"{cascade_cli}\" stack list --active >nul 2>&1\n\
                  if %ERRORLEVEL% neq 0 (\n\
-                     echo ℹ️ No active stack found, commit will not be added to any stack\n\
-                     echo 💡 Use 'ca stack create ^<name^>' to create a stack for this commit\n\
+                     echo \"No active stack found, commit will not be added to any stack\"\n\
+                     echo \"Tip: Use 'ca stack create ^<name^>' to create a stack for this commit\"\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Add commit to active stack\n\
-                 echo 🪝 Adding commit to active stack...\n\
-                 echo 📝 Commit: %COMMIT_MSG%\n\
+                 echo \"Adding commit to active stack...\"\n\
+                 echo \"Commit: %COMMIT_MSG%\"\n\
                  \"{cascade_cli}\" stack push --commit \"%COMMIT_HASH%\" --message \"%COMMIT_MSG%\"\n\
                  if %ERRORLEVEL% equ 0 (\n\
-                     echo ✅ Commit added to stack successfully\n\
-                     echo 💡 Next: 'ca submit' to create PRs when ready\n\
+                     echo \"Commit added to stack successfully\"\n\
+                     echo \"Next: 'ca submit' to create PRs when ready\"\n\
                  ) else (\n\
-                     echo ⚠️ Failed to add commit to stack\n\
-                     echo 💡 You can manually add it with: ca push --commit %COMMIT_HASH%\n\
+                     echo \"Failed to add commit to stack\"\n\
+                     echo \"Tip: You can manually add it with: ca push --commit %COMMIT_HASH%\"\n\
                  )\n"
             )
         }
@@ -827,25 +827,25 @@ impl HooksManager {
                  # Find repository root and check if Cascade is initialized\n\
                  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
                  if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
-                     echo \"ℹ️ Cascade not initialized, skipping stack management\"\n\
-                     echo \"💡 Run 'ca init' to start using stacked diffs\"\n\
+                     echo \"Cascade not initialized, skipping stack management\"\n\
+                     echo \"Run 'ca init' to start using stacked diffs\"\n\
                      exit 0\n\
                  fi\n\n\
                  # Check if there's an active stack\n\
                  if ! \"{cascade_cli}\" stack list --active > /dev/null 2>&1; then\n\
-                     echo \"ℹ️ No active stack found, commit will not be added to any stack\"\n\
-                     echo \"💡 Use 'ca stack create <name>' to create a stack for this commit\"\n\
+                     echo \"No active stack found, commit will not be added to any stack\"\n\
+                     echo \"Tip: Use 'ca stack create <name>' to create a stack for this commit\"\n\
                      exit 0\n\
                  fi\n\n\
                  # Add commit to active stack (using specific commit targeting)\n\
-                 echo \"🪝 Adding commit to active stack...\"\n\
-                 echo \"📝 Commit: $COMMIT_MSG\"\n\
+                 echo \"Adding commit to active stack...\"\n\
+                 echo \"Commit: $COMMIT_MSG\"\n\
                  if \"{cascade_cli}\" stack push --commit \"$COMMIT_HASH\" --message \"$COMMIT_MSG\"; then\n\
-                     echo \"✅ Commit added to stack successfully\"\n\
-                     echo \"💡 Next: 'ca submit' to create PRs when ready\"\n\
+                     echo \"Commit added to stack successfully\"\n\
+                     echo \"Next: 'ca submit' to create PRs when ready\"\n\
                  else\n\
-                     echo \"⚠️ Failed to add commit to stack\"\n\
-                     echo \"💡 You can manually add it with: ca push --commit $COMMIT_HASH\"\n\
+                     echo \"Failed to add commit to stack\"\n\
+                     echo \"Tip: You can manually add it with: ca push --commit $COMMIT_HASH\"\n\
                  fi\n"
             )
         }
@@ -1368,7 +1368,7 @@ exit 0
                     • Complicate the commit history\n\
                     • Interfere with team collaboration\n\
                     • Break CI/CD workflows\n\n\
-                    💡 Recommended workflow:\n\
+                    Recommended workflow:\n\
                     1. Create a feature branch: git checkout -b feature/my-feature\n\
                     2. Install hooks: ca hooks install\n\
                     3. Develop with stacked commits (auto-added with hooks)\n\

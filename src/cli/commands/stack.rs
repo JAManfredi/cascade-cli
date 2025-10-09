@@ -2233,7 +2233,8 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
     // Update entry commit hashes to match current branch HEADs
     // This prevents false "branch modification" errors from stale metadata
     if let Some(stack) = updated_stack_manager.get_stack_mut(&stack_id) {
-        for entry in &mut stack.entries {
+        let mut updates = Vec::new();
+        for entry in &stack.entries {
             if let Ok(current_commit) = git_repo.get_branch_head(&entry.branch) {
                 if entry.commit_hash != current_commit {
                     debug!(
@@ -2242,10 +2243,17 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                         &entry.commit_hash[..8],
                         &current_commit[..8]
                     );
-                    entry.commit_hash = current_commit;
+                    updates.push((entry.id, current_commit));
                 }
             }
         }
+        
+        // Apply updates using safe wrapper
+        for (entry_id, new_hash) in updates {
+            stack.update_entry_commit_hash(&entry_id, new_hash)
+                .map_err(|e| CascadeError::config(e))?;
+        }
+        
         // Save reconciled metadata
         updated_stack_manager.save_to_disk()?;
     }
@@ -4615,3 +4623,4 @@ mod tests {
         ));
     }
 }
+

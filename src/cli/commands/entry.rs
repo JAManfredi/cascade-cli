@@ -863,26 +863,30 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
     let new_commit_hash = repo.get_head_commit()?.id().to_string();
     debug!("New commit hash after amend: {}", new_commit_hash);
 
-    // 3. Update stack metadata with new commit hash
+    // 3. Update stack metadata with new commit hash using safe wrapper
     {
         let stack = manager
             .get_stack_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Stack not found"))?;
 
-        if let Some(entry) = stack.entries.iter_mut().find(|e| e.id == entry_id) {
-            let old_hash = entry.commit_hash.clone();
-            entry.commit_hash = new_commit_hash.clone();
-            debug!(
-                "Updated entry commit hash: {} -> {}",
-                &old_hash[..8],
-                &new_commit_hash[..8]
-            );
-            Output::sub_item(format!(
-                "Updated metadata: {} → {}",
-                &old_hash[..8],
-                &new_commit_hash[..8]
-            ));
-        }
+        let old_hash = stack.entries.iter()
+            .find(|e| e.id == entry_id)
+            .map(|e| e.commit_hash.clone())
+            .ok_or_else(|| CascadeError::config("Entry not found"))?;
+        
+        stack.update_entry_commit_hash(&entry_id, new_commit_hash.clone())
+            .map_err(|e| CascadeError::config(e))?;
+        
+        debug!(
+            "Updated entry commit hash: {} -> {}",
+            &old_hash[..8],
+            &new_commit_hash[..8]
+        );
+        Output::sub_item(format!(
+            "Updated metadata: {} → {}",
+            &old_hash[..8],
+            &new_commit_hash[..8]
+        ));
     }
 
     manager.save_to_disk()?;

@@ -2736,7 +2736,7 @@ impl GitRepository {
                                             println!("💡 You can undo with: git reset HEAD~1");
                                         }
                                         Ok(None) => {
-                                            println!("ℹ️  No staged changes found to commit");
+                                            println!("No staged changes found to commit");
                                         }
                                         Err(commit_err) => {
                                             println!(
@@ -2748,7 +2748,7 @@ impl GitRepository {
                                         }
                                     }
                                 } else {
-                                    println!("ℹ️  No staged changes to commit");
+                                    println!("No staged changes to commit");
                                 }
                             }
                             1 => {
