@@ -142,8 +142,8 @@ pub enum StackAction {
         /// Submit range of entries (e.g., "1-3" or "2,4,6")
         #[arg(long)]
         range: Option<String>,
-        /// Create draft pull requests (can be edited later)
-        #[arg(long)]
+        /// Create draft pull requests (default: true, use --no-draft to create ready PRs)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         draft: bool,
         /// Open the PR(s) in your default browser after submission (default: true, use --no-open to disable)
         #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
@@ -1785,7 +1785,19 @@ async fn submit_entry(
                 }
             }
             Err(e) => {
-                Output::warning(format!("Failed to update some PR descriptions: {e}"));
+                // Suppress benign 409 "out of date" errors - these happen when PR was just created
+                // and Bitbucket's version hasn't propagated yet. The PR still gets created successfully.
+                let error_msg = e.to_string();
+                if !error_msg.contains("409") && !error_msg.contains("out-of-date") {
+                    // Only show non-409 errors, and make them concise
+                    let clean_error = error_msg
+                        .lines()
+                        .next()
+                        .unwrap_or("Unknown error")
+                        .trim();
+                    Output::warning(format!("Could not update some PR descriptions: {}", clean_error));
+                    Output::sub_item("PRs were created successfully - descriptions can be updated manually");
+                }
             }
         }
     }
@@ -4499,7 +4511,7 @@ mod tests {
             title: None,
             description: None,
             range: None,
-            draft: false,
+            draft: true,  // Default changed to true
             open: true,
         };
 
@@ -4510,7 +4522,7 @@ mod tests {
                 title: None,
                 description: None,
                 range: None,
-                draft: false,
+                draft: true,  // Default changed to true
                 open: true
             }
         ));

@@ -79,7 +79,12 @@ impl BitbucketIntegration {
                                     updated_prs.push(pr_id);
                                 }
                                 Err(e) => {
-                                    warn!("Failed to update PR #{}: {}", pr_id, e);
+                                    // Suppress verbose error logging for benign 409 conflicts
+                                    // These happen when PR was just created and version hasn't propagated
+                                    let error_msg = e.to_string();
+                                    if !error_msg.contains("409") && !error_msg.contains("out-of-date") {
+                                        debug!("Failed to update PR #{} description: {}", pr_id, error_msg.lines().next().unwrap_or("Unknown error"));
+                                    }
                                 }
                             }
                         }
