@@ -2247,13 +2247,14 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                 }
             }
         }
-        
+
         // Apply updates using safe wrapper
         for (entry_id, new_hash) in updates {
-            stack.update_entry_commit_hash(&entry_id, new_hash)
-                .map_err(|e| CascadeError::config(e))?;
+            stack
+                .update_entry_commit_hash(&entry_id, new_hash)
+                .map_err(CascadeError::config)?;
         }
-        
+
         // Save reconciled metadata
         updated_stack_manager.save_to_disk()?;
     }
@@ -4623,4 +4624,3 @@ mod tests {
         ));
     }
 }
-

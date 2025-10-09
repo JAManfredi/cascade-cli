@@ -1276,13 +1276,15 @@ impl RebaseManager {
 
         // Get entry info before mutation
         let entry_exists = stack.entries.iter().any(|e| e.id == *entry_id);
-        
+
         if entry_exists {
-            let old_hash = stack.entries.iter()
+            let old_hash = stack
+                .entries
+                .iter()
                 .find(|e| e.id == *entry_id)
                 .map(|e| e.commit_hash.clone())
                 .unwrap();
-            
+
             debug!(
                 "Found entry {} - updating commit from '{}' to '{}' (keeping original branch)",
                 entry_id, old_hash, new_commit_hash
@@ -1290,8 +1292,9 @@ impl RebaseManager {
 
             // CRITICAL: Keep the original branch name to preserve PR mapping
             // Only update the commit hash to point to the new rebased commit using safe wrapper
-            stack.update_entry_commit_hash(entry_id, new_commit_hash.to_string())
-                .map_err(|e| CascadeError::config(e))?;
+            stack
+                .update_entry_commit_hash(entry_id, new_commit_hash.to_string())
+                .map_err(CascadeError::config)?;
 
             // Note: Stack will be saved by the caller (StackManager) after rebase completes
 

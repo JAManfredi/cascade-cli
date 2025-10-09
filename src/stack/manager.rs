@@ -341,11 +341,12 @@ impl StackManager {
                         }
                     }
                 }
-                
+
                 // Apply updates using the safe wrapper function
                 for (entry_id, new_hash) in updates {
-                    stack.update_entry_commit_hash(&entry_id, new_hash)
-                        .map_err(|e| CascadeError::config(e))?;
+                    stack
+                        .update_entry_commit_hash(&entry_id, new_hash)
+                        .map_err(CascadeError::config)?;
                     reconciled = true;
                 }
             }
@@ -1312,24 +1313,25 @@ impl StackManager {
             .ok_or_else(|| CascadeError::config(format!("Stack not found: {}", stack_id)))?;
 
         // Find entry and get info we need before mutation
-        let entry_info = stack.entries.iter()
+        let entry_info = stack
+            .entries
+            .iter()
             .find(|e| e.id == entry_id)
             .map(|e| (e.commit_hash.clone(), e.id));
-        
+
         if let Some((old_commit_hash, entry_id)) = entry_info {
             let new_head = self.repo.get_branch_head(branch)?;
             let old_commit = old_commit_hash[..8].to_string();
 
             // Get the extra commits for message update
-            let extra_commits = self
-                .repo
-                .get_commits_between(&old_commit_hash, &new_head)?;
+            let extra_commits = self.repo.get_commits_between(&old_commit_hash, &new_head)?;
 
             // Update the entry to point to the new HEAD using safe wrapper
             // Note: We intentionally do NOT append commit messages here
             // The entry's message should describe the feature/change, not list all commits
-            stack.update_entry_commit_hash(&entry_id, new_head.clone())
-                .map_err(|e| CascadeError::config(e))?;
+            stack
+                .update_entry_commit_hash(&entry_id, new_head.clone())
+                .map_err(CascadeError::config)?;
 
             Output::success(format!(
                 "Incorporated {} commit(s) into entry '{}'",

@@ -164,22 +164,30 @@ impl Stack {
 
     /// Update an entry's commit hash in both entries Vec and entry_map
     /// This ensures the two data structures stay in sync
-    pub fn update_entry_commit_hash(&mut self, entry_id: &Uuid, new_commit_hash: String) -> Result<(), String> {
+    pub fn update_entry_commit_hash(
+        &mut self,
+        entry_id: &Uuid,
+        new_commit_hash: String,
+    ) -> Result<(), String> {
         // Update in entries Vec
-        let updated_in_vec = self.entries.iter_mut()
+        let updated_in_vec = self
+            .entries
+            .iter_mut()
             .find(|e| e.id == *entry_id)
             .map(|entry| {
                 entry.commit_hash = new_commit_hash.clone();
             })
             .is_some();
-        
+
         // Update in entry_map
-        let updated_in_map = self.entry_map.get_mut(entry_id)
+        let updated_in_map = self
+            .entry_map
+            .get_mut(entry_id)
             .map(|entry| {
                 entry.commit_hash = new_commit_hash;
             })
             .is_some();
-        
+
         if updated_in_vec && updated_in_map {
             Ok(())
         } else {

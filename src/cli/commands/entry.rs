@@ -869,14 +869,17 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
             .get_stack_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Stack not found"))?;
 
-        let old_hash = stack.entries.iter()
+        let old_hash = stack
+            .entries
+            .iter()
             .find(|e| e.id == entry_id)
             .map(|e| e.commit_hash.clone())
             .ok_or_else(|| CascadeError::config("Entry not found"))?;
-        
-        stack.update_entry_commit_hash(&entry_id, new_commit_hash.clone())
-            .map_err(|e| CascadeError::config(e))?;
-        
+
+        stack
+            .update_entry_commit_hash(&entry_id, new_commit_hash.clone())
+            .map_err(CascadeError::config)?;
+
         debug!(
             "Updated entry commit hash: {} -> {}",
             &old_hash[..8],

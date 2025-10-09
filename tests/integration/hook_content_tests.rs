@@ -22,41 +22,41 @@ async fn test_post_commit_hook_contains_user_feedback() {
         .generate_hook_script(&cascade_cli::cli::commands::hooks::HookType::PostCommit)
         .unwrap();
 
-    // Verify essential user feedback messages are present
+    // Verify essential user feedback messages are present (no emojis per professional output guidelines)
     assert!(
-        hook_content.contains("🪝 Adding commit to active stack"),
+        hook_content.contains("Adding commit to active stack"),
         "Post-commit hook should show progress message"
     );
     assert!(
-        hook_content.contains("✅ Commit added to stack successfully"),
+        hook_content.contains("Commit added to stack successfully"),
         "Post-commit hook should show success message"
     );
     assert!(
-        hook_content.contains("💡 Next: 'ca submit' to create PRs when ready"),
+        hook_content.contains("Next: 'ca submit' to create PRs when ready"),
         "Post-commit hook should provide next steps"
     );
     assert!(
-        hook_content.contains("ℹ️ Cascade not initialized"),
+        hook_content.contains("Cascade not initialized"),
         "Post-commit hook should handle uninitialized repos gracefully"
     );
     assert!(
-        hook_content.contains("💡 Run 'ca init' to start using stacked diffs"),
+        hook_content.contains("Run 'ca init' to start using stacked diffs"),
         "Post-commit hook should guide users to initialize"
     );
     assert!(
-        hook_content.contains("ℹ️ No active stack found"),
+        hook_content.contains("No active stack found"),
         "Post-commit hook should handle missing active stack"
     );
     assert!(
-        hook_content.contains("💡 Use 'ca stack create"),
+        hook_content.contains("Tip: Use 'ca stack create"),
         "Post-commit hook should guide users to create stacks"
     );
     assert!(
-        hook_content.contains("⚠️ Failed to add commit to stack"),
+        hook_content.contains("Failed to add commit to stack"),
         "Post-commit hook should handle failures gracefully"
     );
     assert!(
-        hook_content.contains("💡 You can manually add it with"),
+        hook_content.contains("Tip: You can manually add it with"),
         "Post-commit hook should provide recovery instructions"
     );
 }
