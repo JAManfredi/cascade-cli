@@ -884,14 +884,18 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         let short_hash = entry.short_hash();
         let short_msg = entry.short_message(50);
 
-        // Get source branch information if available
+        // Get source branch information for pending entries only
+        // (submitted entries have their own branch, so source is no longer relevant)
         let metadata = stack_manager.get_repository_metadata();
-        let source_branch_info = if let Some(commit_meta) = metadata.get_commit(&entry.commit_hash)
-        {
-            if commit_meta.source_branch != commit_meta.branch
-                && !commit_meta.source_branch.is_empty()
-            {
-                format!(" (from {})", commit_meta.source_branch)
+        let source_branch_info = if !entry.is_submitted {
+            if let Some(commit_meta) = metadata.get_commit(&entry.commit_hash) {
+                if commit_meta.source_branch != commit_meta.branch
+                    && !commit_meta.source_branch.is_empty()
+                {
+                    format!(" (from {})", commit_meta.source_branch)
+                } else {
+                    String::new()
+                }
             } else {
                 String::new()
             }
