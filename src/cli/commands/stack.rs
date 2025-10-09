@@ -1790,13 +1790,14 @@ async fn submit_entry(
                 let error_msg = e.to_string();
                 if !error_msg.contains("409") && !error_msg.contains("out-of-date") {
                     // Only show non-409 errors, and make them concise
-                    let clean_error = error_msg
-                        .lines()
-                        .next()
-                        .unwrap_or("Unknown error")
-                        .trim();
-                    Output::warning(format!("Could not update some PR descriptions: {}", clean_error));
-                    Output::sub_item("PRs were created successfully - descriptions can be updated manually");
+                    let clean_error = error_msg.lines().next().unwrap_or("Unknown error").trim();
+                    Output::warning(format!(
+                        "Could not update some PR descriptions: {}",
+                        clean_error
+                    ));
+                    Output::sub_item(
+                        "PRs were created successfully - descriptions can be updated manually",
+                    );
                 }
             }
         }
@@ -4511,7 +4512,7 @@ mod tests {
             title: None,
             description: None,
             range: None,
-            draft: true,  // Default changed to true
+            draft: true, // Default changed to true
             open: true,
         };
 
@@ -4522,7 +4523,7 @@ mod tests {
                 title: None,
                 description: None,
                 range: None,
-                draft: true,  // Default changed to true
+                draft: true, // Default changed to true
                 open: true
             }
         ));

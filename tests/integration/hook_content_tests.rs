@@ -243,18 +243,19 @@ async fn test_prepare_commit_msg_hook_contains_edit_mode_guidance() {
         .generate_hook_script(&cascade_cli::cli::commands::hooks::HookType::PrepareCommitMsg)
         .unwrap();
 
-    // Verify edit mode guidance is present
+    // Verify stack context is added (but no edit mode guidance - that's in pre-commit now)
     assert!(
-        hook_content.contains("entry status --quiet"),
-        "Prepare-commit-msg hook should check edit mode status"
+        hook_content.contains("Stack:"),
+        "Prepare-commit-msg hook should add stack context"
     );
     assert!(
-        hook_content.contains("[EDIT MODE] Editing stack entry"),
-        "Prepare-commit-msg hook should provide edit mode header"
+        hook_content.contains("stack list --active"),
+        "Prepare-commit-msg hook should check for active stack"
     );
+    // Edit mode guidance was removed - it's now in pre-commit hook only
     assert!(
-        hook_content.contains("The pre-commit hook will prompt you for Amend/New choice"),
-        "Prepare-commit-msg hook should refer to pre-commit hook"
+        !hook_content.contains("[EDIT MODE]"),
+        "Prepare-commit-msg hook should NOT contain edit mode guidance anymore"
     );
 }
 

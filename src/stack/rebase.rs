@@ -619,7 +619,10 @@ impl RebaseManager {
                         // Check if working branch is ahead of top stack entry
                         if working_head != top_commit {
                             // Get commits between top of stack and working branch head
-                            if let Ok(commits) = self.git_repo.get_commits_between(&top_commit, &working_head) {
+                            if let Ok(commits) = self
+                                .git_repo
+                                .get_commits_between(&top_commit, &working_head)
+                            {
                                 if !commits.is_empty() {
                                     // Working branch has extra commits!
                                     Output::error(format!(
@@ -631,17 +634,25 @@ impl RebaseManager {
                                     Output::sub_item("These commits would be lost if we proceed:");
                                     for (i, commit) in commits.iter().take(5).enumerate() {
                                         let message = commit.summary().unwrap_or("(no message)");
-                                        Output::sub_item(format!("  {}. {} - {}", i + 1, &commit.id().to_string()[..8], message));
+                                        Output::sub_item(format!(
+                                            "  {}. {} - {}",
+                                            i + 1,
+                                            &commit.id().to_string()[..8],
+                                            message
+                                        ));
                                     }
                                     if commits.len() > 5 {
-                                        Output::sub_item(format!("  ... and {} more", commits.len() - 5));
+                                        Output::sub_item(format!(
+                                            "  ... and {} more",
+                                            commits.len() - 5
+                                        ));
                                     }
                                     println!();
                                     Output::tip("Add these commits to the stack first:");
-                                    Output::bullet(format!("Run: ca stack push"));
-                                    Output::bullet(format!("Then run: ca sync"));
+                                    Output::bullet("Run: ca stack push");
+                                    Output::bullet("Then run: ca sync");
                                     println!();
-                                    
+
                                     return Err(CascadeError::validation(
                                         format!(
                                             "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
