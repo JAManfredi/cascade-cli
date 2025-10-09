@@ -2778,7 +2778,7 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
                 Output::success(format!("Stack '{}' structure validation passed", name));
             }
             Err(e) => {
-                println!("✗ Stack '{}' structure validation failed: {}", name, e);
+                Output::error(format!("Stack '{}' structure validation failed: {}", name, e));
                 return Err(CascadeError::config(e));
             }
         }
@@ -2786,18 +2786,20 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
         // Handle branch modifications (includes Git integrity checks)
         manager.handle_branch_modifications(&stack_id, fix_mode)?;
 
-        println!("🎉 Stack '{name}' validation completed");
+        println!();
+        Output::success(format!("Stack '{name}' validation completed"));
         Ok(())
     } else {
         // Validate all stacks
-        println!("🔍 Validating all stacks...");
+        Output::section("Validating all stacks");
+        println!();
 
         // Get all stack IDs through public method
         let all_stacks = manager.get_all_stacks();
         let stack_ids: Vec<uuid::Uuid> = all_stacks.iter().map(|s| s.id).collect();
 
         if stack_ids.is_empty() {
-            println!("📭 No stacks found");
+            Output::info("No stacks found");
             return Ok(());
         }
 
@@ -2806,15 +2808,15 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
             let stack = manager.get_stack(&stack_id).unwrap();
             let stack_name = &stack.name;
 
-            println!("\nChecking stack '{stack_name}':");
+            println!("Checking stack '{stack_name}':");
 
             // Basic structure validation
             match stack.validate() {
                 Ok(message) => {
-                    println!("  ✅ Structure: {message}");
+                    Output::sub_item(format!("Structure: {message}"));
                 }
                 Err(e) => {
-                    println!("  ❌ Structure: {e}");
+                    Output::sub_item(format!("Structure: {e}"));
                     all_valid = false;
                     continue;
                 }
@@ -2823,19 +2825,20 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
             // Handle branch modifications
             match manager.handle_branch_modifications(&stack_id, fix_mode.clone()) {
                 Ok(_) => {
-                    println!("  ✅ Git integrity: OK");
+                    Output::sub_item("Git integrity: OK");
                 }
                 Err(e) => {
-                    println!("  ❌ Git integrity: {e}");
+                    Output::sub_item(format!("Git integrity: {e}"));
                     all_valid = false;
                 }
             }
+            println!();
         }
 
         if all_valid {
-            println!("\n🎉 All stacks passed validation");
+            Output::success("All stacks passed validation");
         } else {
-            println!("\n⚠️  Some stacks have validation issues");
+            Output::warning("Some stacks have validation issues");
             return Err(CascadeError::config("Stack validation failed".to_string()));
         }
 
