@@ -342,7 +342,7 @@ impl StackManager {
                 }
             }
         } // End of reconciliation scope - stack borrow dropped here
-        
+
         // Save reconciled metadata before validation
         if reconciled {
             debug!("Saving reconciled metadata before validation");
