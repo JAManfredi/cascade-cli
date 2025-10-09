@@ -335,7 +335,13 @@ impl StackManager {
                                 &entry.commit_hash[..8],
                                 &current_commit[..8]
                             );
-                            entry.commit_hash = current_commit;
+                            entry.commit_hash = current_commit.clone();
+                            
+                            // Also update entry_map to keep it in sync
+                            if let Some(map_entry) = stack.entry_map.get_mut(&entry.id) {
+                                map_entry.commit_hash = current_commit;
+                            }
+                            
                             reconciled = true;
                         }
                     }

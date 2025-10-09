@@ -1401,12 +1401,22 @@ async fn push_to_stack(
                         commits.into_iter().map(|c| c.id().to_string()).collect();
 
                     // Filter out commits that are already in the stack
+                    eprintln!("DEBUG: Before filter, unpushed commits: {:?}", unpushed.iter().map(|h| &h[..8]).collect::<Vec<_>>());
+                    eprintln!("DEBUG: Stack entries: {:?}", active_stack.entries.iter().map(|e| (&e.commit_hash[..8], &e.message)).collect::<Vec<_>>());
                     unpushed.retain(|commit_hash| {
-                        !active_stack
+                        let in_stack = active_stack
                             .entries
                             .iter()
-                            .any(|entry| entry.commit_hash == *commit_hash)
+                            .any(|entry| {
+                                let matches = entry.commit_hash == *commit_hash;
+                                if !matches {
+                                    eprintln!("DEBUG: Comparing {} vs {} = false", &entry.commit_hash[..8], &commit_hash[..8]);
+                                }
+                                matches
+                            });
+                        !in_stack
                     });
+                    eprintln!("DEBUG: After filter, unpushed commits: {:?}", unpushed.iter().map(|h| &h[..8]).collect::<Vec<_>>());
 
                     unpushed.reverse(); // Reverse to get chronological order (oldest first)
                     unpushed
