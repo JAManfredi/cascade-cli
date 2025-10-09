@@ -1161,41 +1161,22 @@ exit 0
                  for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
                  if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
                  if not exist \"%REPO_ROOT%\\.cascade\" exit /b 0\n\n\
-                 rem Check if in edit mode first\n\
-                 for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
-                 if \"%EDIT_STATUS%\"==\"\" set EDIT_STATUS=inactive\n\n\
-                 if not \"%EDIT_STATUS%\"==\"inactive\" (\n\
-                     rem In edit mode - add minimal context\n\
+                 rem Check for active stack\n\
+                 for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" stack list --active --format=name 2^>nul') do set ACTIVE_STACK=%%i\n\n\
+                 if not \"%ACTIVE_STACK%\"==\"\" (\n\
+                     rem Get current commit message\n\
                      set /p CURRENT_MSG=<%COMMIT_MSG_FILE%\n\n\
-                     rem Skip if message already has edit guidance\n\
-                     echo !CURRENT_MSG! | findstr \"[EDIT MODE]\" >nul\n\
+                     rem Skip if message already has stack context\n\
+                     echo !CURRENT_MSG! | findstr \"[stack:\" >nul\n\
                      if %ERRORLEVEL% equ 0 exit /b 0\n\n\
-                     rem Add simple edit mode marker\n\
+                     rem Add stack context to commit message\n\
                      echo.\n\
-                     echo # [EDIT MODE] Editing stack entry\n\
-                     echo # The pre-commit hook will prompt you for Amend/New choice\n\
-                     echo.\n\
+                     echo # Stack: %ACTIVE_STACK%\n\
+                     echo # This commit will be added to the active stack automatically.\n\
+                     echo # Use 'ca stack status' to see the current stack state.\n\
                      type \"%COMMIT_MSG_FILE%\"\n\
-                 ) > \"%COMMIT_MSG_FILE%.tmp\" && (\n\
-                     move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n\
-                 ) else (\n\
-                     rem Regular stack mode - check for active stack\n\
-                     for /f \"tokens=*\" %%i in ('\"{cascade_cli}\" stack list --active --format=name 2^>nul') do set ACTIVE_STACK=%%i\n\n\
-                     if not \"%ACTIVE_STACK%\"==\"\" (\n\
-                         rem Get current commit message\n\
-                         set /p CURRENT_MSG=<%COMMIT_MSG_FILE%\n\n\
-                         rem Skip if message already has stack context\n\
-                         echo !CURRENT_MSG! | findstr \"[stack:\" >nul\n\
-                         if %ERRORLEVEL% equ 0 exit /b 0\n\n\
-                         rem Add stack context to commit message\n\
-                         echo.\n\
-                         echo # Stack: %ACTIVE_STACK%\n\
-                         echo # This commit will be added to the active stack automatically.\n\
-                         echo # Use 'ca stack status' to see the current stack state.\n\
-                         type \"%COMMIT_MSG_FILE%\"\n\
-                     ) > \"%COMMIT_MSG_FILE%.tmp\"\n\
-                     move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n\
-                 )\n"
+                 ) > \"%COMMIT_MSG_FILE%.tmp\"\n\
+                 move \"%COMMIT_MSG_FILE%.tmp\" \"%COMMIT_MSG_FILE%\"\n"
             )
         }
 
@@ -1218,43 +1199,24 @@ exit 0
                  if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
-                 # Check if in edit mode first\n\
-                 EDIT_STATUS=$(\"{cascade_cli}\" entry status --quiet 2>/dev/null || echo \"inactive\")\n\
+                 # Check for active stack\n\
+                 ACTIVE_STACK=$(\"{cascade_cli}\" stack list --active --format=name 2>/dev/null || echo \"\")\n\
                  \n\
-                 if [ \"$EDIT_STATUS\" != \"inactive\" ]; then\n\
-                     # In edit mode - add minimal context\n\
+                 if [ -n \"$ACTIVE_STACK\" ]; then\n\
+                     # Get current commit message\n\
                      CURRENT_MSG=$(cat \"$COMMIT_MSG_FILE\")\n\
                      \n\
-                     # Skip if message already has edit guidance\n\
-                     if echo \"$CURRENT_MSG\" | grep -q \"\\[EDIT MODE\\]\"; then\n\
+                     # Skip if message already has stack context\n\
+                     if echo \"$CURRENT_MSG\" | grep -q \"\\[stack:\"; then\n\
                          exit 0\n\
                      fi\n\
                      \n\
+                     # Add stack context to commit message\n\
                      echo \"\n\
-                 # [EDIT MODE] Editing stack entry\n\
-                 # The pre-commit hook will prompt you for Amend/New choice\n\
-                 \n\
+                 # Stack: $ACTIVE_STACK\n\
+                 # This commit will be added to the active stack automatically.\n\
+                 # Use 'ca stack status' to see the current stack state.\n\
                  $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
-                 else\n\
-                     # Regular stack mode - check for active stack\n\
-                     ACTIVE_STACK=$(\"{cascade_cli}\" stack list --active --format=name 2>/dev/null || echo \"\")\n\
-                     \n\
-                     if [ -n \"$ACTIVE_STACK\" ]; then\n\
-                         # Get current commit message\n\
-                         CURRENT_MSG=$(cat \"$COMMIT_MSG_FILE\")\n\
-                         \n\
-                         # Skip if message already has stack context\n\
-                         if echo \"$CURRENT_MSG\" | grep -q \"\\[stack:\"; then\n\
-                             exit 0\n\
-                         fi\n\
-                         \n\
-                         # Add stack context to commit message\n\
-                         echo \"\n\
-                     # Stack: $ACTIVE_STACK\n\
-                     # This commit will be added to the active stack automatically.\n\
-                     # Use 'ca stack status' to see the current stack state.\n\
-                     $CURRENT_MSG\" > \"$COMMIT_MSG_FILE\"\n\
-                     fi\n\
                  fi\n"
             )
         }
