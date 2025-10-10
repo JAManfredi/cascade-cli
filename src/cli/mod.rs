@@ -278,11 +278,11 @@ pub enum Commands {
         /// Submit range of entries (e.g., "1-3" or "2,4,6")
         #[arg(long)]
         range: Option<String>,
-        /// Create draft pull requests (can be edited later)
-        #[arg(long)]
+        /// Create draft pull requests (default: true, use --no-draft to create ready PRs)
+        #[arg(long, default_value_t = true)]
         draft: bool,
         /// Open the PR(s) in your default browser after submission (default: true, use --no-open to disable)
-        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        #[arg(long, default_value_t = true)]
         open: bool,
     },
 

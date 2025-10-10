@@ -396,14 +396,17 @@ ca validate --fix split        # Split extra commits into new stack entries
 Cascade CLI automatically generates meaningful pull request titles and descriptions:
 
 ```bash
-# Create draft PRs for review:
-ca submit --draft
+# Submit PRs (creates drafts by default):
+ca submit
 
 # Each PR gets intelligent metadata:
-# ┌─ PR Title: Generated from commit messages
+# ┌─ PR Title: Generated from commit messages (prefixed with [DRAFT])
 # ├─ Description: Combines commit details & context  
 # ├─ Branch: Auto-created with semantic naming
 # └─ Target: Points to previous stack entry or base
+
+# Create ready (non-draft) PRs:
+ca submit --no-draft
 
 # Custom titles and descriptions:
 ca submit 2 --title "Add advanced user auth" --description "Implements JWT tokens with refresh capabilities"
@@ -640,17 +643,17 @@ ca pop --keep-branch                         # Keep the branch when popping
 
 ### **Pull Request Workflow**
 ```bash
-# Submit for review
-ca submit                                    # Submit top entry (creates PR)
+# Submit for review (creates draft PRs by default)
+ca submit                                    # Submit all unsubmitted entries
 ca submit 2                                  # Submit specific entry number
 ca submit --title <title>                    # Custom PR title
 ca submit -t <title>                         # Short form
 ca submit --description <desc>               # Custom PR description
 ca submit -d <desc>                          # Short form
-ca submit --draft                            # Create as draft PR (can be edited later)
+ca submit --no-draft                         # Create as ready (non-draft) PR
+ca submit --no-open                          # Don't open PR in browser
 
 # Batch submission
-ca submit                                    # Submit all unsubmitted entries
 ca submit --range 1-3                        # Submit entries 1 through 3
 ca submit --range 2,4,6                      # Submit specific entries
 

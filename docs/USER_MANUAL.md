@@ -412,7 +412,8 @@ ca submit [ENTRY] [OPTIONS]
 --title <TITLE>         # PR title override
 --description <DESC>    # PR description
 --range <RANGE>         # Submit range of entries (e.g., "1-3" or "2,4,6")
---draft                 # Create as draft PR
+--no-draft              # Create as ready PR (default is draft)
+--no-open               # Don't open PR in browser (default opens)
 --reviewers <USERS>     # Comma-separated reviewer list
 ```
 
@@ -435,8 +436,11 @@ ca submit --range 2,4,6
 # Submit with custom details
 ca submit --title "Add OAuth integration" --description "Implements Google OAuth2 flow"
 
-# Create draft PRs
-ca submit --draft
+# Create ready (non-draft) PRs
+ca submit --no-draft
+
+# Submit without opening browser
+ca submit --no-open
 
 # Add reviewers
 ca submit --reviewers "alice,bob,charlie"

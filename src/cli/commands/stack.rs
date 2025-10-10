@@ -143,10 +143,10 @@ pub enum StackAction {
         #[arg(long)]
         range: Option<String>,
         /// Create draft pull requests (default: true, use --no-draft to create ready PRs)
-        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        #[arg(long, default_value_t = true)]
         draft: bool,
         /// Open the PR(s) in your default browser after submission (default: true, use --no-open to disable)
-        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        #[arg(long, default_value_t = true)]
         open: bool,
     },
 
