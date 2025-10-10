@@ -235,7 +235,7 @@ impl RebaseManager {
             .original_working_branch
             .clone()
             .or_else(|| self.git_repo.get_current_branch().ok());
-        
+
         // Store original branch for cleanup on early error returns
         let original_branch_for_cleanup = original_branch.clone();
 
@@ -333,16 +333,19 @@ impl RebaseManager {
             // This avoids committing directly to protected branches like develop/main
             let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
             temp_branches.push(temp_branch.clone()); // Track for cleanup
-            
+
             // Create and checkout temp branch - restore original branch on error
-            if let Err(e) = self.git_repo.create_branch(&temp_branch, Some(&current_base)) {
+            if let Err(e) = self
+                .git_repo
+                .create_branch(&temp_branch, Some(&current_base))
+            {
                 // Restore original branch before returning error
                 if let Some(ref orig) = original_branch_for_cleanup {
                     let _ = self.git_repo.checkout_branch_unsafe(orig);
                 }
                 return Err(e);
             }
-            
+
             if let Err(e) = self.git_repo.checkout_branch_silent(&temp_branch) {
                 // Restore original branch before returning error
                 if let Some(ref orig) = original_branch_for_cleanup {
@@ -764,10 +767,13 @@ impl RebaseManager {
             // Before returning error, try to restore original branch
             if let Some(ref orig_branch) = original_branch {
                 if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
-                    debug!("Could not return to original branch '{}' after error: {}", orig_branch, e);
+                    debug!(
+                        "Could not return to original branch '{}' after error: {}",
+                        orig_branch, e
+                    );
                 }
             }
-            
+
             // Include the detailed error message (which contains conflict info)
             let detailed_error = result.error.as_deref().unwrap_or("Rebase failed");
             return Err(CascadeError::Branch(detailed_error.to_string()));

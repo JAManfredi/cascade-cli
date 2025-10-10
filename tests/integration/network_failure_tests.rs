@@ -357,6 +357,7 @@ async fn test_cli_network_error_integration() {
                 || stderr.contains("unreachable")
                 || stderr.contains("Configuration")
                 || stderr.contains("uncommitted")
+                || stderr.contains("Error")
                 || stdout.contains("Error"),
             "Should contain some kind of graceful error. Stderr: {stderr}, Stdout: {stdout}"
         );

@@ -2131,47 +2131,51 @@ async fn continue_sync() -> Result<()> {
 
     // Load stack to get working branch and update metadata
     let mut manager = crate::stack::StackManager::new(&repo_root)?;
-    
+
     // CRITICAL: Update the stack entry's commit hash to the new rebased commit
     // This prevents sync_stack() from thinking the working branch has "untracked" commits
     let new_commit_hash = git_repo.get_branch_head(&stack_branch)?;
-    
+
     // Get data we need from active_stack before mutably borrowing manager
     let (stack_id, entry_id_opt, working_branch) = {
         let active_stack = manager
             .get_active_stack()
             .ok_or_else(|| CascadeError::config("No active stack found"))?;
-        
-        let entry_id_opt = active_stack.entries
+
+        let entry_id_opt = active_stack
+            .entries
             .iter()
             .find(|e| e.branch == stack_branch)
-            .map(|e| e.id.clone());
-        
+            .map(|e| e.id);
+
         let working_branch = active_stack
             .working_branch
             .as_ref()
             .ok_or_else(|| CascadeError::config("Active stack has no working branch"))?
             .clone();
-        
+
         (active_stack.id, entry_id_opt, working_branch)
     };
-    
+
     // Now we can mutably borrow manager to update the entry
     if let Some(entry_id) = entry_id_opt {
-        let stack = manager.get_stack_mut(&stack_id)
+        let stack = manager
+            .get_stack_mut(&stack_id)
             .ok_or_else(|| CascadeError::config("Could not get mutable stack reference"))?;
-        
-        stack.update_entry_commit_hash(&entry_id, new_commit_hash.clone())
+
+        stack
+            .update_entry_commit_hash(&entry_id, new_commit_hash.clone())
             .map_err(CascadeError::config)?;
-        
+
         manager.save_to_disk()?;
     }
 
     // Get the top of the stack to update the working branch
     let top_commit = {
-        let active_stack = manager.get_active_stack()
+        let active_stack = manager
+            .get_active_stack()
             .ok_or_else(|| CascadeError::config("No active stack found"))?;
-        
+
         if let Some(last_entry) = active_stack.entries.last() {
             git_repo.get_branch_head(&last_entry.branch)?
         } else {
@@ -2186,7 +2190,7 @@ async fn continue_sync() -> Result<()> {
 
     // Checkout to working branch
     git_repo.checkout_branch_unsafe(&working_branch)?;
-    
+
     // Update working branch to point to the top of the rebased stack
     // In the continue_sync() context, we KNOW we just finished rebasing, so the
     // working branch's old commits are pre-rebase versions that should be replaced.
