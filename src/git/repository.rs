@@ -354,10 +354,9 @@ impl GitRepository {
             )));
         }
 
-        // Fetch first to ensure we have latest remote state for safety checks
-        if let Err(e) = self.fetch() {
-            tracing::warn!("Could not fetch before force push: {}", e);
-        }
+        // CRITICAL: Fetch with retry to ensure we have latest remote state
+        // Using stale refs could cause silent data loss on force push!
+        self.fetch_with_retry()?;
 
         // Check safety and create backup if needed
         let safety_result = if auto_confirm {
@@ -446,9 +445,14 @@ impl GitRepository {
             CascadeError::branch(format!("Could not get tree for branch '{name}': {e}"))
         })?;
 
-        // Checkout the tree
+        // Checkout the tree with proper options
+        // Force overwrite to ensure working directory matches branch exactly
+        let mut checkout_builder = git2::build::CheckoutBuilder::new();
+        checkout_builder.force(); // Overwrite modified files
+        checkout_builder.remove_untracked(false); // Keep untracked files
+
         self.repo
-            .checkout_tree(tree.as_object(), None)
+            .checkout_tree(tree.as_object(), Some(&mut checkout_builder))
             .map_err(|e| {
                 CascadeError::branch(format!("Could not checkout branch '{name}': {e}"))
             })?;
@@ -766,6 +770,7 @@ impl GitRepository {
             .map_err(CascadeError::Git)?;
 
         index.write().map_err(CascadeError::Git)?;
+        drop(index); // Explicitly close index after staging
 
         tracing::debug!("Staged all changes");
         Ok(())
@@ -804,6 +809,7 @@ impl GitRepository {
         }
 
         index.write().map_err(CascadeError::Git)?;
+        drop(index); // Explicitly close index after staging
 
         tracing::debug!(
             "Staged {} specific files: {:?}",
@@ -1481,6 +1487,10 @@ impl GitRepository {
     /// Fetch from remote origin
     pub fn fetch(&self) -> Result<()> {
         tracing::debug!("Fetching from origin");
+
+        // CRITICAL: Ensure index is closed before fetch operation
+        // This prevents "index is locked" errors when fetch is called after cherry-pick/commit
+        self.ensure_index_closed()?;
 
         let mut remote = self
             .repo

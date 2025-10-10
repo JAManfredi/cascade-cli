@@ -903,14 +903,12 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             String::new()
         };
 
-        let status_icon = if entry.is_submitted {
-            "[submitted]"
-        } else {
-            "[pending]"
-        };
+        // Use colored status: pending (yellow), submitted (muted green)
+        let status_colored = Output::entry_status(entry.is_submitted, false);
+
         Output::numbered_item(
             entry_num,
-            format!("{short_hash} {status_icon} {short_msg}{source_branch_info}"),
+            format!("{short_hash} {status_colored} {short_msg}{source_branch_info}"),
         );
 
         if verbose {
@@ -2354,13 +2352,33 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
                         };
 
+                        // Get entry count before creating rebase manager
+                        let stack_for_count = updated_stack_manager
+                            .get_stack(&stack_id)
+                            .ok_or_else(|| CascadeError::config("Stack not found"))?;
+                        let entry_count = stack_for_count.entries.len();
+
                         let mut rebase_manager = crate::stack::RebaseManager::new(
                             updated_stack_manager,
                             git_repo,
                             options,
                         );
 
-                        match rebase_manager.rebase_stack(&stack_id) {
+                        // Start spinner before rebase (tree will print below)
+                        let plural = if entry_count == 1 { "entry" } else { "entries" };
+
+                        println!(); // Spacing
+                        let mut rebase_spinner =
+                            crate::utils::spinner::Spinner::new_with_output_below(format!(
+                                "Rebasing {} {}",
+                                entry_count, plural
+                            ));
+
+                        let rebase_result = rebase_manager.rebase_stack(&stack_id);
+
+                        rebase_spinner.stop();
+
+                        match rebase_result {
                             Ok(result) => {
                                 if !result.branch_mapping.is_empty() {
                                     // Update PRs if enabled
@@ -2480,20 +2498,12 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
         }
     }
 
-    // Return to original working branch
-    if let Some(orig_branch) = original_branch {
-        if orig_branch != base_branch {
-            // Create new git_repo instance since the previous one was moved
-            if let Ok(git_repo) = GitRepository::open(&repo_root) {
-                if let Err(e) = git_repo.checkout_branch(&orig_branch) {
-                    Output::warning(format!(
-                        "Could not return to original branch '{}': {}",
-                        orig_branch, e
-                    ));
-                }
-            }
-        }
-    }
+    // NOTE: Don't checkout the original branch here!
+    // The rebase_with_force_push() function already returned us to the working branch
+    // using checkout_branch_unsafe(). If we try to checkout again with the safe version,
+    // it will see the rebased working tree and think there are staged changes
+    // (because the working branch HEAD was updated during rebase but we're still on the old tree).
+    // Trust that the rebase left us in the correct state.
 
     Output::success("Sync completed successfully!");
 

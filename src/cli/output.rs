@@ -6,8 +6,11 @@ use std::fmt::Display;
 struct Theme;
 
 impl Theme {
-    /// Bright green for success messages (matches banner accent)
-    const SUCCESS: Color = Color::Green;
+    /// Bright/bold green for success messages (matches banner accent)
+    /// Using Color256(46) for a brighter, more vibrant green
+    fn success_style() -> Style {
+        Style::new().color256(46).bold() // Bright bold green
+    }
 
     /// Red for errors
     const ERROR: Color = Color::Red;
@@ -36,9 +39,9 @@ impl Theme {
 pub struct Output;
 
 impl Output {
-    /// Print a success message with checkmark
+    /// Print a success message with checkmark (bright bold green)
     pub fn success<T: Display>(message: T) {
-        println!("{} {}", style("✓").fg(Theme::SUCCESS), message);
+        println!("{} {}", Theme::success_style().apply_to("✓"), message);
     }
 
     /// Print an error message with X mark
@@ -98,7 +101,12 @@ impl Output {
         working_branch: Option<&str>,
         is_active: bool,
     ) {
-        Self::success(format!("Created stack '{name}'"));
+        // Show as info, not success (we're viewing, not creating)
+        println!(
+            "{} {}",
+            Theme::info_style().apply_to("Stack:"),
+            style(name).bold()
+        );
         Self::sub_item(format!("Stack ID: {}", Theme::dim_style().apply_to(id)));
         Self::sub_item(format!(
             "Base branch: {}",
@@ -113,7 +121,10 @@ impl Output {
         }
 
         if is_active {
-            Self::sub_item(format!("Status: {}", style("Active").fg(Theme::SUCCESS)));
+            Self::sub_item(format!(
+                "Status: {}",
+                Theme::success_style().apply_to("Active")
+            ));
         }
     }
 
@@ -149,6 +160,20 @@ impl Output {
     /// Print empty line for spacing
     pub fn spacing() {
         println!();
+    }
+
+    /// Format stack entry status with appropriate color
+    /// - pending: Yellow (work in progress)
+    /// - submitted: Muted green (PR open/under review)
+    /// - merged: Bright green (completed!)
+    pub fn entry_status(is_submitted: bool, is_merged: bool) -> String {
+        if is_merged {
+            format!("{}", Theme::success_style().apply_to("[merged]"))
+        } else if is_submitted {
+            format!("{}", Theme::info_style().apply_to("[submitted]"))
+        } else {
+            format!("{}", style("[pending]").fg(Theme::WARNING))
+        }
     }
 }
 

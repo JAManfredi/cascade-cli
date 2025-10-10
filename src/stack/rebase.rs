@@ -210,6 +210,7 @@ impl RebaseManager {
             return self.handle_in_progress_cherry_pick(stack);
         }
 
+        // Print section header (caller will handle spinner animation)
         Output::section(format!("Rebasing stack: {}", stack.name));
 
         let mut result = RebaseResult {
@@ -286,12 +287,7 @@ impl RebaseManager {
             return Ok(result);
         }
 
-        println!(); // Spacing before tree
-        let plural = if entry_count == 1 { "entry" } else { "entries" };
-
-        // Start spinner that stays on one line while tree builds below
-        let mut spinner =
-            Spinner::new_with_output_below(format!("Rebasing {} {}", entry_count, plural));
+        // Just print tree items - caller handles spinner and title
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
@@ -576,9 +572,6 @@ impl RebaseManager {
             }
         }
 
-        // Stop the spinner now that all rebases are complete
-        spinner.stop();
-
         // Cleanup temp branches before returning to original branch
         // Must checkout away from temp branches first
         if !temp_branches.is_empty() {
@@ -607,7 +600,7 @@ impl RebaseManager {
         if !branches_to_push.is_empty() {
             println!(); // Spacing
 
-            // Start animated spinner for push phase
+            // Start spinner for push phase (animated until all pushes complete)
             let branch_word = if pushed_count == 1 {
                 "branch"
             } else {
@@ -618,7 +611,7 @@ impl RebaseManager {
                 pushed_count, branch_word
             ));
 
-            // Collect results while spinner animates
+            // Push all branches while spinner animates
             let mut push_results = Vec::new();
             for (branch_name, _pr_num, _index) in branches_to_push.iter() {
                 let result = self.git_repo.force_push_single_branch_auto(branch_name);
@@ -628,17 +621,19 @@ impl RebaseManager {
             // Stop spinner after all pushes complete
             push_spinner.stop();
 
-            // Now show all the results
+            // Now show static results for each push
             let mut failed_pushes = 0;
-            for (branch_name, result) in push_results {
+            for (index, (branch_name, result)) in push_results.iter().enumerate() {
                 match result {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
                         successful_pushes += 1;
-                        Output::success(format!(
-                            "Pushed {} ({}/{})",
-                            branch_name, successful_pushes, pushed_count
-                        ));
+                        println!(
+                            "   ✓ Pushed {} ({}/{})",
+                            branch_name,
+                            index + 1,
+                            pushed_count
+                        );
                     }
                     Err(e) => {
                         failed_pushes += 1;
@@ -918,9 +913,30 @@ impl RebaseManager {
         // Check for any leftover staged changes after successful cherry-pick
         if let Ok(staged_files) = self.git_repo.get_staged_files() {
             if !staged_files.is_empty() {
-                // Commit any leftover staged changes silently
+                // CRITICAL: Must commit staged changes - if this fails, user gets checkout warning
                 let cleanup_message = format!("Cleanup after cherry-pick {}", &commit_hash[..8]);
-                let _ = self.git_repo.commit_staged_changes(&cleanup_message);
+                match self.git_repo.commit_staged_changes(&cleanup_message) {
+                    Ok(Some(_)) => {
+                        debug!(
+                            "Committed {} leftover staged files after cherry-pick",
+                            staged_files.len()
+                        );
+                    }
+                    Ok(None) => {
+                        // Files were unstaged between check and commit - not critical
+                        debug!("Staged files were cleared before commit");
+                    }
+                    Err(e) => {
+                        // This is serious - staged files will remain and cause checkout warning
+                        tracing::warn!(
+                            "Failed to commit {} staged files after cherry-pick: {}. \
+                             User may see checkout warning with staged changes.",
+                            staged_files.len(),
+                            e
+                        );
+                        // Don't fail the entire rebase for this - but user will need to handle staged files
+                    }
+                }
             }
         }
 
