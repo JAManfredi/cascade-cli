@@ -8,7 +8,7 @@ use crate::config::CascadeConfig;
 use crate::errors::{CascadeError, Result};
 use crate::stack::{Stack, StackEntry, StackManager};
 use std::collections::HashMap;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 /// High-level integration between stacks and Bitbucket
@@ -95,7 +95,7 @@ impl BitbucketIntegration {
                             }
                         }
                         Err(e) => {
-                            warn!("Failed to get PR #{} for update: {}", pr_id, e);
+                            tracing::debug!("Failed to get PR #{} for update: {}", pr_id, e);
                         }
                     }
                 }
@@ -246,7 +246,7 @@ impl BitbucketIntegration {
                             status.pull_requests.push(pr);
                         }
                         Err(e) => {
-                            warn!("Failed to get pull request #{}: {}", pr_id, e);
+                            tracing::debug!("Failed to get pull request #{}: {}", pr_id, e);
                         }
                     }
                 }
@@ -521,9 +521,10 @@ impl BitbucketIntegration {
                                     if let Err(e) =
                                         self.pr_manager.add_comment(pr_id, &rebase_comment).await
                                     {
-                                        warn!(
+                                        tracing::debug!(
                                             "Failed to add rebase comment to PR #{}: {}",
-                                            pr_id, e
+                                            pr_id,
+                                            e
                                         );
                                     }
 
@@ -545,16 +546,17 @@ impl BitbucketIntegration {
                                     if let Err(e2) =
                                         self.pr_manager.add_comment(pr_id, &error_comment).await
                                     {
-                                        warn!(
+                                        tracing::debug!(
                                             "Failed to add error comment to PR #{}: {}",
-                                            pr_id, e2
+                                            pr_id,
+                                            e2
                                         );
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            warn!("Could not retrieve PR #{}: {}", pr_id, e);
+                            tracing::debug!("Could not retrieve PR #{}: {}", pr_id, e);
                         }
                     }
                 }
@@ -661,7 +663,11 @@ impl BitbucketIntegration {
                             status.enhanced_statuses.push(enhanced_status);
                         }
                         Err(e) => {
-                            warn!("Failed to get enhanced status for PR #{}: {}", pr_id, e);
+                            tracing::debug!(
+                                "Failed to get enhanced status for PR #{}: {}",
+                                pr_id,
+                                e
+                            );
                             // Fallback to basic PR info
                             match self.pr_manager.get_pull_request(pr_id).await {
                                 Ok(pr) => {
@@ -673,7 +679,7 @@ impl BitbucketIntegration {
                                     status.pull_requests.push(pr);
                                 }
                                 Err(e2) => {
-                                    warn!("Failed to get basic PR #{}: {}", pr_id, e2);
+                                    tracing::debug!("Failed to get basic PR #{}: {}", pr_id, e2);
                                 }
                             }
                         }

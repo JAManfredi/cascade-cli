@@ -532,7 +532,9 @@ impl GitRepository {
         }
 
         // 2. Try to fetch it from remote
-        println!("🔍 Branch '{name}' not found locally, trying to fetch from remote...");
+        crate::cli::output::Output::info(format!(
+            "Branch '{name}' not found locally, trying to fetch from remote..."
+        ));
 
         use std::process::Command;
 
@@ -560,7 +562,7 @@ impl GitRepository {
 
         // 4. Try alternative fetch patterns for common branch naming
         if name.contains('/') {
-            println!("🔍 Trying alternative fetch patterns...");
+            crate::cli::output::Output::info("Trying alternative fetch patterns...");
 
             // Try: git fetch origin (to get all refs, then checkout locally)
             let fetch_all_result = Command::new("git")
@@ -750,7 +752,7 @@ impl GitRepository {
             return Ok(None);
         }
 
-        tracing::info!("Committing {} staged files", staged_files.len());
+        tracing::debug!("Committing {} staged files", staged_files.len());
         let commit_hash = self.commit(default_message)?;
         Ok(Some(commit_hash))
     }
@@ -1658,7 +1660,7 @@ impl GitRepository {
         // Attempt push with enhanced error reporting
         match remote.push(&[&refspec], Some(&mut push_options)) {
             Ok(_) => {
-                tracing::info!("Push completed successfully for branch: {}", branch);
+                tracing::debug!("Push completed successfully for branch: {}", branch);
                 Ok(())
             }
             Err(e) => {
@@ -1804,7 +1806,7 @@ impl GitRepository {
             })?;
 
         if output.status.success() {
-            tracing::info!("✅ Git CLI pull succeeded for branch: {}", branch);
+            tracing::debug!("Git CLI pull succeeded for branch: {}", branch);
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -2015,8 +2017,8 @@ impl GitRepository {
             }
         }
 
-        info!(
-            "✅ Successfully force pushed {} to preserve PR history",
+        tracing::debug!(
+            "Successfully force pushed {} to preserve PR history",
             target_branch
         );
         Ok(())
@@ -2478,16 +2480,21 @@ impl GitRepository {
         }
 
         if !safety_info.is_merged_to_main {
-            println!("\n📋 Branch status:");
-            println!("  • Not merged to '{}'", safety_info.main_branch_name);
+            println!();
+            crate::cli::output::Output::section("Branch status");
+            crate::cli::output::Output::bullet(format!(
+                "Not merged to '{}'",
+                safety_info.main_branch_name
+            ));
             if let Some(ref remote) = safety_info.remote_tracking_branch {
-                println!("  • Remote tracking branch: {remote}");
+                crate::cli::output::Output::bullet(format!("Remote tracking branch: {remote}"));
             } else {
-                println!("  • No remote tracking branch");
+                crate::cli::output::Output::bullet("No remote tracking branch");
             }
         }
 
-        println!("\n💡 Safer alternatives:");
+        println!();
+        crate::cli::output::Output::section("Safer alternatives");
         if !safety_info.unpushed_commits.is_empty() {
             if let Some(ref _remote) = safety_info.remote_tracking_branch {
                 println!("  • Push commits first: git push origin {branch_name}");
@@ -2693,11 +2700,13 @@ impl GitRepository {
 
                 match self.create_stash(&stash_message) {
                     Ok(stash_id) => {
-                        println!("✅ Created stash: {stash_message} ({stash_id})");
-                        println!("💡 You can restore with: git stash pop");
+                        crate::cli::output::Output::success(format!(
+                            "Created stash: {stash_message} ({stash_id})"
+                        ));
+                        crate::cli::output::Output::tip("You can restore with: git stash pop");
                     }
                     Err(e) => {
-                        println!("❌ Failed to create stash: {e}");
+                        crate::cli::output::Output::error(format!("Failed to create stash: {e}"));
 
                         // If stash failed, provide better options
                         use dialoguer::Select;
@@ -2729,14 +2738,18 @@ impl GitRepository {
                                         .commit_staged_changes("WIP: Auto-commit before checkout")
                                     {
                                         Ok(Some(commit_hash)) => {
-                                            println!(
-                                                "✅ Committed staged changes as {}",
+                                            crate::cli::output::Output::success(format!(
+                                                "Committed staged changes as {}",
                                                 &commit_hash[..8]
+                                            ));
+                                            crate::cli::output::Output::tip(
+                                                "You can undo with: git reset HEAD~1",
                                             );
-                                            println!("💡 You can undo with: git reset HEAD~1");
                                         }
                                         Ok(None) => {
-                                            println!("No staged changes found to commit");
+                                            crate::cli::output::Output::info(
+                                                "No staged changes found to commit",
+                                            );
                                         }
                                         Err(commit_err) => {
                                             println!(

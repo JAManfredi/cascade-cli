@@ -36,7 +36,7 @@ impl AuthManager {
             .bitbucket_tokens
             .insert(server_url.to_string(), token.to_string());
         self.save()?;
-        tracing::info!("Stored authentication token for {}", server_url);
+        tracing::debug!("Stored authentication token for {}", server_url);
         Ok(())
     }
 
@@ -50,7 +50,7 @@ impl AuthManager {
         let removed = self.config.bitbucket_tokens.remove(server_url).is_some();
         if removed {
             self.save()?;
-            tracing::info!("Removed authentication token for {}", server_url);
+            tracing::debug!("Removed authentication token for {}", server_url);
         }
         Ok(removed)
     }
@@ -70,7 +70,7 @@ impl AuthManager {
 
         self.config.default_server = Some(server_url.to_string());
         self.save()?;
-        tracing::info!("Set default server to {}", server_url);
+        tracing::debug!("Set default server to {}", server_url);
         Ok(())
     }
 

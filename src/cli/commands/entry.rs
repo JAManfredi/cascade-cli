@@ -19,7 +19,7 @@ use ratatui::{
 };
 use std::env;
 use std::io;
-use tracing::{debug, warn};
+use tracing::debug;
 
 #[derive(Debug, Subcommand)]
 pub enum EntryAction {
@@ -172,7 +172,7 @@ async fn checkout_entry(
 
     // Handle edit mode exit if needed
     if let Some((commit_hash, commit_message)) = edit_mode_display {
-        warn!("Already in edit mode for entry in stack");
+        tracing::debug!("Already in edit mode for entry in stack");
 
         if !skip_confirmation {
             Output::warning("Already in edit mode!");

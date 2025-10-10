@@ -413,7 +413,7 @@ impl StackManager {
             // Update working branch if not already set
             if stack.working_branch.is_none() && current_branch != stack.base_branch {
                 stack.working_branch = Some(current_branch.clone());
-                tracing::info!(
+                tracing::debug!(
                     "Set working branch for stack '{}' to '{}'",
                     stack.name,
                     current_branch
@@ -430,12 +430,14 @@ impl StackManager {
                     || current_branch.contains("fix");
 
                 if base_exists && current_is_feature {
-                    tracing::info!(
-                        "🎯 First commit detected: updating stack '{}' base branch from '{}' to '{}'",
-                        stack.name, stack.base_branch, current_branch
+                    tracing::debug!(
+                        "First commit detected: updating stack '{}' base branch from '{}' to '{}'",
+                        stack.name,
+                        stack.base_branch,
+                        current_branch
                     );
 
-                    Output::info("🎯 Smart Base Branch Update:");
+                    Output::info("Smart Base Branch Update:");
                     Output::sub_item(format!(
                         "Stack '{}' was created with base '{}'",
                         stack.name, stack.base_branch

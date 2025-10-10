@@ -660,7 +660,7 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
                     stack_meta.total_commits, stack_meta.submitted_commits
                 );
                 if stack_meta.has_conflicts {
-                    println!("    ⚠️  Has conflicts");
+                    Output::warning("    Has conflicts");
                 }
             }
 
@@ -1041,9 +1041,9 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                 }
             }
             Err(e) => {
-                warn!("Failed to get enhanced stack status: {}", e);
-                println!("   ⚠️  Could not fetch mergability status");
-                println!("   Use 'ca stack show --verbose' for basic PR information");
+                tracing::debug!("Failed to get enhanced stack status: {}", e);
+                Output::warning("Could not fetch mergability status");
+                Output::sub_item("Use 'ca stack show --verbose' for basic PR information");
             }
         }
     } else {
@@ -1098,7 +1098,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                 Output::tip("Use 'ca stack --mergeable' to see detailed status including build and review information");
             }
             Err(e) => {
-                warn!("Failed to check stack status: {}", e);
+                tracing::debug!("Failed to check stack status: {}", e);
             }
         }
     }
@@ -1252,12 +1252,12 @@ async fn push_to_stack(
                             match repo.cherry_pick(commit_hash) {
                                 Ok(_) => println!("   ✅ Cherry-picked {}", &commit_hash[..8]),
                                 Err(e) => {
-                                    println!(
-                                        "   ❌ Failed to cherry-pick {}: {}",
+                                    Output::error(format!(
+                                        "Failed to cherry-pick {}: {}",
                                         &commit_hash[..8],
                                         e
-                                    );
-                                    println!("   💡 You may need to resolve conflicts manually");
+                                    ));
+                                    Output::tip("You may need to resolve conflicts manually");
                                     return Err(CascadeError::branch(format!(
                                         "Failed to cherry-pick commit {commit_hash}: {e}"
                                     )));
@@ -1737,7 +1737,7 @@ async fn submit_entry(
         {
             Ok(pr) => {
                 submitted_count += 1;
-                println!("✓ PR #{}", pr.id);
+                Output::success(format!("PR #{}", pr.id));
                 if let Some(url) = pr.web_url() {
                     Output::sub_item(format!(
                         "{} → {}",
@@ -1748,7 +1748,7 @@ async fn submit_entry(
                 }
             }
             Err(e) => {
-                println!("✗ Failed");
+                Output::error("Failed");
                 // Extract clean error message (remove git stderr noise)
                 let clean_error = if e.to_string().contains("non-fast-forward") {
                     "Branch has diverged (was rebased after initial submission). Update to v0.1.41+ to auto force-push.".to_string()
@@ -1822,8 +1822,8 @@ async fn submit_entry(
     } else {
         println!();
         Output::section("Submission Summary");
-        println!("   ✓ Successful: {submitted_count}");
-        println!("   ✗ Failed: {}", failed_entries.len());
+        Output::success(format!("Successful: {submitted_count}"));
+        Output::error(format!("Failed: {}", failed_entries.len()));
 
         if !failed_entries.is_empty() {
             println!();
@@ -1926,7 +1926,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
             }
         }
         Err(e) => {
-            warn!("Failed to check stack status: {}", e);
+            tracing::debug!("Failed to check stack status: {}", e);
             return Err(e);
         }
     }
@@ -2557,26 +2557,30 @@ async fn rebase_stack(
                             }
                         }
                         Err(e) => {
-                            eprintln!("   ⚠️  Failed to update pull requests: {e}");
-                            eprintln!("      You may need to manually update PRs in Bitbucket");
+                            Output::warning(format!("Failed to update pull requests: {e}"));
+                            Output::sub_item("You may need to manually update PRs in Bitbucket");
                         }
                     }
                 }
             }
 
-            println!(
-                "   ✅ {} commits successfully rebased",
+            Output::success(format!(
+                "{} commits successfully rebased",
                 result.success_count()
-            );
+            ));
 
             // Show next steps
             if matches!(rebase_strategy, crate::stack::RebaseStrategy::ForcePush) {
-                println!("\n📝 Next steps:");
+                println!();
+                Output::section("Next steps");
                 if !result.branch_mapping.is_empty() {
-                    println!("   1. ✅ Branches have been rebased and force-pushed");
-                    println!("   2. ✅ Pull requests updated automatically (history preserved)");
-                    println!("   3. 🔍 Review the updated PRs in Bitbucket");
-                    println!("   4. 🧪 Test your changes");
+                    Output::numbered_item(1, "Branches have been rebased and force-pushed");
+                    Output::numbered_item(
+                        2,
+                        "Pull requests updated automatically (history preserved)",
+                    );
+                    Output::numbered_item(3, "Review the updated PRs in Bitbucket");
+                    Output::numbered_item(4, "Test your changes");
                 } else {
                     println!("   1. Review the rebased stack");
                     println!("   2. Test your changes");
@@ -2649,7 +2653,7 @@ async fn abort_rebase() -> Result<()> {
         return Ok(());
     }
 
-    println!("⚠️  Aborting rebase...");
+    Output::warning("Aborting rebase...");
     match rebase_manager.abort_rebase() {
         Ok(_) => {
             Output::success(" Rebase aborted successfully");

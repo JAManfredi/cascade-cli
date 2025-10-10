@@ -4,7 +4,7 @@ use crate::stack::{Stack, StackManager};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, info, warn};
+use tracing::debug;
 use uuid::Uuid;
 
 /// Conflict resolution result
@@ -113,10 +113,10 @@ impl TempBranchCleanupGuard {
             return;
         }
 
-        info!("🧹 Cleaning up {} temporary branches", self.branches.len());
+        tracing::debug!("Cleaning up {} temporary branches", self.branches.len());
         for branch in &self.branches {
             if let Err(e) = git_repo.delete_branch_unsafe(branch) {
-                warn!("Failed to delete temp branch {}: {}", branch, e);
+                tracing::debug!("Failed to delete temp branch {}: {}", branch, e);
                 // Continue with cleanup even if one fails
             }
         }
@@ -129,12 +129,12 @@ impl Drop for TempBranchCleanupGuard {
         if !self.cleaned && !self.branches.is_empty() {
             // This path is only hit on panic or unexpected early return
             // We can't access git_repo here, so just log the branches that need manual cleanup
-            warn!(
-                "⚠️  {} temporary branches were not cleaned up: {}",
+            tracing::warn!(
+                "{} temporary branches were not cleaned up: {}",
                 self.branches.len(),
                 self.branches.join(", ")
             );
-            warn!("Run 'ca cleanup' to remove orphaned temporary branches");
+            tracing::warn!("Run 'ca cleanup' to remove orphaned temporary branches");
         }
     }
 }
@@ -464,7 +464,7 @@ impl RebaseManager {
                                     → Manually resolve conflicts as they appear",
                                     &entry.commit_hash[..8]
                                 ));
-                                warn!("CRITICAL - No files staged after auto-resolve!");
+                                tracing::error!("CRITICAL - No files staged after auto-resolve!");
                                 break;
                             }
 
@@ -754,7 +754,7 @@ impl RebaseManager {
 
     /// Interactive rebase with user input
     fn rebase_interactive(&mut self, stack: &Stack) -> Result<RebaseResult> {
-        info!("Starting interactive rebase for stack '{}'", stack.name);
+        tracing::debug!("Starting interactive rebase for stack '{}'", stack.name);
 
         let mut result = RebaseResult {
             success: true,
@@ -835,7 +835,9 @@ impl RebaseManager {
 
             // If cherry-pick is in progress but no conflicts detected, something is wrong
             if cherry_pick_in_progress {
-                warn!("CHERRY_PICK_HEAD exists but no conflicts in index - aborting cherry-pick");
+                tracing::debug!(
+                    "CHERRY_PICK_HEAD exists but no conflicts in index - aborting cherry-pick"
+                );
 
                 // Abort the cherry-pick to clean up
                 let _ = std::process::Command::new("git")
@@ -977,7 +979,7 @@ impl RebaseManager {
             return Ok(ConflictResolution::Resolved);
         }
 
-        info!(
+        tracing::debug!(
             "Resolving {} conflicts in {} using enhanced analysis",
             conflicts.len(),
             file_path
@@ -1032,7 +1034,7 @@ impl RebaseManager {
 
                 // CRITICAL SAFETY CHECK: Don't write empty files!
                 if content.trim().is_empty() {
-                    warn!(
+                    tracing::warn!(
                         "SAFETY CHECK: Resolved content for {} is empty! Aborting auto-resolution.",
                         file_path
                     );
@@ -1057,7 +1059,7 @@ impl RebaseManager {
                 debug!("Wrote {} bytes to {}", content.len(), file_path);
                 return Ok(ConflictResolution::Resolved);
             } else {
-                info!(
+                tracing::debug!(
                     "Partially resolved conflicts in {} ({} remaining)",
                     file_path,
                     remaining_conflicts.len()
@@ -1312,7 +1314,7 @@ impl RebaseManager {
 
     /// Pull latest changes from remote
     fn pull_latest_changes(&self, branch: &str) -> Result<()> {
-        info!("Pulling latest changes for branch {}", branch);
+        tracing::debug!("Pulling latest changes for branch {}", branch);
 
         // First try to fetch (this might fail if no remote exists)
         match self.git_repo.fetch() {
@@ -1321,18 +1323,18 @@ impl RebaseManager {
                 // Now try to pull the specific branch
                 match self.git_repo.pull(branch) {
                     Ok(_) => {
-                        info!("Pull completed successfully for {}", branch);
+                        tracing::debug!("Pull completed successfully for {}", branch);
                         Ok(())
                     }
                     Err(e) => {
-                        warn!("Pull failed for {}: {}", branch, e);
+                        tracing::debug!("Pull failed for {}: {}", branch, e);
                         // Don't fail the entire rebase for pull issues
                         Ok(())
                     }
                 }
             }
             Err(e) => {
-                warn!("Fetch failed: {}", e);
+                tracing::debug!("Fetch failed: {}", e);
                 // Don't fail if there's no remote configured
                 Ok(())
             }
@@ -1350,7 +1352,7 @@ impl RebaseManager {
 
     /// Abort an in-progress rebase
     pub fn abort_rebase(&self) -> Result<()> {
-        info!("Aborting rebase operation");
+        tracing::debug!("Aborting rebase operation");
 
         let git_dir = self.git_repo.path().join(".git");
 
@@ -1379,13 +1381,13 @@ impl RebaseManager {
             })?;
         }
 
-        info!("Rebase aborted successfully");
+        tracing::debug!("Rebase aborted successfully");
         Ok(())
     }
 
     /// Continue an in-progress rebase after conflict resolution
     pub fn continue_rebase(&self) -> Result<()> {
-        info!("Continuing rebase operation");
+        tracing::debug!("Continuing rebase operation");
 
         // Check if there are still conflicts
         if self.git_repo.has_conflicts()? {
@@ -1397,7 +1399,7 @@ impl RebaseManager {
         // Stage resolved files
         self.git_repo.stage_conflict_resolved_files()?;
 
-        info!("Rebase continued successfully");
+        tracing::debug!("Rebase continued successfully");
         Ok(())
     }
 

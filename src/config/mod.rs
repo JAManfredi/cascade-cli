@@ -74,16 +74,16 @@ pub fn initialize_repo(repo_path: &Path, bitbucket_url: Option<String>) -> Resul
     // Detect the actual default branch from the repository
     if let Ok(git_repo) = GitRepository::open(repo_path) {
         if let Ok(detected_branch) = git_repo.detect_main_branch() {
-            tracing::info!("Detected default branch: {}", detected_branch);
+            tracing::debug!("Detected default branch: {}", detected_branch);
             settings.git.default_branch = detected_branch;
         } else {
-            tracing::warn!(
+            tracing::debug!(
                 "Could not detect default branch, using fallback: {}",
                 settings.git.default_branch
             );
         }
     } else {
-        tracing::warn!(
+        tracing::debug!(
             "Could not open git repository, using fallback default branch: {}",
             settings.git.default_branch
         );
@@ -91,6 +91,6 @@ pub fn initialize_repo(repo_path: &Path, bitbucket_url: Option<String>) -> Resul
 
     settings.save_to_file(&config_dir.join("config.json"))?;
 
-    tracing::info!("Initialized Cascade repository at {}", repo_path.display());
+    tracing::debug!("Initialized Cascade repository at {}", repo_path.display());
     Ok(())
 }
