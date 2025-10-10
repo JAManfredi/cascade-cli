@@ -632,36 +632,33 @@ impl RebaseManager {
                 pushed_count, branch_word
             ));
 
-            let mut successful_pushes = 0;
+            // Collect results while spinner animates
+            let mut push_results = Vec::new();
             for (branch_name, _pr_num) in branches_to_push.iter() {
-                match self.git_repo.force_push_single_branch_auto(branch_name) {
+                let result = self.git_repo.force_push_single_branch_auto(branch_name);
+                push_results.push((branch_name.clone(), result));
+            }
+
+            // Stop spinner after all pushes complete
+            push_spinner.stop();
+
+            // Now show all the results
+            let mut successful_pushes = 0;
+            for (branch_name, result) in push_results {
+                match result {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
                         successful_pushes += 1;
-
-                        // Stop spinner on first push to clear the title line
-                        if successful_pushes == 1 {
-                            push_spinner.stop();
-                        }
-
-                        // Show individual branch progress (no restart of spinner)
                         Output::success(format!(
                             "Pushed {} ({}/{})",
                             branch_name, successful_pushes, pushed_count
                         ));
                     }
                     Err(e) => {
-                        // Stop spinner on first error if not already stopped
-                        if successful_pushes == 0 {
-                            push_spinner.stop();
-                        }
                         Output::warning(format!("Could not push '{}': {}", branch_name, e));
                     }
                 }
             }
-
-            // Ensure spinner is stopped (in case all pushes failed)
-            push_spinner.stop();
         }
 
         // Update working branch to point to the top of the rebased stack
