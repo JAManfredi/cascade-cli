@@ -632,41 +632,44 @@ impl RebaseManager {
                 pushed_count, branch_word
             ));
 
+            let mut successful_pushes = 0;
             for (i, (branch_name, _pr_num)) in branches_to_push.iter().enumerate() {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
-                        // Update spinner message with progress
-                        push_spinner.update_message(format!(
-                            "Pushing {} updated PR {} ({}/{})",
-                            pushed_count,
-                            branch_word,
-                            i + 1,
-                            pushed_count
+                        successful_pushes += 1;
+
+                        // Stop spinner and show progress line
+                        push_spinner.stop();
+                        Output::success(format!(
+                            "Pushed {}/{} PR {}",
+                            successful_pushes, pushed_count, branch_word
                         ));
+
+                        // Restart spinner for remaining pushes (if any)
+                        if i + 1 < branches_to_push.len() {
+                            push_spinner = Spinner::new(format!(
+                                "Pushing {} updated PR {}",
+                                pushed_count, branch_word
+                            ));
+                        }
                     }
                     Err(e) => {
                         push_spinner.stop(); // Stop spinner before printing warning
                         Output::warning(format!("Could not push '{}': {}", branch_name, e));
                         // Restart spinner for remaining pushes
-                        if i + 1 < pushed_count {
+                        if i + 1 < branches_to_push.len() {
                             push_spinner = Spinner::new(format!(
-                                "Pushing {} updated PR {} ({}/{})",
-                                pushed_count,
-                                branch_word,
-                                i + 2,
-                                pushed_count
+                                "Pushing {} updated PR {}",
+                                pushed_count, branch_word
                             ));
                         }
                     }
                 }
             }
 
-            // Stop spinner with success message
-            push_spinner.stop_with_message(&format!(
-                "✓ Pushed {}/{} PR {}",
-                pushed_count, pushed_count, branch_word
-            ));
+            // Ensure spinner is stopped (in case of early break or error)
+            push_spinner.stop();
         }
 
         // Update working branch to point to the top of the rebased stack
