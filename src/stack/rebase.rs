@@ -287,7 +287,8 @@ impl RebaseManager {
 
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
-        println!("Rebasing {} {}...", entry_count, plural);
+        print!("⠋ Rebasing {} {}...", entry_count, plural);
+        std::io::Write::flush(&mut std::io::stdout()).ok();
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
@@ -312,6 +313,11 @@ impl RebaseManager {
                 } else {
                     "├─"
                 };
+
+                // Clear spinner and start tree on first entry
+                if index == 0 {
+                    print!("\r"); // Clear spinner line
+                }
 
                 if let Some(pr_num) = &entry.pull_request_id {
                     println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
@@ -373,6 +379,11 @@ impl RebaseManager {
                     } else {
                         "├─"
                     };
+
+                    // Clear spinner and start tree on first entry
+                    if index == 0 {
+                        print!("\r"); // Clear spinner line
+                    }
 
                     if let Some(pr_num) = &entry.pull_request_id {
                         println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
@@ -606,19 +617,35 @@ impl RebaseManager {
         let skipped_count = entry_count - pushed_count;
 
         if !branches_to_push.is_empty() {
-            // Push branches silently - user will see the summary
+            println!(); // Spacing
+            print!(
+                "⠋ Pushing {} updated PR branch{}...",
+                pushed_count,
+                if pushed_count == 1 { "" } else { "es" }
+            );
+            std::io::Write::flush(&mut std::io::stdout()).ok();
 
-            for (branch_name, _pr_num) in &branches_to_push {
+            for (i, (branch_name, _pr_num)) in branches_to_push.iter().enumerate() {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
+                        // Show progress indicator - clear line and show progress
+                        print!(
+                            "\r  {} Pushed {}/{}",
+                            if i + 1 == pushed_count { "✓" } else { "⠋" },
+                            i + 1,
+                            pushed_count
+                        );
+                        std::io::Write::flush(&mut std::io::stdout()).ok();
                     }
                     Err(e) => {
+                        println!(); // New line before warning
                         Output::warning(format!("Could not push '{}': {}", branch_name, e));
                         // Continue pushing other branches even if one fails
                     }
                 }
             }
+            println!(); // Final newline after progress
         }
 
         // Update working branch to point to the top of the rebased stack
