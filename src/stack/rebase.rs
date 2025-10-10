@@ -633,42 +633,34 @@ impl RebaseManager {
             ));
 
             let mut successful_pushes = 0;
-            for (i, (branch_name, _pr_num)) in branches_to_push.iter().enumerate() {
+            for (branch_name, _pr_num) in branches_to_push.iter() {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
                         successful_pushes += 1;
 
-                        // Stop spinner and show progress line
-                        push_spinner.stop();
-                        Output::success(format!(
-                            "Pushed {}/{} PR {}",
-                            successful_pushes, pushed_count, branch_word
-                        ));
-
-                        // Restart spinner for remaining pushes (if any)
-                        if i + 1 < branches_to_push.len() {
-                            push_spinner = Spinner::new(format!(
-                                "Pushing {} updated PR {}",
-                                pushed_count, branch_word
-                            ));
+                        // Stop spinner on first push to clear the title line
+                        if successful_pushes == 1 {
+                            push_spinner.stop();
                         }
+
+                        // Show individual branch progress (no restart of spinner)
+                        Output::success(format!(
+                            "Pushed {} ({}/{})",
+                            branch_name, successful_pushes, pushed_count
+                        ));
                     }
                     Err(e) => {
-                        push_spinner.stop(); // Stop spinner before printing warning
-                        Output::warning(format!("Could not push '{}': {}", branch_name, e));
-                        // Restart spinner for remaining pushes
-                        if i + 1 < branches_to_push.len() {
-                            push_spinner = Spinner::new(format!(
-                                "Pushing {} updated PR {}",
-                                pushed_count, branch_word
-                            ));
+                        // Stop spinner on first error if not already stopped
+                        if successful_pushes == 0 {
+                            push_spinner.stop();
                         }
+                        Output::warning(format!("Could not push '{}': {}", branch_name, e));
                     }
                 }
             }
 
-            // Ensure spinner is stopped (in case of early break or error)
+            // Ensure spinner is stopped (in case all pushes failed)
             push_spinner.stop();
         }
 
