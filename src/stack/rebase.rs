@@ -267,7 +267,7 @@ impl RebaseManager {
         let mut current_base = target_base.clone();
         let entry_count = stack.entries.len();
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
-        let mut branches_to_push: Vec<(String, String)> = Vec::new(); // (branch_name, pr_number)
+        let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, index)
 
         // Handle empty stack early
         if entry_count == 0 {
@@ -289,8 +289,9 @@ impl RebaseManager {
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
 
-        // Start animated spinner for rebase phase
-        let mut spinner = Spinner::new(format!("Rebasing {} {}", entry_count, plural));
+        // Start spinner that stays on one line while tree builds below
+        let mut spinner =
+            Spinner::new_with_output_below(format!("Rebasing {} {}", entry_count, plural));
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
@@ -309,23 +310,15 @@ impl RebaseManager {
                     current_base
                 );
 
-                // Track which branches need to be pushed (only those with PRs)
-                let tree_char = if index + 1 == entry_count {
-                    "└─"
-                } else {
-                    "├─"
-                };
-
-                // Clear spinner and start tree on first entry
-                if index == 0 {
-                    spinner.stop(); // Stop animated spinner
-                }
-
+                // Print tree item immediately and track for push phase
                 if let Some(pr_num) = &entry.pull_request_id {
+                    let tree_char = if index + 1 == entry_count {
+                        "└─"
+                    } else {
+                        "├─"
+                    };
                     println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
-                    branches_to_push.push((original_branch.clone(), pr_num.clone()));
-                } else {
-                    println!("   {} {} (not submitted)", tree_char, original_branch);
+                    branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
                 }
 
                 result
@@ -375,23 +368,15 @@ impl RebaseManager {
                     self.git_repo
                         .update_branch_to_commit(original_branch, &rebased_commit_id)?;
 
-                    // Track which branches need to be pushed (only those with PRs)
-                    let tree_char = if index + 1 == entry_count {
-                        "└─"
-                    } else {
-                        "├─"
-                    };
-
-                    // Clear spinner and start tree on first entry
-                    if index == 0 {
-                        spinner.stop(); // Stop animated spinner
-                    }
-
+                    // Print tree item immediately and track for push phase
                     if let Some(pr_num) = &entry.pull_request_id {
+                        let tree_char = if index + 1 == entry_count {
+                            "└─"
+                        } else {
+                            "├─"
+                        };
                         println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
-                        branches_to_push.push((original_branch.clone(), pr_num.clone()));
-                    } else {
-                        println!("   {} {} (not submitted)", tree_char, original_branch);
+                        branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
                     }
 
                     result
@@ -521,25 +506,22 @@ impl RebaseManager {
                                         &rebased_commit_id,
                                     )?;
 
-                                    // Track which branches need to be pushed (only those with PRs)
-                                    let tree_char = if index + 1 == entry_count {
-                                        "└─"
-                                    } else {
-                                        "├─"
-                                    };
-
+                                    // Print tree item immediately and track for push phase
                                     if let Some(pr_num) = &entry.pull_request_id {
+                                        let tree_char = if index + 1 == entry_count {
+                                            "└─"
+                                        } else {
+                                            "├─"
+                                        };
                                         println!(
                                             "   {} {} (PR #{})",
                                             tree_char, original_branch, pr_num
                                         );
-                                        branches_to_push
-                                            .push((original_branch.clone(), pr_num.clone()));
-                                    } else {
-                                        println!(
-                                            "   {} {} (not submitted)",
-                                            tree_char, original_branch
-                                        );
+                                        branches_to_push.push((
+                                            original_branch.clone(),
+                                            pr_num.clone(),
+                                            index,
+                                        ));
                                     }
 
                                     result
@@ -594,6 +576,9 @@ impl RebaseManager {
             }
         }
 
+        // Stop the spinner now that all rebases are complete
+        spinner.stop();
+
         // Cleanup temp branches before returning to original branch
         // Must checkout away from temp branches first
         if !temp_branches.is_empty() {
@@ -634,7 +619,7 @@ impl RebaseManager {
 
             // Collect results while spinner animates
             let mut push_results = Vec::new();
-            for (branch_name, _pr_num) in branches_to_push.iter() {
+            for (branch_name, _pr_num, _index) in branches_to_push.iter() {
                 let result = self.git_repo.force_push_single_branch_auto(branch_name);
                 push_results.push((branch_name.clone(), result));
             }

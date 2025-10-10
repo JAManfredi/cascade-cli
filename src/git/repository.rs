@@ -1539,6 +1539,42 @@ impl GitRepository {
         }
     }
 
+    /// Fetch from remote with exponential backoff retry logic
+    /// This is critical for force push safety checks to prevent data loss from stale refs
+    fn fetch_with_retry(&self) -> Result<()> {
+        const MAX_RETRIES: u32 = 3;
+        const BASE_DELAY_MS: u64 = 500;
+
+        let mut last_error = None;
+
+        for attempt in 0..MAX_RETRIES {
+            match self.fetch() {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    last_error = Some(e);
+
+                    if attempt < MAX_RETRIES - 1 {
+                        let delay_ms = BASE_DELAY_MS * 2_u64.pow(attempt);
+                        debug!(
+                            "Fetch attempt {} failed, retrying in {}ms...",
+                            attempt + 1,
+                            delay_ms
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                    }
+                }
+            }
+        }
+
+        // All retries failed - this is CRITICAL for force push safety
+        Err(CascadeError::Git(git2::Error::from_str(&format!(
+            "Critical: Failed to fetch remote refs after {} attempts. Cannot safely proceed with force push - \
+             stale remote refs could cause data loss. Error: {}. Please check network connection.",
+            MAX_RETRIES,
+            last_error.unwrap()
+        ))))
+    }
+
     /// Pull changes from remote (fetch + merge)
     pub fn pull(&self, branch: &str) -> Result<()> {
         tracing::debug!("Pulling branch: {}", branch);
@@ -2035,7 +2071,7 @@ impl GitRepository {
             Ok(_) => {}
             Err(e) => {
                 // If fetch fails, warn but don't block the operation
-                warn!("Could not fetch latest changes for safety check: {}", e);
+                debug!("Could not fetch latest changes for safety check: {}", e);
             }
         }
 
@@ -2244,13 +2280,9 @@ impl GitRepository {
     /// Check force push safety without user confirmation (auto-creates backup)
     /// Used for automated operations like sync where user already confirmed the operation
     fn check_force_push_safety_auto(&self, target_branch: &str) -> Result<Option<ForceBackupInfo>> {
-        // First fetch latest remote changes to ensure we have up-to-date information
-        match self.fetch() {
-            Ok(_) => {}
-            Err(e) => {
-                warn!("Could not fetch latest changes for safety check: {}", e);
-            }
-        }
+        // CRITICAL: Fetch latest remote changes with retry logic
+        // Stale remote refs could cause silent data loss!
+        self.fetch_with_retry()?;
 
         // Check if there are commits on the remote that would be lost
         let remote_ref = format!("refs/remotes/origin/{target_branch}");

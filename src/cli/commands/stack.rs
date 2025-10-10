@@ -2373,19 +2373,40 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                                                 cascade_config,
                                             )?;
 
-                                        match integration
+                                        // Show spinner during PR updates
+                                        let pr_word = if result.branch_mapping.len() == 1 {
+                                            "PR"
+                                        } else {
+                                            "PRs"
+                                        };
+                                        let mut pr_spinner =
+                                            crate::utils::spinner::Spinner::new(format!(
+                                                "Updating {} {}",
+                                                result.branch_mapping.len(),
+                                                pr_word
+                                            ));
+
+                                        let pr_result = integration
                                             .update_prs_after_rebase(
                                                 &stack_id,
                                                 &result.branch_mapping,
                                             )
-                                            .await
-                                        {
+                                            .await;
+
+                                        pr_spinner.stop();
+
+                                        match pr_result {
                                             Ok(updated_prs) => {
                                                 if !updated_prs.is_empty() {
-                                                    println!(
-                                                        "Updated {} pull requests",
-                                                        updated_prs.len()
-                                                    );
+                                                    Output::success(format!(
+                                                        "Updated {} pull request{}",
+                                                        updated_prs.len(),
+                                                        if updated_prs.len() == 1 {
+                                                            ""
+                                                        } else {
+                                                            "s"
+                                                        }
+                                                    ));
                                                 }
                                             }
                                             Err(e) => {

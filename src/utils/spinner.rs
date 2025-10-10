@@ -57,6 +57,42 @@ impl Spinner {
         }
     }
 
+    /// Start a new spinner that stays on one line while content appears below
+    ///
+    /// This variant prints the message with a newline, then updates only the
+    /// spinner character using ANSI cursor positioning. Content can be printed
+    /// below without being overwritten by the spinner.
+    pub fn new_with_output_below(message: String) -> Self {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = Arc::clone(&running);
+        let message_clone = message.clone();
+
+        // Print initial message with newline
+        println!("{} {}...", Self::FRAMES[0], message_clone);
+        io::stdout().flush().ok();
+
+        let handle = thread::spawn(move || {
+            let mut frame_idx = 1; // Start at 1 since we already printed frame 0
+            while running_clone.load(Ordering::Relaxed) {
+                let frame = Self::FRAMES[frame_idx % Self::FRAMES.len()];
+
+                // Move cursor up 1 line, go to column 0, print spinner, move cursor down 1 line
+                // This updates just the spinner character without touching content below
+                print!("\x1b[1A\x1b[0G{}\x1b[1B\x1b[0G", frame);
+                io::stdout().flush().ok();
+
+                frame_idx += 1;
+                thread::sleep(Duration::from_millis(Self::FRAME_DURATION_MS));
+            }
+        });
+
+        Spinner {
+            running,
+            handle: Some(handle),
+            message,
+        }
+    }
+
     /// Stop the spinner and clear the line
     ///
     /// This method is idempotent - it's safe to call multiple times.

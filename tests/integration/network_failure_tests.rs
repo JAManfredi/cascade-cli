@@ -301,7 +301,9 @@ async fn test_network_interruption_scenarios() {
             || error_msg.contains("resolve")
             || error_msg.contains("network")
             || error_msg.contains("connection")
-            || error_msg.contains("timeout"),
+            || error_msg.contains("timeout")
+            || error_msg.contains("eof")
+            || error_msg.contains("tunneling"),
         "Should contain network-related error: {error_msg}"
     );
 }
