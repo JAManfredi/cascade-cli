@@ -2167,18 +2167,14 @@ async fn continue_sync() -> Result<()> {
         manager.save_to_disk()?;
     }
 
-    // Get the top of the stack (last entry) to update the working branch
-    // The working branch should always point to the top of the stack
+    // Get the top of the stack to update the working branch
     let top_commit = {
         let active_stack = manager.get_active_stack()
             .ok_or_else(|| CascadeError::config("No active stack found"))?;
         
         if let Some(last_entry) = active_stack.entries.last() {
-            // Get the current HEAD of the last entry's branch
-            // This handles both the case where we just updated it and where it was already rebased
             git_repo.get_branch_head(&last_entry.branch)?
         } else {
-            // Empty stack - shouldn't happen here, but use new_commit_hash as fallback
             new_commit_hash.clone()
         }
     };
@@ -2191,9 +2187,29 @@ async fn continue_sync() -> Result<()> {
     // Checkout to working branch
     git_repo.checkout_branch_unsafe(&working_branch)?;
     
-    // CRITICAL: Update working branch to point to the top of the rebased stack
-    // This ensures the working branch reflects the rebased stack state
-    git_repo.update_branch_to_commit(&working_branch, &top_commit)?;
+    // SAFETY CHECK: Only update working branch if it's safe to do so
+    // Mirror the safety logic from rebase.rs lines 630-681
+    if let Ok(working_head) = git_repo.get_branch_head(&working_branch) {
+        let top_commit_hash = top_commit.clone();
+        if working_head != top_commit_hash {
+            // Check if working branch has commits beyond the top of stack
+            if let Ok(commits) = git_repo.get_commits_between(&top_commit_hash, &working_head) {
+                if !commits.is_empty() {
+                    // Working branch has untracked commits - preserve them!
+                    Output::warning(format!(
+                        "Working branch '{}' has {} additional commit(s) - not updating pointer",
+                        working_branch,
+                        commits.len()
+                    ));
+                    Output::tip("Run 'ca stack push' to add these commits to the stack");
+                } else {
+                    // Safe to update - working branch is behind top of stack
+                    git_repo.update_branch_to_commit(&working_branch, &top_commit_hash)?;
+                }
+            }
+        }
+        // If working_head == top_commit, no update needed
+    }
 
     println!();
     Output::info("Resuming sync to complete the rebase...");
