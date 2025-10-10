@@ -1,6 +1,7 @@
 use crate::errors::{CascadeError, Result};
 use crate::git::{ConflictAnalyzer, GitRepository};
 use crate::stack::{Stack, StackManager};
+use crate::utils::spinner::Spinner;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -287,8 +288,9 @@ impl RebaseManager {
 
         println!(); // Spacing before tree
         let plural = if entry_count == 1 { "entry" } else { "entries" };
-        print!("⠋ Rebasing {} {}...", entry_count, plural);
-        std::io::Write::flush(&mut std::io::stdout()).ok();
+
+        // Start animated spinner for rebase phase
+        let mut spinner = Spinner::new(format!("Rebasing {} {}", entry_count, plural));
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
@@ -316,7 +318,7 @@ impl RebaseManager {
 
                 // Clear spinner and start tree on first entry
                 if index == 0 {
-                    print!("\r"); // Clear spinner line
+                    spinner.stop(); // Stop animated spinner
                 }
 
                 if let Some(pr_num) = &entry.pull_request_id {
@@ -382,7 +384,7 @@ impl RebaseManager {
 
                     // Clear spinner and start tree on first entry
                     if index == 0 {
-                        print!("\r"); // Clear spinner line
+                        spinner.stop(); // Stop animated spinner
                     }
 
                     if let Some(pr_num) = &entry.pull_request_id {
@@ -618,34 +620,53 @@ impl RebaseManager {
 
         if !branches_to_push.is_empty() {
             println!(); // Spacing
-            print!(
-                "⠋ Pushing {} updated PR branch{}...",
-                pushed_count,
-                if pushed_count == 1 { "" } else { "es" }
-            );
-            std::io::Write::flush(&mut std::io::stdout()).ok();
+
+            // Start animated spinner for push phase
+            let branch_word = if pushed_count == 1 {
+                "branch"
+            } else {
+                "branches"
+            };
+            let mut push_spinner = Spinner::new(format!(
+                "Pushing {} updated PR {}",
+                pushed_count, branch_word
+            ));
 
             for (i, (branch_name, _pr_num)) in branches_to_push.iter().enumerate() {
                 match self.git_repo.force_push_single_branch_auto(branch_name) {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
-                        // Show progress indicator - clear line and show progress
-                        print!(
-                            "\r  {} Pushed {}/{}",
-                            if i + 1 == pushed_count { "✓" } else { "⠋" },
+                        // Update spinner message with progress
+                        push_spinner.update_message(format!(
+                            "Pushing {} updated PR {} ({}/{})",
+                            pushed_count,
+                            branch_word,
                             i + 1,
                             pushed_count
-                        );
-                        std::io::Write::flush(&mut std::io::stdout()).ok();
+                        ));
                     }
                     Err(e) => {
-                        println!(); // New line before warning
+                        push_spinner.stop(); // Stop spinner before printing warning
                         Output::warning(format!("Could not push '{}': {}", branch_name, e));
-                        // Continue pushing other branches even if one fails
+                        // Restart spinner for remaining pushes
+                        if i + 1 < pushed_count {
+                            push_spinner = Spinner::new(format!(
+                                "Pushing {} updated PR {} ({}/{})",
+                                pushed_count,
+                                branch_word,
+                                i + 2,
+                                pushed_count
+                            ));
+                        }
                     }
                 }
             }
-            println!(); // Final newline after progress
+
+            // Stop spinner with success message
+            push_spinner.stop_with_message(&format!(
+                "✓ Pushed {}/{} PR {}",
+                pushed_count, pushed_count, branch_word
+            ));
         }
 
         // Update working branch to point to the top of the rebased stack

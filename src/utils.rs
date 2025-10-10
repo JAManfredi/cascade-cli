@@ -6,6 +6,9 @@ use std::path::Path;
 /// Platform-specific utilities for cross-platform compatibility
 pub mod platform;
 
+/// Terminal spinner utilities for progress indication
+pub mod spinner;
+
 /// Atomic file operations to prevent corruption during writes
 pub mod atomic_file {
     use super::*;
