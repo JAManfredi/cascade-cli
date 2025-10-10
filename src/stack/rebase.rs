@@ -602,6 +602,7 @@ impl RebaseManager {
         // This batch approach prevents index lock conflicts between libgit2 and git CLI
         let pushed_count = branches_to_push.len();
         let skipped_count = entry_count - pushed_count;
+        let mut successful_pushes = 0; // Track successful pushes for summary
 
         if !branches_to_push.is_empty() {
             println!(); // Spacing
@@ -628,7 +629,7 @@ impl RebaseManager {
             push_spinner.stop();
 
             // Now show all the results
-            let mut successful_pushes = 0;
+            let mut failed_pushes = 0;
             for (branch_name, result) in push_results {
                 match result {
                     Ok(_) => {
@@ -640,9 +641,20 @@ impl RebaseManager {
                         ));
                     }
                     Err(e) => {
+                        failed_pushes += 1;
                         Output::warning(format!("Could not push '{}': {}", branch_name, e));
                     }
                 }
+            }
+
+            // If any pushes failed, show recovery instructions
+            if failed_pushes > 0 {
+                println!(); // Spacing
+                Output::warning(format!(
+                    "{} branch(es) failed to push to remote",
+                    failed_pushes
+                ));
+                Output::tip("To retry failed pushes, run: ca sync");
             }
         }
 
@@ -783,22 +795,30 @@ impl RebaseManager {
             }
         }
 
-        // Build summary message
-        result.summary = if pushed_count > 0 {
-            let pr_plural = if pushed_count == 1 { "" } else { "s" };
+        // Build summary message based on actual push success count
+        // IMPORTANT: successful_pushes is tracked during the push loop above
+        result.summary = if successful_pushes > 0 {
+            let pr_plural = if successful_pushes == 1 { "" } else { "s" };
             let entry_plural = if entry_count == 1 { "entry" } else { "entries" };
 
             if skipped_count > 0 {
                 format!(
                     "{} {} rebased ({} PR{} updated, {} not yet submitted)",
-                    entry_count, entry_plural, pushed_count, pr_plural, skipped_count
+                    entry_count, entry_plural, successful_pushes, pr_plural, skipped_count
                 )
             } else {
                 format!(
                     "{} {} rebased ({} PR{} updated)",
-                    entry_count, entry_plural, pushed_count, pr_plural
+                    entry_count, entry_plural, successful_pushes, pr_plural
                 )
             }
+        } else if pushed_count > 0 {
+            // We attempted pushes but none succeeded
+            let entry_plural = if entry_count == 1 { "entry" } else { "entries" };
+            format!(
+                "{} {} rebased (pushes failed - retry with 'ca sync')",
+                entry_count, entry_plural
+            )
         } else {
             let plural = if entry_count == 1 { "entry" } else { "entries" };
             format!("{} {} rebased (no PRs to update yet)", entry_count, plural)

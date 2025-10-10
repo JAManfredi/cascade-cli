@@ -30,6 +30,10 @@ impl Spinner {
     /// Frame duration in milliseconds
     const FRAME_DURATION_MS: u64 = 80;
 
+    /// ANSI color code for muted green (terminal color 35 - matches theme)
+    const COLOR_START: &'static str = "\x1b[38;5;35m";
+    const COLOR_END: &'static str = "\x1b[0m";
+
     /// Start a new spinner with the given message
     ///
     /// The spinner will animate in a background thread until stopped.
@@ -42,7 +46,13 @@ impl Spinner {
             let mut frame_idx = 0;
             while running_clone.load(Ordering::Relaxed) {
                 let frame = Self::FRAMES[frame_idx % Self::FRAMES.len()];
-                print!("\r{} {}...", frame, message_clone);
+                print!(
+                    "\r{}{}{} {}...",
+                    Self::COLOR_START,
+                    frame,
+                    Self::COLOR_END,
+                    message_clone
+                );
                 io::stdout().flush().ok();
 
                 frame_idx += 1;
@@ -67,8 +77,14 @@ impl Spinner {
         let running_clone = Arc::clone(&running);
         let message_clone = message.clone();
 
-        // Print initial message with newline
-        println!("{} {}...", Self::FRAMES[0], message_clone);
+        // Print initial message with newline (with muted green spinner)
+        println!(
+            "{}{}{} {}...",
+            Self::COLOR_START,
+            Self::FRAMES[0],
+            Self::COLOR_END,
+            message_clone
+        );
         io::stdout().flush().ok();
 
         let handle = thread::spawn(move || {
@@ -76,9 +92,14 @@ impl Spinner {
             while running_clone.load(Ordering::Relaxed) {
                 let frame = Self::FRAMES[frame_idx % Self::FRAMES.len()];
 
-                // Move cursor up 1 line, go to column 0, print spinner, move cursor down 1 line
+                // Move cursor up 1 line, go to column 0, print colored spinner, move cursor down 1 line
                 // This updates just the spinner character without touching content below
-                print!("\x1b[1A\x1b[0G{}\x1b[1B\x1b[0G", frame);
+                print!(
+                    "\x1b[1A\x1b[0G{}{}{}\x1b[1B\x1b[0G",
+                    Self::COLOR_START,
+                    frame,
+                    Self::COLOR_END
+                );
                 io::stdout().flush().ok();
 
                 frame_idx += 1;
