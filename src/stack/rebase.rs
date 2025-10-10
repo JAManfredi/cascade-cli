@@ -644,41 +644,75 @@ impl RebaseManager {
                                 .get_commits_between(&top_commit, &working_head)
                             {
                                 if !commits.is_empty() {
-                                    // Working branch has extra commits!
-                                    Output::error(format!(
-                                        "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
-                                        orig_branch,
-                                        commits.len()
-                                    ));
-                                    println!();
-                                    Output::sub_item("These commits would be lost if we proceed:");
-                                    for (i, commit) in commits.iter().take(5).enumerate() {
-                                        let message = commit.summary().unwrap_or("(no message)");
-                                        Output::sub_item(format!(
-                                            "  {}. {} - {}",
-                                            i + 1,
-                                            &commit.id().to_string()[..8],
-                                            message
-                                        ));
-                                    }
-                                    if commits.len() > 5 {
-                                        Output::sub_item(format!(
-                                            "  ... and {} more",
-                                            commits.len() - 5
-                                        ));
-                                    }
-                                    println!();
-                                    Output::tip("Add these commits to the stack first:");
-                                    Output::bullet("Run: ca stack push");
-                                    Output::bullet("Then run: ca sync");
-                                    println!();
+                                    // Check if these commits match the stack entry messages
+                                    // If so, they're likely old pre-rebase versions, not new work
+                                    let stack_messages: Vec<String> = stack
+                                        .entries
+                                        .iter()
+                                        .map(|e| e.message.trim().to_string())
+                                        .collect();
 
-                                    return Err(CascadeError::validation(
-                                        format!(
-                                            "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
-                                            orig_branch, commits.len()
-                                        )
-                                    ));
+                                    let all_match_stack = commits.iter().all(|commit| {
+                                        if let Some(msg) = commit.summary() {
+                                            stack_messages
+                                                .iter()
+                                                .any(|stack_msg| stack_msg == msg.trim())
+                                        } else {
+                                            false
+                                        }
+                                    });
+
+                                    if all_match_stack && commits.len() == stack.entries.len() {
+                                        // These are the old pre-rebase versions of stack entries
+                                        // Safe to update working branch to new rebased top
+                                        debug!(
+                                            "Working branch has old pre-rebase commits (matching stack messages) - safe to update"
+                                        );
+                                    } else {
+                                        // These are truly new commits not in the stack!
+                                        Output::error(format!(
+                                            "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
+                                            orig_branch,
+                                            commits.len()
+                                        ));
+                                        println!();
+                                        Output::sub_item(
+                                            "These commits would be lost if we proceed:",
+                                        );
+                                        for (i, commit) in commits.iter().take(5).enumerate() {
+                                            let message =
+                                                commit.summary().unwrap_or("(no message)");
+                                            Output::sub_item(format!(
+                                                "  {}. {} - {}",
+                                                i + 1,
+                                                &commit.id().to_string()[..8],
+                                                message
+                                            ));
+                                        }
+                                        if commits.len() > 5 {
+                                            Output::sub_item(format!(
+                                                "  ... and {} more",
+                                                commits.len() - 5
+                                            ));
+                                        }
+                                        println!();
+                                        Output::tip("Add these commits to the stack first:");
+                                        Output::bullet("Run: ca stack push");
+                                        Output::bullet("Then run: ca sync");
+                                        println!();
+
+                                        // Restore original branch before returning error
+                                        if let Some(ref orig) = original_branch_for_cleanup {
+                                            let _ = self.git_repo.checkout_branch_unsafe(orig);
+                                        }
+
+                                        return Err(CascadeError::validation(
+                                            format!(
+                                                "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
+                                                orig_branch, commits.len()
+                                            )
+                                        ));
+                                    }
                                 }
                             }
                         }
