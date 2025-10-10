@@ -1811,7 +1811,7 @@ async fn submit_entry(
     // Summary
     if failed_entries.is_empty() {
         Output::success(format!(
-            "All {} {} submitted successfully!",
+            "{} {} submitted successfully!",
             submitted_count,
             if submitted_count == 1 {
                 "entry"
