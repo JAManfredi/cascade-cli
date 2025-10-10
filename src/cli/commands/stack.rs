@@ -2187,28 +2187,18 @@ async fn continue_sync() -> Result<()> {
     // Checkout to working branch
     git_repo.checkout_branch_unsafe(&working_branch)?;
     
-    // SAFETY CHECK: Only update working branch if it's safe to do so
-    // Mirror the safety logic from rebase.rs lines 630-681
+    // Update working branch to point to the top of the rebased stack
+    // In the continue_sync() context, we KNOW we just finished rebasing, so the
+    // working branch's old commits are pre-rebase versions that should be replaced.
+    // We unconditionally update here because:
+    // 1. The user just resolved conflicts and continued the rebase
+    // 2. The stack entry metadata has been updated to the new rebased commits
+    // 3. Any "old" commits on the working branch are the pre-rebase versions
+    // 4. The subsequent sync_stack() call will do final safety checks
     if let Ok(working_head) = git_repo.get_branch_head(&working_branch) {
-        let top_commit_hash = top_commit.clone();
-        if working_head != top_commit_hash {
-            // Check if working branch has commits beyond the top of stack
-            if let Ok(commits) = git_repo.get_commits_between(&top_commit_hash, &working_head) {
-                if !commits.is_empty() {
-                    // Working branch has untracked commits - preserve them!
-                    Output::warning(format!(
-                        "Working branch '{}' has {} additional commit(s) - not updating pointer",
-                        working_branch,
-                        commits.len()
-                    ));
-                    Output::tip("Run 'ca stack push' to add these commits to the stack");
-                } else {
-                    // Safe to update - working branch is behind top of stack
-                    git_repo.update_branch_to_commit(&working_branch, &top_commit_hash)?;
-                }
-            }
+        if working_head != top_commit {
+            git_repo.update_branch_to_commit(&working_branch, &top_commit)?;
         }
-        // If working_head == top_commit, no update needed
     }
 
     println!();
