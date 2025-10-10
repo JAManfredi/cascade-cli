@@ -2167,6 +2167,22 @@ async fn continue_sync() -> Result<()> {
         manager.save_to_disk()?;
     }
 
+    // Get the top of the stack (last entry) to update the working branch
+    // The working branch should always point to the top of the stack
+    let top_commit = {
+        let active_stack = manager.get_active_stack()
+            .ok_or_else(|| CascadeError::config("No active stack found"))?;
+        
+        if let Some(last_entry) = active_stack.entries.last() {
+            // Get the current HEAD of the last entry's branch
+            // This handles both the case where we just updated it and where it was already rebased
+            git_repo.get_branch_head(&last_entry.branch)?
+        } else {
+            // Empty stack - shouldn't happen here, but use new_commit_hash as fallback
+            new_commit_hash.clone()
+        }
+    };
+
     Output::info(format!(
         "Checking out to working branch: {}",
         working_branch
@@ -2174,6 +2190,10 @@ async fn continue_sync() -> Result<()> {
 
     // Checkout to working branch
     git_repo.checkout_branch_unsafe(&working_branch)?;
+    
+    // CRITICAL: Update working branch to point to the top of the rebased stack
+    // This ensures the working branch reflects the rebased stack state
+    git_repo.update_branch_to_commit(&working_branch, &top_commit)?;
 
     println!();
     Output::info("Resuming sync to complete the rebase...");
