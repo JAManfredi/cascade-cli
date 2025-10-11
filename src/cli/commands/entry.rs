@@ -913,27 +913,60 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
 
         // Create fresh instances for rebase manager
         let rebase_manager_stack = StackManager::new(&repo_root)?;
-        let rebase_manager_repo = crate::git::GitRepository::open(&repo_root)?;
+        let stack_for_count = rebase_manager_stack
+            .get_stack(&stack_id)
+            .ok_or_else(|| CascadeError::config("Stack not found"))?;
 
-        // Use the sync_stack mechanism to rebase dependent entries
-        let mut rebase_manager = crate::stack::RebaseManager::new(
-            rebase_manager_stack,
-            rebase_manager_repo,
-            crate::stack::RebaseOptions {
-                strategy: crate::stack::RebaseStrategy::ForcePush,
-                target_base: Some(entry_branch.clone()),
-                skip_pull: Some(true), // Don't pull, we're rebasing on local changes
-                ..Default::default()
-            },
-        );
+        // Count dependent entries (entries after the current one)
+        let entry_index = stack_for_count
+            .entries
+            .iter()
+            .position(|e| e.id == entry_id)
+            .unwrap_or(0);
+        let dependent_count = stack_for_count
+            .entries
+            .len()
+            .saturating_sub(entry_index + 1);
 
-        match rebase_manager.rebase_stack(&stack_id) {
-            Ok(_) => {
-                Output::success("Dependent entries restacked");
-            }
-            Err(e) => {
-                Output::warning(format!("Could not auto-restack: {}", e));
-                Output::tip("Run 'ca sync' manually to restack dependent entries");
+        if dependent_count > 0 {
+            let rebase_manager_repo = crate::git::GitRepository::open(&repo_root)?;
+            let plural = if dependent_count == 1 {
+                "entry"
+            } else {
+                "entries"
+            };
+
+            // Use the sync_stack mechanism to rebase dependent entries
+            let mut rebase_manager = crate::stack::RebaseManager::new(
+                rebase_manager_stack,
+                rebase_manager_repo,
+                crate::stack::RebaseOptions {
+                    strategy: crate::stack::RebaseStrategy::ForcePush,
+                    target_base: Some(entry_branch.clone()),
+                    skip_pull: Some(true), // Don't pull, we're rebasing on local changes
+                    ..Default::default()
+                },
+            );
+
+            println!(); // Spacing
+            let mut rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                "Restacking {} dependent {}",
+                dependent_count, plural
+            ));
+
+            let rebase_result = rebase_manager.rebase_stack(&stack_id);
+
+            rebase_spinner.stop();
+            println!(); // Spacing
+
+            match rebase_result {
+                Ok(_) => {
+                    Output::success("Dependent entries restacked");
+                }
+                Err(e) => {
+                    Output::warning(format!("Could not auto-restack: {}", e));
+                    Output::tip("Run 'ca sync' manually to restack dependent entries");
+                }
             }
         }
     }

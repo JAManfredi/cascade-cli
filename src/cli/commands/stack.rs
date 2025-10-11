@@ -2352,11 +2352,9 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
                         };
 
-                        // Get entry count before creating rebase manager
-                        let stack_for_count = updated_stack_manager
-                            .get_stack(&stack_id)
-                            .ok_or_else(|| CascadeError::config("Stack not found"))?;
-                        let entry_count = stack_for_count.entries.len();
+                        // Get entry count for spinner title before creating rebase manager
+                        let entry_count = active_stack.entries.len();
+                        let plural = if entry_count == 1 { "entry" } else { "entries" };
 
                         let mut rebase_manager = crate::stack::RebaseManager::new(
                             updated_stack_manager,
@@ -2364,19 +2362,20 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             options,
                         );
 
-                        // Start spinner before rebase (tree will print below)
-                        let plural = if entry_count == 1 { "entry" } else { "entries" };
-
                         println!(); // Spacing
-                        let mut rebase_spinner =
-                            crate::utils::spinner::Spinner::new_with_output_below(format!(
-                                "Rebasing {} {}",
-                                entry_count, plural
-                            ));
 
+                        // Start spinner with static title
+                        let mut rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                            "Rebasing {} {}",
+                            entry_count, plural
+                        ));
+
+                        // Rebase all entries (tree prints as we go)
                         let rebase_result = rebase_manager.rebase_stack(&stack_id);
 
+                        // Stop rebase spinner before showing results
                         rebase_spinner.stop();
+                        println!(); // Spacing after spinner
 
                         match rebase_result {
                             Ok(result) => {
@@ -2587,6 +2586,9 @@ async fn rebase_stack(
     debug!("   Target base: {:?}", options.target_base);
     debug!("   Entries: {}", active_stack.entries.len());
 
+    let entry_count = active_stack.entries.len();
+    let plural = if entry_count == 1 { "entry" } else { "entries" };
+
     // Check if there's already a rebase in progress
     let mut rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
@@ -2600,8 +2602,20 @@ async fn rebase_stack(
         return Ok(());
     }
 
+    println!(); // Spacing
+
+    // Start spinner for rebase
+    let mut rebase_spinner =
+        crate::utils::spinner::Spinner::new(format!("Rebasing {} {}", entry_count, plural));
+
     // Perform the rebase
-    match rebase_manager.rebase_stack(&stack_id) {
+    let rebase_result = rebase_manager.rebase_stack(&stack_id);
+
+    // Stop spinner before showing results
+    rebase_spinner.stop();
+    println!(); // Spacing
+
+    match rebase_result {
         Ok(result) => {
             Output::success("Rebase completed!");
             Output::sub_item(result.get_summary());
@@ -3395,6 +3409,13 @@ async fn land_stack(
                     }
 
                     // 2️⃣ Use rebase system to retarget remaining PRs
+                    let temp_manager = StackManager::new(&repo_root)?;
+                    let stack_for_count = temp_manager
+                        .get_stack(&stack_id)
+                        .ok_or_else(|| CascadeError::config("Stack not found"))?;
+                    let entry_count = stack_for_count.entries.len();
+                    let plural = if entry_count == 1 { "entry" } else { "entries" };
+
                     let mut rebase_manager = crate::stack::RebaseManager::new(
                         StackManager::new(&repo_root)?,
                         git_repo,
@@ -3405,7 +3426,18 @@ async fn land_stack(
                         },
                     );
 
-                    match rebase_manager.rebase_stack(&stack_id) {
+                    println!(); // Spacing
+                    let mut rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                        "Retargeting {} {}",
+                        entry_count, plural
+                    ));
+
+                    let rebase_result = rebase_manager.rebase_stack(&stack_id);
+
+                    rebase_spinner.stop();
+                    println!(); // Spacing
+
+                    match rebase_result {
                         Ok(rebase_result) => {
                             if !rebase_result.branch_mapping.is_empty() {
                                 // Update PRs using the rebase result

@@ -287,7 +287,22 @@ impl RebaseManager {
             return Ok(result);
         }
 
-        // Just print tree items - caller handles spinner and title
+        // Check if ALL entries are already correctly based - if so, skip rebase entirely
+        let all_up_to_date = stack.entries.iter().all(|entry| {
+            self.git_repo
+                .is_commit_based_on(&entry.commit_hash, &target_base)
+                .unwrap_or(false)
+        });
+
+        if all_up_to_date {
+            println!(); // Spacing
+            Output::success("Stack is already up-to-date with base branch");
+            result.summary = "Stack is up-to-date".to_string();
+            result.success = true;
+            return Ok(result);
+        }
+
+        // Caller handles title and spinner - just print tree items
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
