@@ -222,11 +222,19 @@ impl GitRepository {
     }
 
     /// Check if the working directory is dirty (has uncommitted changes)
+    /// Excludes .cascade/ directory changes as these are internal metadata
     pub fn is_dirty(&self) -> Result<bool> {
         let statuses = self.repo.statuses(None).map_err(CascadeError::Git)?;
 
         for status in statuses.iter() {
             let flags = status.status();
+
+            // Skip .cascade/ directory - it's internal metadata that shouldn't block operations
+            if let Some(path) = status.path() {
+                if path.starts_with(".cascade/") || path == ".cascade" {
+                    continue;
+                }
+            }
 
             // Check for any modifications, additions, or deletions
             if flags.intersects(

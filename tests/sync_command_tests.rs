@@ -114,9 +114,14 @@ fn create_test_stack(repo_path: &Path, stack_name: &str) -> Result<(), String> {
         .current_dir(repo_path)
         .output()
         .map_err(|e| format!("Failed to add: {e}"))?;
+    Command::new("git")
+        .args(["commit", "-m", &format!("Add file1.txt for {}", stack_name)])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to commit: {e}"))?;
 
     let (success, _, stderr) = run_ca_command(
-        &["push", "--allow-base-branch", "-m", "First commit"],
+        &["push", "--allow-base-branch"],
         repo_path,
     )?;
     if !success {
@@ -130,9 +135,14 @@ fn create_test_stack(repo_path: &Path, stack_name: &str) -> Result<(), String> {
         .current_dir(repo_path)
         .output()
         .map_err(|e| format!("Failed to add: {e}"))?;
+    Command::new("git")
+        .args(["commit", "-m", &format!("Add file2.txt for {}", stack_name)])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to commit: {e}"))?;
 
     let (success, _, stderr) = run_ca_command(
-        &["push", "--allow-base-branch", "-m", "Second commit"],
+        &["push", "--allow-base-branch"],
         repo_path,
     )?;
     if !success {
@@ -330,6 +340,11 @@ fn test_sync_with_conflicts() {
     std::fs::write(repo_path.join("conflict.txt"), "Original content").unwrap();
     Command::new("git")
         .args(["add", "."])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "Add conflict file"])
         .current_dir(repo_path)
         .output()
         .unwrap();
