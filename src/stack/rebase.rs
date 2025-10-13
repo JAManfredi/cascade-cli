@@ -212,6 +212,8 @@ impl RebaseManager {
 
         // Print section header (caller will handle spinner animation)
         Output::section(format!("Rebasing stack: {}", stack.name));
+        Output::sub_item(format!("Base branch: {}", stack.base_branch));
+        Output::sub_item(format!("Entries: {}", stack.entries.len()));
 
         let mut result = RebaseResult {
             success: true,
@@ -621,8 +623,8 @@ impl RebaseManager {
             } else {
                 "branches"
             };
-            let mut push_spinner = Spinner::new(format!(
-                "Pushing {} updated PR {}",
+            let push_spinner = Spinner::new_with_output_below(format!(
+                "Pushing {} updated stack {}",
                 pushed_count, branch_word
             ));
 

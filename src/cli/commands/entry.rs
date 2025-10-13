@@ -949,7 +949,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
             );
 
             println!(); // Spacing
-            let mut rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+            let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
                 "Restacking {} dependent {}",
                 dependent_count, plural
             ));

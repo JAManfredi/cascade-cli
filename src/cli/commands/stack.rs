@@ -2398,10 +2398,6 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
                         };
 
-                        // Get entry count for spinner title before creating rebase manager
-                        let entry_count = active_stack.entries.len();
-                        let plural = if entry_count == 1 { "entry" } else { "entries" };
-
                         let mut rebase_manager = crate::stack::RebaseManager::new(
                             updated_stack_manager,
                             git_repo,
@@ -2411,10 +2407,9 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                         println!(); // Spacing
 
                         // Start spinner with static title
-                        let mut rebase_spinner = crate::utils::spinner::Spinner::new(format!(
-                            "Rebasing {} {}",
-                            entry_count, plural
-                        ));
+                        let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(
+                            format!("Rebasing stack: {}", active_stack.name),
+                        );
 
                         // Rebase all entries (tree prints as we go)
                         let rebase_result = rebase_manager.rebase_stack(&stack_id);
@@ -2442,12 +2437,14 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                                         } else {
                                             "PRs"
                                         };
-                                        let mut pr_spinner =
-                                            crate::utils::spinner::Spinner::new(format!(
-                                                "Updating {} {}",
-                                                result.branch_mapping.len(),
-                                                pr_word
-                                            ));
+                                        let pr_spinner =
+                                            crate::utils::spinner::Spinner::new_with_output_below(
+                                                format!(
+                                                    "Updating {} {}",
+                                                    result.branch_mapping.len(),
+                                                    pr_word
+                                                ),
+                                            );
 
                                         let pr_result = integration
                                             .update_prs_after_rebase(
@@ -2598,9 +2595,6 @@ async fn rebase_stack(
         return Ok(());
     }
 
-    Output::progress(format!("Rebasing stack: {}", active_stack.name));
-    Output::sub_item(format!("Base: {}", active_stack.base_branch));
-
     // Determine rebase strategy (force-push is the industry standard for stacked diffs)
     let rebase_strategy = if let Some(cli_strategy) = strategy {
         match cli_strategy {
@@ -2632,9 +2626,6 @@ async fn rebase_stack(
     debug!("   Target base: {:?}", options.target_base);
     debug!("   Entries: {}", active_stack.entries.len());
 
-    let entry_count = active_stack.entries.len();
-    let plural = if entry_count == 1 { "entry" } else { "entries" };
-
     // Check if there's already a rebase in progress
     let mut rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
 
@@ -2651,8 +2642,10 @@ async fn rebase_stack(
     println!(); // Spacing
 
     // Start spinner for rebase
-    let mut rebase_spinner =
-        crate::utils::spinner::Spinner::new(format!("Rebasing {} {}", entry_count, plural));
+    let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(format!(
+        "Rebasing stack: {}",
+        active_stack.name
+    ));
 
     // Perform the rebase
     let rebase_result = rebase_manager.rebase_stack(&stack_id);
@@ -3474,7 +3467,7 @@ async fn land_stack(
                     );
 
                     println!(); // Spacing
-                    let mut rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                    let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
                         "Retargeting {} {}",
                         entry_count, plural
                     ));
