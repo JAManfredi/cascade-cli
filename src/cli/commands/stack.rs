@@ -946,7 +946,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             cascade: settings.cascade.clone(),
         };
 
-        let integration =
+        let mut integration =
             crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
 
         match integration.check_enhanced_stack_status(&stack_id).await {
@@ -2229,6 +2229,13 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
 
     let git_repo = GitRepository::open(&repo_root)?;
 
+    if git_repo.is_dirty()? {
+        return Err(CascadeError::branch(
+            "Working tree has uncommitted changes. Commit or stash them before running 'ca sync'."
+                .to_string(),
+        ));
+    }
+
     // Get active stack
     let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
         CascadeError::config("No active stack. Create a stack first with 'ca stack create'")
@@ -2291,13 +2298,52 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
         for entry in &stack.entries {
             if let Ok(current_commit) = git_repo.get_branch_head(&entry.branch) {
                 if entry.commit_hash != current_commit {
-                    debug!(
-                        "Reconciling entry '{}': updating hash from {} to {} (current branch HEAD)",
-                        entry.branch,
-                        &entry.commit_hash[..8],
-                        &current_commit[..8]
-                    );
-                    updates.push((entry.id, current_commit));
+                    let is_safe_descendant = match git_repo.commit_exists(&entry.commit_hash) {
+                        Ok(true) => {
+                            match git_repo.is_descendant_of(&current_commit, &entry.commit_hash) {
+                                Ok(result) => result,
+                                Err(e) => {
+                                    warn!(
+                                    "Cannot verify ancestry for '{}': {} - treating as unsafe to prevent potential data loss",
+                                    entry.branch, e
+                                );
+                                    false
+                                }
+                            }
+                        }
+                        Ok(false) => {
+                            debug!(
+                                "Recorded commit {} for '{}' no longer exists in repository",
+                                &entry.commit_hash[..8],
+                                entry.branch
+                            );
+                            false
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Cannot verify commit existence for '{}': {} - treating as unsafe to prevent potential data loss",
+                                entry.branch, e
+                            );
+                            false
+                        }
+                    };
+
+                    if is_safe_descendant {
+                        debug!(
+                            "Reconciling entry '{}': updating hash from {} to {} (current branch HEAD)",
+                            entry.branch,
+                            &entry.commit_hash[..8],
+                            &current_commit[..8]
+                        );
+                        updates.push((entry.id, current_commit));
+                    } else {
+                        warn!(
+                            "Skipped automatic reconciliation for entry '{}' because local HEAD ({}) does not descend from recorded commit ({})",
+                            entry.branch,
+                            &current_commit[..8],
+                            &entry.commit_hash[..8]
+                        );
+                    }
                 }
             }
         }
@@ -3245,7 +3291,8 @@ async fn land_stack(
         cascade: settings.cascade.clone(),
     };
 
-    let integration = crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
+    let mut integration =
+        crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
 
     // Get enhanced status
     let status = integration.check_enhanced_stack_status(&stack_id).await?;

@@ -574,11 +574,8 @@ impl StackManager {
         // Update stack metadata statistics
         if let Some(stack_meta) = self.metadata.get_stack_mut(stack_id) {
             let submitted_count = stack.entries.iter().filter(|e| e.is_submitted).count();
-            stack_meta.update_stats(
-                stack.entries.len(),
-                submitted_count,
-                stack_meta.merged_commits,
-            );
+            let merged_count = stack.entries.iter().filter(|e| e.is_merged).count();
+            stack_meta.update_stats(stack.entries.len(), submitted_count, merged_count);
         }
 
         self.save_to_disk()?;
@@ -637,13 +634,58 @@ impl StackManager {
             stack_meta.remove_branch(&entry.branch);
 
             let submitted = stack.entries.iter().filter(|e| e.is_submitted).count();
-            let merged = stack_meta.merged_commits.min(stack.entries.len());
+            let merged = stack.entries.iter().filter(|e| e.is_merged).count();
             stack_meta.update_stats(stack.entries.len(), submitted, merged);
         }
 
         self.save_to_disk()?;
 
         Ok(Some(entry))
+    }
+
+    /// Update merged state for a stack entry
+    pub fn set_entry_merged(
+        &mut self,
+        stack_id: &Uuid,
+        entry_id: &Uuid,
+        merged: bool,
+    ) -> Result<()> {
+        let stack = self
+            .stacks
+            .get_mut(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        let current_entry = stack
+            .entry_map
+            .get(entry_id)
+            .cloned()
+            .ok_or_else(|| CascadeError::config(format!("Entry {entry_id} not found")))?;
+
+        if current_entry.is_merged == merged {
+            return Ok(());
+        }
+
+        if !stack.mark_entry_merged(entry_id, merged) {
+            return Err(CascadeError::config(format!(
+                "Entry {entry_id} not found in stack {stack_id}"
+            )));
+        }
+
+        // Update commit metadata using the stored commit hash
+        if let Some(commit_meta) = self.metadata.commits.get_mut(&current_entry.commit_hash) {
+            commit_meta.mark_merged(merged);
+        }
+
+        // Update stack metadata statistics
+        if let Some(stack_meta) = self.metadata.get_stack_mut(stack_id) {
+            let submitted_count = stack.entries.iter().filter(|e| e.is_submitted).count();
+            let merged_count = stack.entries.iter().filter(|e| e.is_merged).count();
+            stack_meta.update_stats(stack.entries.len(), submitted_count, merged_count);
+        }
+
+        self.save_to_disk()?;
+
+        Ok(())
     }
 
     /// Repair data consistency issues in all stacks
@@ -1465,6 +1507,7 @@ impl StackManager {
             is_submitted: false,
             pull_request_id: None,
             is_synced: false,
+            is_merged: false,
         };
 
         // Insert the new entry after the current one

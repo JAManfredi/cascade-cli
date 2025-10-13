@@ -902,6 +902,26 @@ impl GitRepository {
         Ok(parent_hash == expected_base_hash)
     }
 
+    /// Check whether `descendant` commit contains `ancestor` in its history
+    pub fn is_descendant_of(&self, descendant: &str, ancestor: &str) -> Result<bool> {
+        let descendant_oid = Oid::from_str(descendant).map_err(|e| {
+            CascadeError::branch(format!(
+                "Invalid commit hash '{}' for descendant check: {}",
+                descendant, e
+            ))
+        })?;
+        let ancestor_oid = Oid::from_str(ancestor).map_err(|e| {
+            CascadeError::branch(format!(
+                "Invalid commit hash '{}' for descendant check: {}",
+                ancestor, e
+            ))
+        })?;
+
+        self.repo
+            .graph_descendant_of(descendant_oid, ancestor_oid)
+            .map_err(CascadeError::Git)
+    }
+
     /// Get the HEAD commit object
     pub fn get_head_commit(&self) -> Result<git2::Commit<'_>> {
         let head = self
@@ -935,6 +955,22 @@ impl GitRepository {
         })?;
 
         Ok(commit.id().to_string())
+    }
+
+    /// Get the commit hash at the head of a remote branch
+    pub fn get_remote_branch_head(&self, branch_name: &str) -> Result<String> {
+        let refname = format!("refs/remotes/origin/{branch_name}");
+        let reference = self.repo.find_reference(&refname).map_err(|e| {
+            CascadeError::branch(format!("Remote branch '{branch_name}' not found: {e}"))
+        })?;
+
+        let target = reference.target().ok_or_else(|| {
+            CascadeError::branch(format!(
+                "Remote branch '{branch_name}' does not have a target commit"
+            ))
+        })?;
+
+        Ok(target.to_string())
     }
 
     /// Validate git user configuration is properly set

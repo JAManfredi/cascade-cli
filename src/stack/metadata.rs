@@ -26,6 +26,9 @@ pub struct CommitMetadata {
     pub is_pushed: bool,
     /// Whether this commit is part of a submitted PR
     pub is_submitted: bool,
+    /// Whether this commit's PR has been merged
+    #[serde(default)]
+    pub is_merged: bool,
     /// Pull request ID if submitted
     pub pull_request_id: Option<String>,
     /// When this metadata was created
@@ -91,6 +94,7 @@ impl CommitMetadata {
             dependents: Vec::new(),
             is_pushed: false,
             is_submitted: false,
+            is_merged: false,
             pull_request_id: None,
             created_at: now,
             updated_at: now,
@@ -123,6 +127,12 @@ impl CommitMetadata {
     pub fn mark_submitted(&mut self, pull_request_id: String) {
         self.is_submitted = true;
         self.pull_request_id = Some(pull_request_id);
+        self.updated_at = Utc::now();
+    }
+
+    /// Mark commit as merged
+    pub fn mark_merged(&mut self, merged: bool) {
+        self.is_merged = merged;
         self.updated_at = Utc::now();
     }
 
@@ -423,6 +433,7 @@ mod tests {
         assert_eq!(commit.short_hash(), "abc123");
         assert!(!commit.is_pushed);
         assert!(!commit.is_submitted);
+        assert!(!commit.is_merged);
 
         commit.add_dependency("def456".to_string());
         assert_eq!(commit.dependencies, vec!["def456"]);
@@ -433,6 +444,9 @@ mod tests {
         commit.mark_submitted("PR-123".to_string());
         assert!(commit.is_submitted);
         assert_eq!(commit.pull_request_id, Some("PR-123".to_string()));
+
+        commit.mark_merged(true);
+        assert!(commit.is_merged);
     }
 
     #[test]

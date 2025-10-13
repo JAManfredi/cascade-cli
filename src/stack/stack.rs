@@ -28,6 +28,9 @@ pub struct StackEntry {
     pub pull_request_id: Option<String>,
     /// Whether this entry is synced with remote
     pub is_synced: bool,
+    /// Whether this entry's PR has been merged
+    #[serde(default)]
+    pub is_merged: bool,
 }
 
 /// Represents the status of a stack
@@ -115,6 +118,7 @@ impl Stack {
             is_submitted: false,
             pull_request_id: None,
             is_synced: false,
+            is_merged: false,
         };
 
         // Update parent's children if exists
@@ -245,6 +249,7 @@ impl Stack {
             entry.is_submitted = true;
             entry.pull_request_id = Some(pull_request_id);
             entry.updated_at = Utc::now();
+            entry.is_merged = false;
             self.updated_at = Utc::now();
 
             // Synchronize the entries vector with the updated entry_map
@@ -277,6 +282,19 @@ impl Stack {
             self.updated_at = Utc::now();
 
             // Synchronize the entries vector with the updated entry_map
+            self.sync_entries_from_map();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Mark an entry as merged (or unmerged)
+    pub fn mark_entry_merged(&mut self, entry_id: &Uuid, merged: bool) -> bool {
+        if let Some(entry) = self.get_entry_mut(entry_id) {
+            entry.is_merged = merged;
+            entry.updated_at = Utc::now();
+            self.updated_at = Utc::now();
             self.sync_entries_from_map();
             true
         } else {
@@ -468,7 +486,7 @@ impl Stack {
 impl StackEntry {
     /// Check if this entry can be safely modified
     pub fn can_modify(&self) -> bool {
-        !self.is_submitted && !self.is_synced
+        !self.is_submitted && !self.is_synced && !self.is_merged
     }
 
     /// Get a short version of the commit hash
@@ -642,6 +660,25 @@ mod tests {
         let entry = stack.get_entry(&entry_id).unwrap();
         assert!(entry.is_submitted);
         assert_eq!(entry.pull_request_id, Some("PR-123".to_string()));
+    }
+
+    #[test]
+    fn test_mark_entry_merged() {
+        let mut stack = Stack::new("test".to_string(), "main".to_string(), None);
+        let entry_id = stack.push_entry(
+            "branch1".to_string(),
+            "hash1".to_string(),
+            "msg1".to_string(),
+        );
+
+        assert!(!stack.get_entry(&entry_id).unwrap().is_merged);
+        assert!(stack.mark_entry_merged(&entry_id, true));
+        let merged_entry = stack.get_entry(&entry_id).unwrap();
+        assert!(merged_entry.is_merged);
+        assert!(!merged_entry.can_modify());
+
+        assert!(stack.mark_entry_merged(&entry_id, false));
+        assert!(!stack.get_entry(&entry_id).unwrap().is_merged);
     }
 
     #[test]

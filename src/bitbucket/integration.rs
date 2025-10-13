@@ -41,6 +41,7 @@ impl BitbucketIntegration {
         let stack = self
             .stack_manager
             .get_stack(stack_id)
+            .cloned()
             .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
 
         let mut updated_prs = Vec::new();
@@ -60,7 +61,7 @@ impl BitbucketIntegration {
                                         .next()
                                         .map(|s| s.trim().to_string())
                                 }),
-                                stack,
+                                &stack,
                                 entry,
                             )?;
 
@@ -114,10 +115,13 @@ impl BitbucketIntegration {
         description: Option<String>,
         draft: bool,
     ) -> Result<PullRequest> {
-        let stack = self
-            .stack_manager
-            .get_stack(stack_id)
-            .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+        let stack = {
+            let stack_ref = self
+                .stack_manager
+                .get_stack(stack_id)
+                .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+            stack_ref.clone()
+        };
 
         let entry = stack
             .get_entry(entry_id)
@@ -172,7 +176,7 @@ impl BitbucketIntegration {
         }
 
         // Determine target branch (parent entry's branch or stack base)
-        let target_branch = self.get_target_branch(stack, entry)?;
+        let target_branch = self.get_target_branch(&stack, entry)?;
 
         // Ensure target branch is also pushed to remote (if it's not the base branch)
         if target_branch != stack.base_branch {
@@ -191,7 +195,7 @@ impl BitbucketIntegration {
 
         // Create pull request
         let pr_request =
-            self.create_pr_request(stack, entry, &target_branch, title, description, draft)?;
+            self.create_pr_request(&stack, entry, &target_branch, title, description, draft)?;
 
         let pr = match self.pr_manager.create_pull_request(pr_request).await {
             Ok(pr) => pr,
@@ -482,8 +486,73 @@ impl BitbucketIntegration {
                     );
 
                     // Get the existing PR to understand its current state
-                    match self.pr_manager.get_pull_request(pr_id).await {
-                        Ok(_existing_pr) => {
+                    match self.pr_manager.get_pull_request_status(pr_id).await {
+                        Ok(pr_status) => {
+                            match pr_status.pr.state {
+                                crate::bitbucket::pull_request::PullRequestState::Merged => {
+                                    if let Err(e) = self
+                                        .stack_manager
+                                        .set_entry_merged(&stack.id, &entry.id, true)
+                                    {
+                                        tracing::warn!(
+                                            "Failed to persist merged state for entry {}: {}",
+                                            entry.id,
+                                            e
+                                        );
+                                    }
+                                    debug!(
+                                        "Skipping PR #{} update because it is already merged",
+                                        pr_id
+                                    );
+                                    continue;
+                                }
+                                crate::bitbucket::pull_request::PullRequestState::Declined => {
+                                    if let Err(e) = self
+                                        .stack_manager
+                                        .set_entry_merged(&stack.id, &entry.id, false)
+                                    {
+                                        tracing::warn!(
+                                            "Failed to persist merged state for entry {}: {}",
+                                            entry.id,
+                                            e
+                                        );
+                                    }
+                                    debug!("Skipping PR #{} update because it is declined", pr_id);
+                                    continue;
+                                }
+                                crate::bitbucket::pull_request::PullRequestState::Open => {
+                                    if let Err(e) = self
+                                        .stack_manager
+                                        .set_entry_merged(&stack.id, &entry.id, false)
+                                    {
+                                        tracing::warn!(
+                                            "Failed to persist merged state for entry {}: {}",
+                                            entry.id,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+
+                            // Ensure local branch head matches recorded commit before pushing
+                            if let Ok(local_head) =
+                                self.stack_manager.git_repo().get_branch_head(&entry.branch)
+                            {
+                                if local_head != entry.commit_hash {
+                                    Output::error(format!(
+                                        "Skipping PR #{}: branch '{}' HEAD ({}) does not match stack metadata ({})",
+                                        pr_id,
+                                        entry.branch,
+                                        &local_head[..8],
+                                        &entry.commit_hash[..8]
+                                    ));
+                                    Output::warning(
+                                        "Run 'ca stack check --force' to reconcile or investigate manually before retrying."
+                                    );
+                                    continue;
+                                }
+                            }
+
                             // Validate that the new branch contains cumulative changes
                             if let Err(validation_error) =
                                 self.validate_cumulative_changes(&entry.branch, new_branch)
@@ -598,36 +667,51 @@ impl BitbucketIntegration {
 
         let _base_branch = &stack.base_branch;
 
-        // Check that the new branch exists and has commits
-        // Note: After a rebase, commit IDs change, so we can't use ancestry-based validation
-        // Instead, we verify the branch exists and has a reasonable commit count
-        match git_repo.get_branch_commit_hash(new_branch) {
-            Ok(_new_branch_head) => {
-                // Branch exists and has a HEAD commit - this is sufficient for rebased branches
-                // The rebase process ensures the content is correct, even though commit IDs changed
+        // Ensure the updated branch exists locally
+        let new_head = git_repo.get_branch_head(new_branch).map_err(|e| {
+            CascadeError::validation(format!("Could not get HEAD for branch '{new_branch}': {e}"))
+        })?;
 
+        // If a remote counterpart exists, ensure the new head is a descendant before overwriting
+        match git_repo.get_remote_branch_head(original_branch) {
+            Ok(remote_head) => {
+                if remote_head != new_head && !git_repo.is_descendant_of(&new_head, &remote_head)? {
+                    return Err(CascadeError::validation(format!(
+                        "Local branch '{new_branch}' (commit {}) does not contain remote commit {}. Aborting force push.",
+                        &new_head[..8],
+                        &remote_head[..8]
+                    )));
+                }
                 tracing::debug!(
-                    "Validation passed: new branch '{}' exists and has commits (rebased from '{}')",
+                    "Validated ancestry for '{}': {} descends from {}",
                     new_branch,
+                    &new_head[..8],
+                    &remote_head[..8]
+                );
+            }
+            Err(_) => {
+                tracing::debug!(
+                    "No remote tracking branch for '{}' - skipping ancestor validation",
                     original_branch
                 );
-                Ok(())
             }
-            Err(e) => Err(CascadeError::validation(format!(
-                "Could not get commits for validation: {e}"
-            ))),
         }
+
+        Ok(())
     }
 
     /// Check the enhanced status of all pull requests in a stack
     pub async fn check_enhanced_stack_status(
-        &self,
+        &mut self,
         stack_id: &Uuid,
     ) -> Result<StackSubmissionStatus> {
         let stack = self
             .stack_manager
             .get_stack(stack_id)
+            .cloned()
             .ok_or_else(|| CascadeError::config(format!("Stack {stack_id} not found")))?;
+
+        let stack_uuid = stack.id;
 
         let mut status = StackSubmissionStatus {
             stack_name: stack.name.clone(),
@@ -640,6 +724,8 @@ impl BitbucketIntegration {
             enhanced_statuses: Vec::new(),
         };
 
+        let mut merged_updates: Vec<(Uuid, bool)> = Vec::new();
+
         for entry in &stack.entries {
             if let Some(pr_id_str) = &entry.pull_request_id {
                 status.submitted_entries += 1;
@@ -650,13 +736,16 @@ impl BitbucketIntegration {
                         Ok(enhanced_status) => {
                             match enhanced_status.pr.state {
                                 crate::bitbucket::pull_request::PullRequestState::Open => {
-                                    status.open_prs += 1
+                                    status.open_prs += 1;
+                                    merged_updates.push((entry.id, false));
                                 }
                                 crate::bitbucket::pull_request::PullRequestState::Merged => {
-                                    status.merged_prs += 1
+                                    status.merged_prs += 1;
+                                    merged_updates.push((entry.id, true));
                                 }
                                 crate::bitbucket::pull_request::PullRequestState::Declined => {
-                                    status.declined_prs += 1
+                                    status.declined_prs += 1;
+                                    merged_updates.push((entry.id, false));
                                 }
                             }
                             status.pull_requests.push(enhanced_status.pr.clone());
@@ -672,9 +761,18 @@ impl BitbucketIntegration {
                             match self.pr_manager.get_pull_request(pr_id).await {
                                 Ok(pr) => {
                                     match pr.state {
-                                        crate::bitbucket::pull_request::PullRequestState::Open => status.open_prs += 1,
-                                        crate::bitbucket::pull_request::PullRequestState::Merged => status.merged_prs += 1,
-                                        crate::bitbucket::pull_request::PullRequestState::Declined => status.declined_prs += 1,
+                                        crate::bitbucket::pull_request::PullRequestState::Open => {
+                                            status.open_prs += 1;
+                                            merged_updates.push((entry.id, false));
+                                        }
+                                        crate::bitbucket::pull_request::PullRequestState::Merged => {
+                                            status.merged_prs += 1;
+                                            merged_updates.push((entry.id, true));
+                                        }
+                                        crate::bitbucket::pull_request::PullRequestState::Declined => {
+                                            status.declined_prs += 1;
+                                            merged_updates.push((entry.id, false));
+                                        }
                                     }
                                     status.pull_requests.push(pr);
                                 }
@@ -684,6 +782,23 @@ impl BitbucketIntegration {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        drop(stack);
+
+        if !merged_updates.is_empty() {
+            for (entry_id, merged) in merged_updates {
+                if let Err(e) = self
+                    .stack_manager
+                    .set_entry_merged(&stack_uuid, &entry_id, merged)
+                {
+                    tracing::warn!(
+                        "Failed to persist merged state for entry {}: {}",
+                        entry_id,
+                        e
+                    );
                 }
             }
         }
@@ -706,12 +821,16 @@ pub struct StackSubmissionStatus {
 }
 
 impl StackSubmissionStatus {
-    /// Calculate completion percentage
+    /// Calculate completion percentage (merged PRs / submitted PRs)
+    ///
+    /// Measures completion of submitted work, not total stack entries.
+    /// This changed from `total_entries` to `submitted_entries` as divisor
+    /// to provide a more accurate measure of review progress.
     pub fn completion_percentage(&self) -> f64 {
-        if self.total_entries == 0 {
+        if self.submitted_entries == 0 {
             0.0
         } else {
-            (self.merged_prs as f64 / self.total_entries as f64) * 100.0
+            (self.merged_prs as f64 / self.submitted_entries as f64) * 100.0
         }
     }
 
@@ -722,6 +841,6 @@ impl StackSubmissionStatus {
 
     /// Check if all PRs are merged
     pub fn all_merged(&self) -> bool {
-        self.merged_prs == self.total_entries
+        self.submitted_entries > 0 && self.merged_prs == self.submitted_entries
     }
 }
