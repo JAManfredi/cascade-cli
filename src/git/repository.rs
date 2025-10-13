@@ -2196,97 +2196,6 @@ impl GitRepository {
         Ok(None)
     }
 
-    /// Check if two commit histories represent a rebase scenario
-    /// Returns true if the commit messages match, indicating content is preserved
-    fn is_likely_rebase_scenario(&self, local_oid: &str, remote_oid: &str) -> bool {
-        // Get commits from both branches
-        let local_oid_parsed = match git2::Oid::from_str(local_oid) {
-            Ok(oid) => oid,
-            Err(_) => return false,
-        };
-
-        let remote_oid_parsed = match git2::Oid::from_str(remote_oid) {
-            Ok(oid) => oid,
-            Err(_) => return false,
-        };
-
-        let local_commit = match self.repo.find_commit(local_oid_parsed) {
-            Ok(c) => c,
-            Err(_) => return false,
-        };
-
-        let remote_commit = match self.repo.find_commit(remote_oid_parsed) {
-            Ok(c) => c,
-            Err(_) => return false,
-        };
-
-        // Compare commit messages - if they match, it's likely a rebase
-        let local_msg = local_commit.message().unwrap_or("");
-        let remote_msg = remote_commit.message().unwrap_or("");
-
-        // If the top commit messages match, this is very likely a rebase
-        if local_msg == remote_msg {
-            return true;
-        }
-
-        // Also check if local has same number of commits with matching messages
-        // This handles multi-commit rebases
-        let local_count = local_commit.parent_count();
-        let remote_count = remote_commit.parent_count();
-
-        if local_count == remote_count && local_count > 0 {
-            // Walk back and compare messages
-            let mut local_walker = match self.repo.revwalk() {
-                Ok(w) => w,
-                Err(_) => return false,
-            };
-            let mut remote_walker = match self.repo.revwalk() {
-                Ok(w) => w,
-                Err(_) => return false,
-            };
-
-            if local_walker.push(local_commit.id()).is_err() {
-                return false;
-            }
-            if remote_walker.push(remote_commit.id()).is_err() {
-                return false;
-            }
-
-            let local_messages: Vec<String> = local_walker
-                .take(5) // Check first 5 commits
-                .filter_map(|oid| {
-                    self.repo
-                        .find_commit(oid.ok()?)
-                        .ok()?
-                        .message()
-                        .map(|s| s.to_string())
-                })
-                .collect();
-
-            let remote_messages: Vec<String> = remote_walker
-                .take(5)
-                .filter_map(|oid| {
-                    self.repo
-                        .find_commit(oid.ok()?)
-                        .ok()?
-                        .message()
-                        .map(|s| s.to_string())
-                })
-                .collect();
-
-            // If most messages match, it's a rebase
-            let matches = local_messages
-                .iter()
-                .zip(remote_messages.iter())
-                .filter(|(l, r)| l == r)
-                .count();
-
-            return matches >= local_messages.len() / 2;
-        }
-
-        false
-    }
-
     /// Check force push safety without user confirmation (auto-creates backup)
     /// Used for automated operations like sync where user already confirmed the operation
     fn check_force_push_safety_auto(&self, target_branch: &str) -> Result<Option<ForceBackupInfo>> {
@@ -2320,22 +2229,6 @@ impl GitRepository {
 
                 // If merge base != remote commit, remote has commits that would be lost
                 if merge_base_oid != remote.id() {
-                    // Check if this is a rebase scenario (same commit messages, different hashes)
-                    // This is the expected behavior for stacked diffs and doesn't need scary warnings
-                    let is_likely_rebase = self.is_likely_rebase_scenario(
-                        &local.id().to_string(),
-                        &remote.id().to_string(),
-                    );
-
-                    if is_likely_rebase {
-                        debug!(
-                            "Detected rebase scenario for '{}' - skipping backup (commit content preserved)",
-                            target_branch
-                        );
-                        // No backup needed - this is a normal rebase with preserved content
-                        return Ok(None);
-                    }
-
                     let commits_to_lose = self.count_commits_between(
                         &merge_base_oid.to_string(),
                         &remote.id().to_string(),

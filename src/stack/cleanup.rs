@@ -200,24 +200,6 @@ impl CleanupManager {
             }
         }
 
-        // Check if this is a stack entry that was merged via PR
-        if let Some(entry_id) = entry_id {
-            if let Some(stack_id) = stack_id {
-                if self.is_stack_entry_merged(stack_id, entry_id)? {
-                    return Ok(Some(CleanupCandidate {
-                        branch_name: branch_name.to_string(),
-                        entry_id: Some(entry_id),
-                        stack_id: Some(stack_id),
-                        is_merged: false, // Not git-merged, but PR-merged
-                        has_remote,
-                        is_current,
-                        reason: CleanupReason::StackEntryMerged,
-                        safety_info: "Stack entry was merged via pull request".to_string(),
-                    }));
-                }
-            }
-        }
-
         // Never clean up active stack branches - they're in use!
         if stack_id.is_some() {
             return Ok(None);
@@ -352,8 +334,9 @@ impl CleanupManager {
                 self.git_repo.delete_branch(&candidate.branch_name)?;
             }
             CleanupReason::Stale | CleanupReason::Orphaned => {
-                // Use unsafe delete for stale/orphaned branches (they might not be merged)
-                self.git_repo.delete_branch_unsafe(&candidate.branch_name)?;
+                // Run through standard safety checks even for stale/orphaned branches
+                // This prevents accidental deletion when unpushed commits are present.
+                self.git_repo.delete_branch(&candidate.branch_name)?;
             }
         }
 
@@ -373,16 +356,24 @@ impl CleanupManager {
     ) -> Result<()> {
         debug!("Removing entry {} from stack {}", entry_id, stack_id);
 
-        if let Some(stack) = self.stack_manager.get_stack_mut(&stack_id) {
-            stack.entries.retain(|entry| entry.id != entry_id);
-
-            // If the stack is now empty, we might want to remove it
-            if stack.entries.is_empty() {
-                info!("Stack '{}' is now empty after cleanup", stack.name);
+        match self.stack_manager.remove_stack_entry(&stack_id, &entry_id) {
+            Ok(Some(_entry)) => {
+                if let Some(stack) = self.stack_manager.get_stack(&stack_id) {
+                    if stack.entries.is_empty() {
+                        info!("Stack '{}' is now empty after cleanup", stack.name);
+                    }
+                }
+                Ok(())
             }
+            Ok(None) => {
+                warn!(
+                    "Skip removing entry {} from stack {} (entry not found or still has dependents)",
+                    entry_id, stack_id
+                );
+                Ok(())
+            }
+            Err(e) => Err(e),
         }
-
-        Ok(())
     }
 
     /// Check if a branch is merged to its base branch
@@ -395,19 +386,6 @@ impl CleanupManager {
                 Ok(false)
             }
         }
-    }
-
-    /// Check if a stack entry was merged via PR
-    fn is_stack_entry_merged(&self, stack_id: uuid::Uuid, entry_id: uuid::Uuid) -> Result<bool> {
-        // Check if the entry is marked as submitted and has been merged in the stack metadata
-        if let Some(stack) = self.stack_manager.get_stack(&stack_id) {
-            if let Some(entry) = stack.entries.iter().find(|e| e.id == entry_id) {
-                // For now, consider it merged if it's submitted
-                // In a full implementation, we'd check the PR status via Bitbucket API
-                return Ok(entry.is_submitted);
-            }
-        }
-        Ok(false)
     }
 
     /// Get the base branch for a given branch

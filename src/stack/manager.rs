@@ -4,11 +4,12 @@ use crate::cli::output::Output;
 use crate::config::{get_repo_config_dir, Settings};
 use crate::errors::{CascadeError, Result};
 use crate::git::GitRepository;
+use chrono::Utc;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::debug;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 /// Types of branch modifications detected during Git integrity checks
@@ -583,6 +584,66 @@ impl StackManager {
         self.save_to_disk()?;
 
         Ok(())
+    }
+
+    /// Remove a stack entry and update metadata safely (used by cleanup flows)
+    pub fn remove_stack_entry(
+        &mut self,
+        stack_id: &Uuid,
+        entry_id: &Uuid,
+    ) -> Result<Option<StackEntry>> {
+        let stack = match self.stacks.get_mut(stack_id) {
+            Some(stack) => stack,
+            None => return Err(CascadeError::config(format!("Stack {stack_id} not found"))),
+        };
+
+        let entry = match stack.entry_map.get(entry_id) {
+            Some(entry) => entry.clone(),
+            None => return Ok(None),
+        };
+
+        if !entry.children.is_empty() {
+            warn!(
+                "Skipping removal of stack entry {} (branch '{}') because it still has {} child entr{}",
+                entry.id,
+                entry.branch,
+                entry.children.len(),
+                if entry.children.len() == 1 { "y" } else { "ies" }
+            );
+            return Ok(None);
+        }
+
+        // Remove entry from the ordered list
+        stack.entries.retain(|e| e.id != entry.id);
+
+        // Remove entry from lookup map
+        stack.entry_map.remove(&entry.id);
+
+        // Detach from parent so metadata stays accurate
+        if let Some(parent_id) = entry.parent_id {
+            if let Some(parent) = stack.entry_map.get_mut(&parent_id) {
+                parent.children.retain(|child| child != &entry.id);
+            }
+        }
+
+        // Sync entries vector from map to ensure consistency
+        stack.repair_data_consistency();
+        stack.updated_at = Utc::now();
+
+        // Update repository metadata (commit + branch bookkeeping)
+        self.metadata.remove_commit(&entry.commit_hash);
+        if let Some(stack_meta) = self.metadata.get_stack_mut(stack_id) {
+            stack_meta.remove_commit(&entry.commit_hash);
+            stack_meta.remove_branch(&entry.branch);
+
+            let submitted = stack.entries.iter().filter(|e| e.is_submitted).count();
+            let merged = stack_meta.merged_commits.min(stack.entries.len());
+            stack_meta.update_stats(stack.entries.len(), submitted, merged);
+        }
+
+        self.save_to_disk()?;
+
+        Ok(Some(entry))
     }
 
     /// Repair data consistency issues in all stacks
@@ -1391,7 +1452,7 @@ impl StackManager {
         };
 
         // Create new stack entry manually (no constructor method exists)
-        let now = chrono::Utc::now();
+        let now = Utc::now();
         let new_entry = crate::stack::StackEntry {
             id: uuid::Uuid::new_v4(),
             branch: new_branch.clone(),
