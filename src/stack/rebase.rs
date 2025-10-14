@@ -213,10 +213,13 @@ impl RebaseManager {
             return self.handle_in_progress_cherry_pick(stack);
         }
 
-        // Print section header (caller will handle spinner animation)
-        Output::section(format!("Rebasing stack: {}", stack.name));
-        Output::sub_item(format!("Base branch: {}", stack.base_branch));
-        Output::sub_item(format!("Entries: {}", stack.entries.len()));
+        // Only print section header if no outer spinner exists
+        // If progress_printer exists, the caller already has a spinner showing progress
+        if self.options.progress_printer.is_none() {
+            Output::section(format!("Rebasing stack: {}", stack.name));
+            Output::sub_item(format!("Base branch: {}", stack.base_branch));
+            Output::sub_item(format!("Entries: {}", stack.entries.len()));
+        }
 
         let mut result = RebaseResult {
             success: true,
@@ -641,16 +644,21 @@ impl RebaseManager {
         if !branches_to_push.is_empty() {
             print_blank();
 
-            // Start spinner for push phase (animated until all pushes complete)
-            let branch_word = if pushed_count == 1 {
-                "branch"
+            // Only create a new spinner if no progress printer exists
+            // If we have a printer, the outer spinner is already handling animation
+            let push_spinner = if printer.is_none() {
+                let branch_word = if pushed_count == 1 {
+                    "branch"
+                } else {
+                    "branches"
+                };
+                Some(Spinner::new_with_output_below(format!(
+                    "Pushing {} updated stack {}",
+                    pushed_count, branch_word
+                )))
             } else {
-                "branches"
+                None
             };
-            let push_spinner = Spinner::new_with_output_below(format!(
-                "Pushing {} updated stack {}",
-                pushed_count, branch_word
-            ));
 
             // Push all branches while spinner animates
             let mut push_results = Vec::new();
@@ -659,26 +667,28 @@ impl RebaseManager {
                 push_results.push((branch_name.clone(), result));
             }
 
-            // Stop spinner after all pushes complete
-            push_spinner.stop();
+            // Stop spinner if we created one
+            if let Some(spinner) = push_spinner {
+                spinner.stop();
+            }
 
-            // Now show static results for each push
+            // Now show static results for each push using printer-aware output
             let mut failed_pushes = 0;
             for (index, (branch_name, result)) in push_results.iter().enumerate() {
                 match result {
                     Ok(_) => {
                         debug!("Pushed {} successfully", branch_name);
                         successful_pushes += 1;
-                        println!(
+                        print_line(&format!(
                             "   ✓ Pushed {} ({}/{})",
                             branch_name,
                             index + 1,
                             pushed_count
-                        );
+                        ));
                     }
                     Err(e) => {
                         failed_pushes += 1;
-                        Output::warning(format!("Could not push '{}': {}", branch_name, e));
+                        print_line(&format!("   ⚠ Could not push '{}': {}", branch_name, e));
                     }
                 }
             }

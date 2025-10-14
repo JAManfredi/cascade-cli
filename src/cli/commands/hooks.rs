@@ -1040,12 +1040,19 @@ exit 0
                      set /p choice=\\\"Your choice (a/n/c): \\\" <CON\n\
                      if \\\"%choice%\\\"==\\\"\\\" set choice=a\n\
                      \n\
-                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
-                         rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
-                         rem The --all flag will stage changes, --restack updates dependent entries\n\
-                         \\\"{0}\\\" entry amend --all --restack\n\
-                         exit /b %ERRORLEVEL%\n\
-                     ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
+                    if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
+                        rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
+                        rem The --all flag will stage changes, --restack updates dependent entries\n\
+                        \\\"{0}\\\" entry amend --all --restack\n\
+                        set amend_error=%ERRORLEVEL%\n\
+                        if %amend_error% EQU 0 (\n\
+                            echo Amend applied - skipping git commit to avoid duplicate entry.\n\
+                            echo Your commit was updated by Cascade; no further action needed.\n\
+                            exit /b 1\n\
+                        ) else (\n\
+                            exit /b %amend_error%\n\
+                        )\n\
+                    ) else if /i \\\"%choice%\\\"==\\\"N\\\" (\n\
                          echo Creating new stack entry...\n\
                          echo The commit will proceed and post-commit hook will add it to your stack\n\
                          rem Let commit proceed ^(Git will use -m flag or open editor^)\n\
@@ -1099,7 +1106,7 @@ exit 0
                 "# If in edit mode, check if we're on a stack entry branch".to_string(),
                 r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
                 "        # Check if current branch is a stack entry branch".to_string(),
-                format!(r#"        if ! "{}" stacks list --format=json 2>/dev/null | grep -q "\"branch_name\": \"$CURRENT_BRANCH\""; then"#, cascade_cli),
+                format!(r#"        if ! "{}" stack list --format=json 2>/dev/null | grep -q "\"branch_name\": \"$CURRENT_BRANCH\""; then"#, cascade_cli),
                 r#"                # Not on a stack entry branch - edit mode is for a different branch"#.to_string(),
                 r#"                # Silently proceed with normal commit"#.to_string(),
                 "                exit 0".to_string(),
@@ -1125,7 +1132,16 @@ exit 0
                     .to_string(),
                 "                # The --all flag will stage changes automatically".to_string(),
                 amend_line.replace("           ", "                "),
-                "                exit $?".to_string(),
+                "                amend_rc=$?".to_string(),
+                r#"                if [ $amend_rc -eq 0 ]; then"#.to_string(),
+                r#"                    echo "Amend applied - skipping git commit to avoid duplicate entry.""#
+                    .to_string(),
+                r#"                    echo "Your commit was updated by Cascade; no further action needed.""#
+                    .to_string(),
+                "                    exit 1".to_string(),
+                "                else".to_string(),
+                "                    exit $amend_rc".to_string(),
+                "                fi".to_string(),
                 "                ;;".to_string(),
                 "            [Nn])".to_string(),
                 r#"                echo "Creating new stack entry...""#.to_string(),
