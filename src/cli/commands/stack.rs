@@ -2483,9 +2483,10 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                         println!(); // Spacing
 
                         // Start spinner with static title
-                        let rebase_spinner = crate::utils::spinner::Spinner::new(
-                            format!("Rebasing stack: {}", active_stack.name),
-                        );
+                        let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                            "Rebasing stack: {}",
+                            active_stack.name
+                        ));
 
                         // Use the existing rebase system with force-push strategy
                         // This preserves PR history by force-pushing to original branches
