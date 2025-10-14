@@ -1079,7 +1079,9 @@ exit 0
                 "EDIT_STATUS=$(\"{}\" entry status --quiet 2>/dev/null || echo \"inactive\")",
                 cascade_cli
             );
-            let amend_line = format!("           \"{}\" entry amend --all --restack", cascade_cli);
+            // When called from pre-commit hook during 'git commit', changes are already staged
+            // So we DON'T use --all flag, just amend with what's staged
+            let amend_line = format!("           \"{}\" entry amend --restack", cascade_cli);
 
             vec![
                 "#!/bin/sh".to_string(),
@@ -1106,7 +1108,7 @@ exit 0
                 "# If in edit mode, check if we're on a stack entry branch".to_string(),
                 r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
                 "        # Check if current branch is a stack entry branch".to_string(),
-                format!(r#"        if ! "{}" stack list --format=json 2>/dev/null | grep -q "\"branch_name\": \"$CURRENT_BRANCH\""; then"#, cascade_cli),
+                format!(r#"        if ! "{}" stacks list --format=json 2>/dev/null | grep -q "\"branch_name\": \"$CURRENT_BRANCH\""; then"#, cascade_cli),
                 r#"                # Not on a stack entry branch - edit mode is for a different branch"#.to_string(),
                 r#"                # Silently proceed with normal commit"#.to_string(),
                 "                exit 0".to_string(),
@@ -1130,7 +1132,7 @@ exit 0
                 "            [Aa])".to_string(),
                 "                # Use ca entry amend to properly update entry + working branch (ignore any -m flag)"
                     .to_string(),
-                "                # The --all flag will stage changes automatically".to_string(),
+                "                # Changes are already staged by 'git commit', so no --all flag needed".to_string(),
                 amend_line.replace("           ", "                "),
                 "                amend_rc=$?".to_string(),
                 r#"                if [ $amend_rc -eq 0 ]; then"#.to_string(),
