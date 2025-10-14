@@ -1042,8 +1042,8 @@ exit 0
                      \n\
                     if /i \\\"%choice%\\\"==\\\"A\\\" (\n\
                         rem Use ca entry amend to update entry ^(ignore any -m flag^)\n\
-                        rem The --all flag will stage changes, --restack updates dependent entries\n\
-                        \\\"{0}\\\" entry amend --all --restack\n\
+                        rem Changes are already staged by git commit; --restack updates dependents\n\
+                        \\\"{0}\\\" entry amend --restack\n\
                         set amend_error=%ERRORLEVEL%\n\
                         if %amend_error% EQU 0 (\n\
                             echo Amend applied - skipping git commit to avoid duplicate entry.\n\

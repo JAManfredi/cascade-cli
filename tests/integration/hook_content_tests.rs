@@ -218,8 +218,12 @@ async fn test_pre_commit_hook_contains_edit_mode_guidance() {
         "Pre-commit hook should provide cancel option"
     );
     assert!(
-        hook_content.contains("entry amend --all"),
-        "Pre-commit hook should call ca entry amend for amend option"
+        hook_content.contains("entry amend --restack"),
+        "Pre-commit hook should call ca entry amend with restack for amend option"
+    );
+    assert!(
+        !hook_content.contains("entry amend --all"),
+        "Pre-commit hook should avoid staging unstaged changes when amending"
     );
     assert!(
         hook_content.contains("Creating new stack entry..."),

@@ -2483,7 +2483,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                         println!(); // Spacing
 
                         // Start spinner with static title
-                        let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(
+                        let rebase_spinner = crate::utils::spinner::Spinner::new(
                             format!("Rebasing stack: {}", active_stack.name),
                         );
 
