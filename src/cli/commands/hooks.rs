@@ -1099,7 +1099,7 @@ exit 0
                 "# If in edit mode, check if we're on a stack entry branch".to_string(),
                 r#"if echo "$EDIT_STATUS" | grep -q "^active:"; then"#.to_string(),
                 "        # Check if current branch is a stack entry branch".to_string(),
-                format!(r#"        if ! "{}" stack list --format=json 2>/dev/null | grep -q "\"branch_name\": \"$CURRENT_BRANCH\""; then"#, cascade_cli),
+                format!(r#"        if ! "{}" stacks list --format=json 2>/dev/null | grep -q "\"branch_name\": \"$CURRENT_BRANCH\""; then"#, cascade_cli),
                 r#"                # Not on a stack entry branch - edit mode is for a different branch"#.to_string(),
                 r#"                # Silently proceed with normal commit"#.to_string(),
                 "                exit 0".to_string(),
