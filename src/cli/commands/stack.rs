@@ -611,7 +611,7 @@ async fn create_stack(
     Ok(())
 }
 
-async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> Result<()> {
+async fn list_stacks(verbose: bool, active_only: bool, format: Option<String>) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -619,10 +619,105 @@ async fn list_stacks(verbose: bool, _active: bool, _format: Option<String>) -> R
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
     let manager = StackManager::new(&repo_root)?;
-    let stacks = manager.list_stacks();
+    let mut stacks = manager.list_stacks();
+
+    if active_only {
+        stacks.retain(|(_, _, _, _, active_marker)| active_marker.is_some());
+    }
+
+    if let Some(ref format) = format {
+        match format.as_str() {
+            "json" => {
+                let mut json_stacks = Vec::new();
+
+                for (stack_id, name, status, entry_count, active_marker) in &stacks {
+                    let (entries_json, working_branch, base_branch) =
+                        if let Some(stack_obj) = manager.get_stack(stack_id) {
+                            let entries_json = stack_obj
+                                .entries
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, entry)| {
+                                    serde_json::json!({
+                                        "position": idx + 1,
+                                        "entry_id": entry.id.to_string(),
+                                        "branch_name": entry.branch.clone(),
+                                        "commit_hash": entry.commit_hash.clone(),
+                                        "short_hash": entry.short_hash(),
+                                        "is_submitted": entry.is_submitted,
+                                        "is_merged": entry.is_merged,
+                                        "pull_request_id": entry.pull_request_id.clone(),
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+
+                            (
+                                entries_json,
+                                stack_obj.working_branch.clone(),
+                                Some(stack_obj.base_branch.clone()),
+                            )
+                        } else {
+                            (Vec::new(), None, None)
+                        };
+
+                    let status_label = format!("{status:?}");
+
+                    json_stacks.push(serde_json::json!({
+                        "id": stack_id.to_string(),
+                        "name": name,
+                        "status": status_label,
+                        "entry_count": entry_count,
+                        "is_active": active_marker.is_some(),
+                        "base_branch": base_branch,
+                        "working_branch": working_branch,
+                        "entries": entries_json,
+                    }));
+                }
+
+                let json_output = serde_json::json!({ "stacks": json_stacks });
+                let serialized = serde_json::to_string_pretty(&json_output)?;
+                println!("{serialized}");
+                return Ok(());
+            }
+            "name" => {
+                for (_, name, _, _, _) in &stacks {
+                    println!("{name}");
+                }
+                return Ok(());
+            }
+            "id" => {
+                for (stack_id, _, _, _, _) in &stacks {
+                    println!("{}", stack_id);
+                }
+                return Ok(());
+            }
+            "status" => {
+                for (_, name, status, _, active_marker) in &stacks {
+                    let status_label = format!("{status:?}");
+                    let marker = if active_marker.is_some() {
+                        " (active)"
+                    } else {
+                        ""
+                    };
+                    println!("{name}: {status_label}{marker}");
+                }
+                return Ok(());
+            }
+            other => {
+                return Err(CascadeError::config(format!(
+                    "Unsupported format '{}'. Supported formats: name, id, status, json",
+                    other
+                )));
+            }
+        }
+    }
 
     if stacks.is_empty() {
-        Output::info("No stacks found. Create one with: ca stack create <name>");
+        if active_only {
+            Output::info("No active stack. Activate one with 'ca stack switch <name>'");
+        } else {
+            Output::info("No stacks found. Create one with: ca stack create <name>");
+        }
         return Ok(());
     }
 
@@ -2385,6 +2480,13 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             cascade: settings.cascade.clone(),
                         };
 
+                        println!(); // Spacing
+
+                        // Start spinner with static title
+                        let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(
+                            format!("Rebasing stack: {}", active_stack.name),
+                        );
+
                         // Use the existing rebase system with force-push strategy
                         // This preserves PR history by force-pushing to original branches
                         let options = crate::stack::RebaseOptions {
@@ -2396,19 +2498,13 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             max_retries: 3,
                             skip_pull: Some(true), // Skip pull since we already pulled above
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
+                            progress_printer: Some(rebase_spinner.printer()),
                         };
 
                         let mut rebase_manager = crate::stack::RebaseManager::new(
                             updated_stack_manager,
                             git_repo,
                             options,
-                        );
-
-                        println!(); // Spacing
-
-                        // Start spinner with static title
-                        let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(
-                            format!("Rebasing stack: {}", active_stack.name),
                         );
 
                         // Rebase all entries (tree prints as we go)
@@ -2609,6 +2705,19 @@ async fn rebase_stack(
     // Save original branch before any operations
     let original_branch = git_repo.get_current_branch().ok();
 
+    debug!("   Strategy: {:?}", rebase_strategy);
+    debug!("   Interactive: {}", interactive);
+    debug!("   Target base: {:?}", onto);
+    debug!("   Entries: {}", active_stack.entries.len());
+
+    println!(); // Spacing
+
+    // Start spinner for rebase
+    let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(format!(
+        "Rebasing stack: {}",
+        active_stack.name
+    ));
+
     // Create rebase options
     let options = crate::stack::RebaseOptions {
         strategy: rebase_strategy.clone(),
@@ -2619,12 +2728,8 @@ async fn rebase_stack(
         max_retries: 3,
         skip_pull: None, // Normal rebase should pull latest changes
         original_working_branch: original_branch,
+        progress_printer: Some(rebase_spinner.printer()),
     };
-
-    debug!("   Strategy: {:?}", rebase_strategy);
-    debug!("   Interactive: {}", interactive);
-    debug!("   Target base: {:?}", options.target_base);
-    debug!("   Entries: {}", active_stack.entries.len());
 
     // Check if there's already a rebase in progress
     let mut rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
@@ -2636,16 +2741,9 @@ async fn rebase_stack(
             "Run 'ca stack continue-rebase' to continue",
             "Run 'ca stack abort-rebase' to abort",
         ]);
+        rebase_spinner.stop();
         return Ok(());
     }
-
-    println!(); // Spacing
-
-    // Start spinner for rebase
-    let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(format!(
-        "Rebasing stack: {}",
-        active_stack.name
-    ));
 
     // Perform the rebase
     let rebase_result = rebase_manager.rebase_stack(&stack_id);
@@ -3456,21 +3554,21 @@ async fn land_stack(
                     let entry_count = stack_for_count.entries.len();
                     let plural = if entry_count == 1 { "entry" } else { "entries" };
 
+                    println!(); // Spacing
+                    let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(
+                        format!("Retargeting {} {}", entry_count, plural),
+                    );
+
                     let mut rebase_manager = crate::stack::RebaseManager::new(
                         StackManager::new(&repo_root)?,
                         git_repo,
                         crate::stack::RebaseOptions {
                             strategy: crate::stack::RebaseStrategy::ForcePush,
                             target_base: Some(base_branch.clone()),
+                            progress_printer: Some(rebase_spinner.printer()),
                             ..Default::default()
                         },
                     );
-
-                    println!(); // Spacing
-                    let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
-                        "Retargeting {} {}",
-                        entry_count, plural
-                    ));
 
                     let rebase_result = rebase_manager.rebase_stack(&stack_id);
 

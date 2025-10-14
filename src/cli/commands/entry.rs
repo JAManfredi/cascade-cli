@@ -578,48 +578,30 @@ async fn list_entries(verbose: bool) -> Result<()> {
     ));
 
     let edit_mode_info = manager.get_edit_mode_info();
+    let edit_target_entry_id = edit_mode_info
+        .as_ref()
+        .and_then(|info| info.target_entry_id);
 
     for (i, entry) in active_stack.entries.iter().enumerate() {
         let entry_num = i + 1;
-
-        // Status icon
-        let status_icon = if entry.is_submitted {
-            if entry.pull_request_id.is_some() {
-                "📤"
-            } else {
-                "📝"
-            }
-        } else {
-            "🔄"
-        };
-
-        // Edit mode indicator
-        let edit_indicator = if edit_mode_info.is_some()
-            && edit_mode_info.unwrap().target_entry_id == Some(entry.id)
-        {
-            " 🎯"
-        } else {
-            ""
-        };
-
-        // Basic entry line
-        print!(
-            "   {}. {} {} ({})",
-            entry_num,
-            status_icon,
+        let status_label = Output::entry_status(entry.is_submitted, entry.is_merged);
+        let mut entry_line = format!(
+            "{} {} ({})",
+            status_label,
             entry.short_message(50),
             entry.short_hash()
         );
 
-        // PR information
         if let Some(pr_id) = &entry.pull_request_id {
-            print!(" PR: #{pr_id}");
+            entry_line.push_str(&format!(" PR: #{pr_id}"));
         }
 
-        print!("{edit_indicator}");
-        println!(); // Line break for entry
+        if Some(entry.id) == edit_target_entry_id {
+            entry_line.push_str(" [edit target]");
+        }
 
-        // Verbose information
+        Output::numbered_item(entry_num, entry_line);
+
         if verbose {
             Output::sub_item(format!("Branch: {}", entry.branch));
             Output::sub_item(format!("Commit: {}", entry.commit_hash));
@@ -627,63 +609,63 @@ async fn list_entries(verbose: bool) -> Result<()> {
                 "Created: {}",
                 entry.created_at.format("%Y-%m-%d %H:%M:%S")
             ));
-            if entry.is_submitted {
+
+            if entry.is_merged {
+                Output::sub_item("Status: Merged");
+            } else if entry.is_submitted {
                 Output::sub_item("Status: Submitted");
             } else {
                 Output::sub_item("Status: Draft");
             }
 
-            // Display full commit message
             Output::sub_item("Message:");
-            let lines: Vec<&str> = entry.message.lines().collect();
-            for line in lines {
+            for line in entry.message.lines() {
                 Output::sub_item(format!("  {line}"));
             }
 
-            // Add Git status info for entry in edit mode
-            if edit_mode_info.is_some() && edit_mode_info.unwrap().target_entry_id == Some(entry.id)
-            {
-                if let Ok(repo_root) = find_repository_root(&env::current_dir().unwrap_or_default())
-                {
-                    if let Ok(repo) = crate::git::GitRepository::open(&repo_root) {
-                        match repo.get_status_summary() {
-                            Ok(status) => {
-                                if !status.is_clean() {
-                                    Output::sub_item("Git Status:");
-                                    if status.has_staged_changes() {
-                                        Output::sub_item(format!(
-                                            "  Staged: {} files",
-                                            status.staged_count()
-                                        ));
-                                    }
-                                    if status.has_unstaged_changes() {
-                                        Output::sub_item(format!(
-                                            "  Unstaged: {} files",
-                                            status.unstaged_count()
-                                        ));
-                                    }
-                                    if status.has_untracked_files() {
-                                        Output::sub_item(format!(
-                                            "  Untracked: {} files",
-                                            status.untracked_count()
-                                        ));
-                                    }
-                                } else {
-                                    Output::sub_item("Git Status: clean");
+            if Some(entry.id) == edit_target_entry_id {
+                Output::sub_item("Edit mode target");
+
+                match crate::git::GitRepository::open(&repo_root) {
+                    Ok(repo) => match repo.get_status_summary() {
+                        Ok(status) => {
+                            if !status.is_clean() {
+                                Output::sub_item("Git Status:");
+                                if status.has_staged_changes() {
+                                    Output::sub_item(format!(
+                                        "  Staged: {} files",
+                                        status.staged_count()
+                                    ));
                                 }
-                            }
-                            Err(_) => {
-                                Output::sub_item("Git Status: unavailable");
+                                if status.has_unstaged_changes() {
+                                    Output::sub_item(format!(
+                                        "  Unstaged: {} files",
+                                        status.unstaged_count()
+                                    ));
+                                }
+                                if status.has_untracked_files() {
+                                    Output::sub_item(format!(
+                                        "  Untracked: {} files",
+                                        status.untracked_count()
+                                    ));
+                                }
+                            } else {
+                                Output::sub_item("Git Status: clean");
                             }
                         }
+                        Err(_) => {
+                            Output::sub_item("Git Status: unavailable");
+                        }
+                    },
+                    Err(_) => {
+                        Output::sub_item("Git Status: unavailable");
                     }
                 }
             }
-            // Add spacing between entries
         }
     }
 
-    if let Some(_edit_info) = edit_mode_info {
+    if edit_mode_info.is_some() {
         Output::spacing();
         Output::info("Edit mode active - use 'ca entry status' for details");
     } else {
@@ -936,6 +918,12 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
                 "entries"
             };
 
+            println!(); // Spacing
+            let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(format!(
+                "Restacking {} dependent {}",
+                dependent_count, plural
+            ));
+
             // Use the sync_stack mechanism to rebase dependent entries
             let mut rebase_manager = crate::stack::RebaseManager::new(
                 rebase_manager_stack,
@@ -944,15 +932,10 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
                     strategy: crate::stack::RebaseStrategy::ForcePush,
                     target_base: Some(entry_branch.clone()),
                     skip_pull: Some(true), // Don't pull, we're rebasing on local changes
+                    progress_printer: Some(rebase_spinner.printer()),
                     ..Default::default()
                 },
             );
-
-            println!(); // Spacing
-            let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
-                "Restacking {} dependent {}",
-                dependent_count, plural
-            ));
 
             let rebase_result = rebase_manager.rebase_stack(&stack_id);
 

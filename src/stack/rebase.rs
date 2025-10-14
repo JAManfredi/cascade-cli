@@ -1,7 +1,7 @@
 use crate::errors::{CascadeError, Result};
 use crate::git::{ConflictAnalyzer, GitRepository};
 use crate::stack::{Stack, StackManager};
-use crate::utils::spinner::Spinner;
+use crate::utils::spinner::{Spinner, SpinnerPrinter};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -65,6 +65,8 @@ pub struct RebaseOptions {
     /// Original working branch to restore after rebase (if different from base)
     /// This is critical to prevent updating the base branch when sync checks out to it
     pub original_working_branch: Option<String>,
+    /// Optional printer for progress-aware output (e.g., CLI spinners)
+    pub progress_printer: Option<SpinnerPrinter>,
 }
 
 /// Result of a rebase operation
@@ -159,6 +161,7 @@ impl Default for RebaseOptions {
             max_retries: 3,
             skip_pull: None,
             original_working_branch: None,
+            progress_printer: None,
         }
     }
 }
@@ -269,19 +272,34 @@ impl RebaseManager {
 
         let mut current_base = target_base.clone();
         let entry_count = stack.entries.len();
+        let printer = self.options.progress_printer.clone();
+        let print_line = |line: &str| {
+            if let Some(ref printer) = printer {
+                printer.println(line);
+            } else {
+                println!("{}", line);
+            }
+        };
+        let print_blank = || {
+            if let Some(ref printer) = printer {
+                printer.println("");
+            } else {
+                println!();
+            }
+        };
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
         let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, index)
 
         // Handle empty stack early
         if entry_count == 0 {
-            println!(); // Spacing
+            print_blank();
             Output::info("Stack has no entries yet");
             Output::tip("Use 'ca push' to add commits to this stack");
 
             result.summary = "Stack is empty".to_string();
 
             // Print success with summary (consistent with non-empty path)
-            println!(); // Spacing
+            print_blank();
             Output::success(&result.summary);
 
             // Save metadata and return
@@ -297,7 +315,7 @@ impl RebaseManager {
         });
 
         if all_up_to_date {
-            println!(); // Spacing
+            print_blank();
             Output::success("Stack is already up-to-date with base branch");
             result.summary = "Stack is up-to-date".to_string();
             result.success = true;
@@ -330,7 +348,10 @@ impl RebaseManager {
                     } else {
                         "├─"
                     };
-                    println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
+                    print_line(&format!(
+                        "   {} {} (PR #{})",
+                        tree_char, original_branch, pr_num
+                    ));
                     branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
                 }
 
@@ -388,7 +409,10 @@ impl RebaseManager {
                         } else {
                             "├─"
                         };
-                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
+                        print_line(&format!(
+                            "   {} {} (PR #{})",
+                            tree_char, original_branch, pr_num
+                        ));
                         branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
                     }
 
@@ -411,7 +435,7 @@ impl RebaseManager {
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
-                        println!(); // Spacing before error
+                        print_blank();
                         Output::error(e.to_string());
                         result.success = false;
                         result.error = Some(format!(
@@ -615,7 +639,7 @@ impl RebaseManager {
         let mut successful_pushes = 0; // Track successful pushes for summary
 
         if !branches_to_push.is_empty() {
-            println!(); // Spacing
+            print_blank();
 
             // Start spinner for push phase (animated until all pushes complete)
             let branch_word = if pushed_count == 1 {
@@ -837,7 +861,7 @@ impl RebaseManager {
         };
 
         // Display result with proper formatting
-        println!(); // Spacing after tree
+        print_blank();
         if result.success {
             Output::success(&result.summary);
         } else {

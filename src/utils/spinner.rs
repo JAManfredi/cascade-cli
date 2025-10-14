@@ -7,6 +7,12 @@ pub struct Spinner {
     pb: ProgressBar,
 }
 
+/// Cloneable handle that allows printing while a spinner is active.
+#[derive(Debug, Clone)]
+pub struct SpinnerPrinter {
+    pb: ProgressBar,
+}
+
 impl Spinner {
     const TICK_RATE: Duration = Duration::from_millis(80);
     const TEMPLATE: &'static str = "{spinner:.green} {msg}";
@@ -40,6 +46,14 @@ impl Spinner {
         self.pb.println(message.as_ref());
     }
 
+    /// Obtain a cloneable printer handle that can be used to emit lines from
+    /// other parts of the code while the spinner remains active.
+    pub fn printer(&self) -> SpinnerPrinter {
+        SpinnerPrinter {
+            pb: self.pb.clone(),
+        }
+    }
+
     /// Temporarily suspend the spinner while executing the provided closure.
     pub fn suspend<F: FnOnce()>(&self, f: F) {
         self.pb.suspend(f);
@@ -66,6 +80,18 @@ impl Drop for Spinner {
         if !self.pb.is_finished() {
             self.pb.finish_and_clear();
         }
+    }
+}
+
+impl SpinnerPrinter {
+    /// Print a line beneath the spinner.
+    pub fn println<T: AsRef<str>>(&self, message: T) {
+        self.pb.println(message.as_ref());
+    }
+
+    /// Temporarily suspend the spinner while running the provided closure.
+    pub fn suspend<F: FnOnce()>(&self, f: F) {
+        self.pb.suspend(f);
     }
 }
 
