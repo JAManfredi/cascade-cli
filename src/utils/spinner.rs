@@ -25,6 +25,11 @@ impl Spinner {
         );
         pb.set_message(message);
         pb.enable_steady_tick(Self::TICK_RATE);
+
+        // Give indicatif a moment to draw the spinner before any println() calls
+        // This ensures the spinner appears at the correct position
+        std::thread::sleep(Duration::from_millis(20));
+
         Spinner { pb }
     }
 
