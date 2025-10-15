@@ -540,6 +540,9 @@ impl RebaseManager {
                                     result.new_commits.push(new_commit_id.clone());
                                     let rebased_commit_id = new_commit_id;
 
+                                    // Clean up backup files after successful commit
+                                    self.cleanup_backup_files()?;
+
                                     // Update the original branch to point to this rebased commit
                                     self.git_repo.update_branch_to_commit(
                                         original_branch,
@@ -1261,6 +1264,45 @@ impl RebaseManager {
 
         // Penalize for inconsistencies
         lines.len().saturating_sub(inconsistencies)
+    }
+
+    /// Clean up .cascade-backup files from the repository after successful conflict resolution
+    fn cleanup_backup_files(&self) -> Result<()> {
+        use std::fs;
+        use std::path::Path;
+
+        let repo_path = self.git_repo.path();
+
+        // Recursively find and remove all .cascade-backup files
+        fn remove_backups_recursive(dir: &Path) {
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+
+                    if path.is_dir() {
+                        // Skip .git directory
+                        if path.file_name().and_then(|n| n.to_str()) != Some(".git") {
+                            remove_backups_recursive(&path);
+                        }
+                    } else if let Some(ext) = path.extension() {
+                        if ext == "cascade-backup" {
+                            debug!("Cleaning up backup file: {}", path.display());
+                            if let Err(e) = fs::remove_file(&path) {
+                                // Log but don't fail - backup cleanup is not critical
+                                tracing::warn!(
+                                    "Could not remove backup file {}: {}",
+                                    path.display(),
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        remove_backups_recursive(repo_path);
+        Ok(())
     }
 
     /// Resolve a single conflict using enhanced analysis
