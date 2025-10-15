@@ -859,7 +859,10 @@ impl HooksManager {
                  rem Cascade CLI Hook - Pre Push\n\
                  rem Prevents force pushes and validates stack state\n\n\
                  rem Allow force pushes from Cascade internal commands (ca sync, ca submit, etc.)\n\
-                 if \"%CASCADE_INTERNAL_PUSH%\"==\"1\" (\n\
+                 rem Check for marker file (Git hooks don't inherit env vars)\n\
+                 for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
+                 if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
+                 if exist \"%REPO_ROOT%\\.git\\.cascade-internal-push\" (\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Check for force push from user\n\
@@ -902,7 +905,9 @@ impl HooksManager {
                  # Prevents force pushes and validates stack state\n\n\
                  set -e\n\n\
                  # Allow force pushes from Cascade internal commands (ca sync, ca submit, etc.)\n\
-                 if [ \"$CASCADE_INTERNAL_PUSH\" = \"1\" ]; then\n\
+                 # Check for marker file (Git hooks don't inherit env vars)\n\
+                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
+                 if [ -f \"$REPO_ROOT/.git/.cascade-internal-push\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
                  # Check for force push from user\n\

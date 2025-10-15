@@ -2520,6 +2520,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                                 if !result.branch_mapping.is_empty() {
                                     // Update PRs if enabled
                                     if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
+                                        // Reload stack manager to get latest metadata after rebase
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
                                         let mut integration =

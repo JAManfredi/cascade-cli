@@ -380,14 +380,25 @@ impl GitRepository {
         // Ensure index is closed before CLI command to prevent lock conflicts
         self.ensure_index_closed()?;
 
+        // Create marker file to signal pre-push hook to allow this internal push
+        // (Git hooks don't inherit env vars, so we use a file marker instead)
+        let marker_path = self.path.join(".git").join(".cascade-internal-push");
+        std::fs::write(&marker_path, "1")
+            .map_err(|e| CascadeError::branch(format!("Failed to create push marker: {}", e)))?;
+
         // Force push using git CLI (more reliable than git2 for TLS)
-        // Set CASCADE_INTERNAL_PUSH env var to signal pre-push hook to allow this
         let output = std::process::Command::new("git")
             .args(["push", "--force", "origin", branch_name])
-            .env("CASCADE_INTERNAL_PUSH", "1")
             .current_dir(&self.path)
             .output()
-            .map_err(|e| CascadeError::branch(format!("Failed to execute git push: {}", e)))?;
+            .map_err(|e| {
+                // Clean up marker on error
+                let _ = std::fs::remove_file(&marker_path);
+                CascadeError::branch(format!("Failed to execute git push: {}", e))
+            })?;
+
+        // Clean up marker file after push attempt
+        let _ = std::fs::remove_file(&marker_path);
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1736,7 +1747,7 @@ impl GitRepository {
         // Add enhanced progress and error callbacks for better debugging
         callbacks.push_update_reference(|refname, status| {
             if let Some(msg) = status {
-                tracing::error!("Push failed for ref {}: {}", refname, msg);
+                tracing::debug!("Push failed for ref {}: {}", refname, msg);
                 return Err(git2::Error::from_str(&format!("Push failed: {msg}")));
             }
             tracing::debug!("Push succeeded for ref: {}", refname);
@@ -1804,7 +1815,6 @@ impl GitRepository {
                     format!("Failed to push branch '{branch}': {e}")
                 };
 
-                tracing::error!("{}", error_msg);
                 Err(CascadeError::branch(error_msg))
             }
         }
@@ -1839,7 +1849,6 @@ impl GitRepository {
                 // For other errors, just show the stderr without the verbose prefix
                 stderr.trim().to_string()
             };
-            tracing::error!("{}", error_msg);
             Err(CascadeError::branch(error_msg))
         }
     }
@@ -1872,7 +1881,6 @@ impl GitRepository {
                 "Git CLI fetch failed: {}\nStdout: {}\nStderr: {}",
                 output.status, stdout, stderr
             );
-            tracing::error!("{}", error_msg);
             Err(CascadeError::Git(git2::Error::from_str(&error_msg)))
         }
     }
@@ -1905,7 +1913,6 @@ impl GitRepository {
                 "Git CLI pull failed for branch '{}': {}\nStdout: {}\nStderr: {}",
                 branch, output.status, stdout, stderr
             );
-            tracing::error!("{}", error_msg);
             Err(CascadeError::Git(git2::Error::from_str(&error_msg)))
         }
     }
@@ -1934,7 +1941,6 @@ impl GitRepository {
                 "Git CLI force push failed for branch '{}': {}\nStdout: {}\nStderr: {}",
                 branch, output.status, stdout, stderr
             );
-            tracing::error!("{}", error_msg);
             Err(CascadeError::branch(error_msg))
         }
     }
@@ -2778,7 +2784,9 @@ impl GitRepository {
 
     /// Create a stash with uncommitted changes
     fn create_stash(&self, message: &str) -> Result<String> {
-        tracing::info!("Creating stash: {}", message);
+        use crate::cli::output::Output;
+
+        tracing::debug!("Creating stash: {}", message);
 
         // Use git CLI for stashing since git2 stashing is complex and unreliable
         let output = std::process::Command::new("git")
@@ -2812,7 +2820,8 @@ impl GitRepository {
                 "stash@{0}".to_string() // fallback
             };
 
-            tracing::info!("✅ Created stash: {} ({})", message, stash_id);
+            Output::success(format!("Created stash: {} ({})", message, stash_id));
+            Output::tip("You can restore with: git stash pop");
             Ok(stash_id)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
