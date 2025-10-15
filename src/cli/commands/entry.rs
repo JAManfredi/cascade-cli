@@ -932,7 +932,6 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
                     strategy: crate::stack::RebaseStrategy::ForcePush,
                     target_base: Some(entry_branch.clone()),
                     skip_pull: Some(true), // Don't pull, we're rebasing on local changes
-                    progress_printer: Some(rebase_spinner.printer()),
                     ..Default::default()
                 },
             );

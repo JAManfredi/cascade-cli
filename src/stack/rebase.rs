@@ -1,7 +1,6 @@
 use crate::errors::{CascadeError, Result};
 use crate::git::{ConflictAnalyzer, GitRepository};
 use crate::stack::{Stack, StackManager};
-use crate::utils::spinner::{Spinner, SpinnerPrinter};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -65,8 +64,6 @@ pub struct RebaseOptions {
     /// Original working branch to restore after rebase (if different from base)
     /// This is critical to prevent updating the base branch when sync checks out to it
     pub original_working_branch: Option<String>,
-    /// Optional printer for progress-aware output (e.g., CLI spinners)
-    pub progress_printer: Option<SpinnerPrinter>,
 }
 
 /// Result of a rebase operation
@@ -161,7 +158,6 @@ impl Default for RebaseOptions {
             max_retries: 3,
             skip_pull: None,
             original_working_branch: None,
-            progress_printer: None,
         }
     }
 }
@@ -213,13 +209,10 @@ impl RebaseManager {
             return self.handle_in_progress_cherry_pick(stack);
         }
 
-        // Only print section header if no outer spinner exists
-        // If progress_printer exists, the caller already has a spinner showing progress
-        if self.options.progress_printer.is_none() {
-            Output::section(format!("Rebasing stack: {}", stack.name));
-            Output::sub_item(format!("Base branch: {}", stack.base_branch));
-            Output::sub_item(format!("Entries: {}", stack.entries.len()));
-        }
+        // Print section header
+        Output::section(format!("Rebasing stack: {}", stack.name));
+        Output::sub_item(format!("Base branch: {}", stack.base_branch));
+        Output::sub_item(format!("Entries: {}", stack.entries.len()));
 
         let mut result = RebaseResult {
             success: true,
@@ -275,36 +268,19 @@ impl RebaseManager {
 
         let mut current_base = target_base.clone();
         let entry_count = stack.entries.len();
-        let printer = self.options.progress_printer.clone();
-
-        // Helper to print lines - suspends spinner if needed to prevent visual corruption
-        let print_line = |line: &str| {
-            if let Some(ref printer) = printer {
-                printer.suspend(|| println!("{}", line));
-            } else {
-                println!("{}", line);
-            }
-        };
-        let print_blank = || {
-            if let Some(ref printer) = printer {
-                printer.suspend(|| println!());
-            } else {
-                println!();
-            }
-        };
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
         let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, index)
 
         // Handle empty stack early
         if entry_count == 0 {
-            print_blank();
+            println!();
             Output::info("Stack has no entries yet");
             Output::tip("Use 'ca push' to add commits to this stack");
 
             result.summary = "Stack is empty".to_string();
 
             // Print success with summary (consistent with non-empty path)
-            print_blank();
+            println!();
             Output::success(&result.summary);
 
             // Save metadata and return
@@ -320,14 +296,12 @@ impl RebaseManager {
         });
 
         if all_up_to_date {
-            print_blank();
+            println!();
             Output::success("Stack is already up-to-date with base branch");
             result.summary = "Stack is up-to-date".to_string();
             result.success = true;
             return Ok(result);
         }
-
-        // Caller handles title and spinner - just print tree items
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
@@ -346,17 +320,8 @@ impl RebaseManager {
                     current_base
                 );
 
-                // Print tree item immediately and track for push phase
+                // Track for push phase (tree already printed by caller)
                 if let Some(pr_num) = &entry.pull_request_id {
-                    let tree_char = if index + 1 == entry_count {
-                        "└─"
-                    } else {
-                        "├─"
-                    };
-                    print_line(&format!(
-                        "   {} {} (PR #{})",
-                        tree_char, original_branch, pr_num
-                    ));
                     branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
                 }
 
@@ -424,10 +389,7 @@ impl RebaseManager {
                         } else {
                             "├─"
                         };
-                        print_line(&format!(
-                            "   {} {} (PR #{})",
-                            tree_char, original_branch, pr_num
-                        ));
+                        println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
                         branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
                     }
 
@@ -450,7 +412,7 @@ impl RebaseManager {
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
-                        print_blank();
+                        println!();
                         Output::error(e.to_string());
                         result.success = false;
                         result.error = Some(format!(
@@ -660,7 +622,7 @@ impl RebaseManager {
         let mut successful_pushes = 0; // Track successful pushes for summary
 
         if !result.success {
-            print_blank();
+            println!();
             Output::error("Rebase failed - not pushing any branches");
             // Error details are in result.error, will be returned at end of function
             // Skip the push phase and jump straight to cleanup/return
@@ -669,53 +631,32 @@ impl RebaseManager {
             // This batch approach prevents index lock conflicts between libgit2 and git CLI
 
             if !branches_to_push.is_empty() {
-                print_blank();
+                println!();
 
-                // Only create a new spinner if no progress printer exists
-                // If we have a printer, the outer spinner is already handling animation
-                let push_spinner = if printer.is_none() {
-                    let branch_word = if pushed_count == 1 {
-                        "branch"
-                    } else {
-                        "branches"
-                    };
-                    Some(Spinner::new_with_output_below(format!(
-                        "Pushing {} updated stack {}",
-                        pushed_count, branch_word
-                    )))
-                } else {
-                    None
-                };
-
-                // Push all branches while spinner animates
+                // Push all branches
                 let mut push_results = Vec::new();
                 for (branch_name, _pr_num, _index) in branches_to_push.iter() {
                     let result = self.git_repo.force_push_single_branch_auto(branch_name);
                     push_results.push((branch_name.clone(), result));
                 }
 
-                // Stop spinner if we created one
-                if let Some(spinner) = push_spinner {
-                    spinner.stop();
-                }
-
-                // Now show static results for each push using printer-aware output
+                // Show static results for each push
                 let mut failed_pushes = 0;
                 for (index, (branch_name, result)) in push_results.iter().enumerate() {
                     match result {
                         Ok(_) => {
                             debug!("Pushed {} successfully", branch_name);
                             successful_pushes += 1;
-                            print_line(&format!(
+                            println!(
                                 "   ✓ Pushed {} ({}/{})",
                                 branch_name,
                                 index + 1,
                                 pushed_count
-                            ));
+                            );
                         }
                         Err(e) => {
                             failed_pushes += 1;
-                            print_line(&format!("   ⚠ Could not push '{}': {}", branch_name, e));
+                            println!("   ⚠ Could not push '{}': {}", branch_name, e);
                         }
                     }
                 }
@@ -898,7 +839,7 @@ impl RebaseManager {
         // If rebase failed, we'll have an error message but no summary
 
         // Display result with proper formatting
-        print_blank();
+        println!();
         if result.success {
             Output::success(&result.summary);
         } else {

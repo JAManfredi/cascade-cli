@@ -2438,6 +2438,8 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             &current_commit[..8],
                             &entry.commit_hash[..8]
                         );
+                        // This commonly happens after 'ca entry amend' without --restack
+                        // The amended commit replaces the old one (not a descendant)
                     }
                 }
             }
@@ -2482,12 +2484,6 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
 
                         println!(); // Spacing
 
-                        // Start spinner with static title
-                        let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
-                            "Rebasing stack: {}",
-                            active_stack.name
-                        ));
-
                         // Use the existing rebase system with force-push strategy
                         // This preserves PR history by force-pushing to original branches
                         let options = crate::stack::RebaseOptions {
@@ -2499,7 +2495,6 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             max_retries: 3,
                             skip_pull: Some(true), // Skip pull since we already pulled above
                             original_working_branch: original_branch.clone(), // Pass the saved working branch
-                            progress_printer: Some(rebase_spinner.printer()),
                         };
 
                         let mut rebase_manager = crate::stack::RebaseManager::new(
@@ -2508,12 +2503,8 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                             options,
                         );
 
-                        // Rebase all entries (tree prints as we go)
+                        // Rebase all entries (static output)
                         let rebase_result = rebase_manager.rebase_stack(&stack_id);
-
-                        // Stop rebase spinner before showing results
-                        rebase_spinner.stop();
-                        println!(); // Spacing after spinner
 
                         match rebase_result {
                             Ok(result) => {
@@ -2529,27 +2520,13 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                                                 cascade_config,
                                             )?;
 
-                                        // Show spinner during PR updates
-                                        let pr_word = if result.branch_mapping.len() == 1 {
-                                            "PR"
-                                        } else {
-                                            "PRs"
-                                        };
-                                        let pr_spinner =
-                                            crate::utils::spinner::Spinner::new(format!(
-                                                "Updating {} {}",
-                                                result.branch_mapping.len(),
-                                                pr_word
-                                            ));
-
+                                        // Update PRs (static output)
                                         let pr_result = integration
                                             .update_prs_after_rebase(
                                                 &stack_id,
                                                 &result.branch_mapping,
                                             )
                                             .await;
-
-                                        pr_spinner.stop();
 
                                         match pr_result {
                                             Ok(updated_prs) => {
@@ -2728,7 +2705,6 @@ async fn rebase_stack(
         max_retries: 3,
         skip_pull: None, // Normal rebase should pull latest changes
         original_working_branch: original_branch,
-        progress_printer: Some(rebase_spinner.printer()),
     };
 
     // Check if there's already a rebase in progress
@@ -3566,7 +3542,6 @@ async fn land_stack(
                         crate::stack::RebaseOptions {
                             strategy: crate::stack::RebaseStrategy::ForcePush,
                             target_base: Some(base_branch.clone()),
-                            progress_printer: Some(rebase_spinner.printer()),
                             ..Default::default()
                         },
                     );

@@ -421,7 +421,8 @@ impl Stack {
                             "Branch '{}' has diverged from stack metadata\n   \
                              Expected commit: {} (from stack entry)\n   \
                              Actual commit:   {} (current branch HEAD)\n   \
-                             The branch may have been modified outside of cascade",
+                             This commonly happens after 'ca entry amend' without --restack\n   \
+                             Run 'ca validate' and choose 'Incorporate' to update metadata",
                             entry.branch,
                             &entry.commit_hash[..8],
                             &branch_head[..8]
