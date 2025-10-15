@@ -487,9 +487,9 @@ impl RebaseManager {
                                 break;
                             }
 
-                            // Commit the resolved changes
-                            let commit_message =
-                                format!("Auto-resolved conflicts in {}", &entry.commit_hash[..8]);
+                            // Commit the resolved changes with the ORIGINAL commit message
+                            // This preserves the user's intended commit message even after auto-resolution
+                            let commit_message = entry.message.trim().to_string();
 
                             // CRITICAL: Check if there are actually changes to commit
                             debug!("Checking staged files before commit");
