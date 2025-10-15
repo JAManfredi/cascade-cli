@@ -276,16 +276,18 @@ impl RebaseManager {
         let mut current_base = target_base.clone();
         let entry_count = stack.entries.len();
         let printer = self.options.progress_printer.clone();
+
+        // Helper to print lines - suspends spinner if needed to prevent visual corruption
         let print_line = |line: &str| {
             if let Some(ref printer) = printer {
-                printer.println(line);
+                printer.suspend(|| println!("{}", line));
             } else {
                 println!("{}", line);
             }
         };
         let print_blank = || {
             if let Some(ref printer) = printer {
-                printer.println("");
+                printer.suspend(|| println!());
             } else {
                 println!();
             }
@@ -366,7 +368,7 @@ impl RebaseManager {
                 current_base = original_branch.clone();
                 continue;
             }
-            
+
             // CRITICAL: Bail early if a previous entry failed
             // Don't continue rebasing subsequent entries or we'll create corrupt state
             if !result.success {
@@ -651,12 +653,12 @@ impl RebaseManager {
         // CRITICAL: Don't push branches if rebase failed
         // If result.success is false, we had a conflict or error during rebase
         // Pushing partial results would create corrupt state
-        
+
         // Declare these variables outside the block so they're accessible for summary
         let pushed_count = branches_to_push.len();
         let _skipped_count = entry_count - pushed_count; // Not used in new summary logic
         let mut successful_pushes = 0; // Track successful pushes for summary
-        
+
         if !result.success {
             print_blank();
             Output::error("Rebase failed - not pushing any branches");
@@ -667,56 +669,56 @@ impl RebaseManager {
             // This batch approach prevents index lock conflicts between libgit2 and git CLI
 
             if !branches_to_push.is_empty() {
-            print_blank();
+                print_blank();
 
-            // Only create a new spinner if no progress printer exists
-            // If we have a printer, the outer spinner is already handling animation
-            let push_spinner = if printer.is_none() {
-                let branch_word = if pushed_count == 1 {
-                    "branch"
+                // Only create a new spinner if no progress printer exists
+                // If we have a printer, the outer spinner is already handling animation
+                let push_spinner = if printer.is_none() {
+                    let branch_word = if pushed_count == 1 {
+                        "branch"
+                    } else {
+                        "branches"
+                    };
+                    Some(Spinner::new_with_output_below(format!(
+                        "Pushing {} updated stack {}",
+                        pushed_count, branch_word
+                    )))
                 } else {
-                    "branches"
+                    None
                 };
-                Some(Spinner::new_with_output_below(format!(
-                    "Pushing {} updated stack {}",
-                    pushed_count, branch_word
-                )))
-            } else {
-                None
-            };
 
-            // Push all branches while spinner animates
-            let mut push_results = Vec::new();
-            for (branch_name, _pr_num, _index) in branches_to_push.iter() {
-                let result = self.git_repo.force_push_single_branch_auto(branch_name);
-                push_results.push((branch_name.clone(), result));
-            }
+                // Push all branches while spinner animates
+                let mut push_results = Vec::new();
+                for (branch_name, _pr_num, _index) in branches_to_push.iter() {
+                    let result = self.git_repo.force_push_single_branch_auto(branch_name);
+                    push_results.push((branch_name.clone(), result));
+                }
 
-            // Stop spinner if we created one
-            if let Some(spinner) = push_spinner {
-                spinner.stop();
-            }
+                // Stop spinner if we created one
+                if let Some(spinner) = push_spinner {
+                    spinner.stop();
+                }
 
-            // Now show static results for each push using printer-aware output
-            let mut failed_pushes = 0;
-            for (index, (branch_name, result)) in push_results.iter().enumerate() {
-                match result {
-                    Ok(_) => {
-                        debug!("Pushed {} successfully", branch_name);
-                        successful_pushes += 1;
-                        print_line(&format!(
-                            "   ✓ Pushed {} ({}/{})",
-                            branch_name,
-                            index + 1,
-                            pushed_count
-                        ));
-                    }
-                    Err(e) => {
-                        failed_pushes += 1;
-                        print_line(&format!("   ⚠ Could not push '{}': {}", branch_name, e));
+                // Now show static results for each push using printer-aware output
+                let mut failed_pushes = 0;
+                for (index, (branch_name, result)) in push_results.iter().enumerate() {
+                    match result {
+                        Ok(_) => {
+                            debug!("Pushed {} successfully", branch_name);
+                            successful_pushes += 1;
+                            print_line(&format!(
+                                "   ✓ Pushed {} ({}/{})",
+                                branch_name,
+                                index + 1,
+                                pushed_count
+                            ));
+                        }
+                        Err(e) => {
+                            failed_pushes += 1;
+                            print_line(&format!("   ⚠ Could not push '{}': {}", branch_name, e));
+                        }
                     }
                 }
-            }
 
                 // If any pushes failed, show recovery instructions
                 if failed_pushes > 0 {
@@ -730,16 +732,8 @@ impl RebaseManager {
             }
 
             // Build result summary
-            let entries_word = if entry_count == 1 {
-                "entry"
-            } else {
-                "entries"
-            };
-            let pr_word = if successful_pushes == 1 {
-                "PR"
-            } else {
-                "PRs"
-            };
+            let entries_word = if entry_count == 1 { "entry" } else { "entries" };
+            let pr_word = if successful_pushes == 1 { "PR" } else { "PRs" };
 
             result.summary = if successful_pushes > 0 {
                 let not_submitted_count = entry_count - successful_pushes;
