@@ -797,9 +797,11 @@ impl RebaseManager {
                                         }
                                     });
 
-                                    if all_match_stack && commits.len() == stack.entries.len() {
+                                    if all_match_stack {
                                         // These are the old pre-rebase versions of stack entries
                                         // Safe to update working branch to new rebased top
+                                        // Note: commits.len() may be less than stack.entries.len() if only
+                                        // some entries were rebased (e.g., after amending one entry)
                                         debug!(
                                             "Working branch has old pre-rebase commits (matching stack messages) - safe to update"
                                         );

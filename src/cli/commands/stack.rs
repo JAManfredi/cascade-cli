@@ -2536,13 +2536,11 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                                             "PRs"
                                         };
                                         let pr_spinner =
-                                            crate::utils::spinner::Spinner::new_with_output_below(
-                                                format!(
-                                                    "Updating {} {}",
-                                                    result.branch_mapping.len(),
-                                                    pr_word
-                                                ),
-                                            );
+                                            crate::utils::spinner::Spinner::new(format!(
+                                                "Updating {} {}",
+                                                result.branch_mapping.len(),
+                                                pr_word
+                                            ));
 
                                         let pr_result = integration
                                             .update_prs_after_rebase(
@@ -3557,9 +3555,10 @@ async fn land_stack(
                     let plural = if entry_count == 1 { "entry" } else { "entries" };
 
                     println!(); // Spacing
-                    let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(
-                        format!("Retargeting {} {}", entry_count, plural),
-                    );
+                    let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                        "Retargeting {} {}",
+                        entry_count, plural
+                    ));
 
                     let mut rebase_manager = crate::stack::RebaseManager::new(
                         StackManager::new(&repo_root)?,
