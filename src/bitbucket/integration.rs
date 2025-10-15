@@ -546,11 +546,14 @@ impl BitbucketIntegration {
                                         &local_head[..8],
                                         &entry.commit_hash[..8]
                                     );
-                                    
+
                                     // Auto-reconcile: update metadata to match current branch HEAD
                                     // This is safe during PR updates after a rebase since we know the branch was just updated
-                                    if let Some(stack) = self.stack_manager.get_stack_mut(&stack.id) {
-                                        if let Err(e) = stack.update_entry_commit_hash(&entry.id, local_head.clone()) {
+                                    if let Some(stack) = self.stack_manager.get_stack_mut(&stack.id)
+                                    {
+                                        if let Err(e) = stack
+                                            .update_entry_commit_hash(&entry.id, local_head.clone())
+                                        {
                                             Output::warning(format!(
                                                 "Could not reconcile metadata for PR #{}: {}",
                                                 pr_id, e
