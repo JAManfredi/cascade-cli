@@ -534,22 +534,37 @@ impl BitbucketIntegration {
                                 }
                             }
 
-                            // Ensure local branch head matches recorded commit before pushing
+                            // Ensure local branch head matches recorded commit before updating PR
+                            // If they don't match, auto-reconcile since we just finished a rebase
                             if let Ok(local_head) =
                                 self.stack_manager.git_repo().get_branch_head(&entry.branch)
                             {
                                 if local_head != entry.commit_hash {
-                                    Output::error(format!(
-                                        "Skipping PR #{}: branch '{}' HEAD ({}) does not match stack metadata ({})",
-                                        pr_id,
+                                    tracing::debug!(
+                                        "Branch '{}' HEAD ({}) doesn't match metadata ({}), reconciling...",
                                         entry.branch,
                                         &local_head[..8],
                                         &entry.commit_hash[..8]
-                                    ));
-                                    Output::warning(
-                                        "Run 'ca stack check --force' to reconcile or investigate manually before retrying."
                                     );
-                                    continue;
+                                    
+                                    // Auto-reconcile: update metadata to match current branch HEAD
+                                    // This is safe during PR updates after a rebase since we know the branch was just updated
+                                    if let Some(stack) = self.stack_manager.get_stack_mut(&stack.id) {
+                                        if let Err(e) = stack.update_entry_commit_hash(&entry.id, local_head.clone()) {
+                                            Output::warning(format!(
+                                                "Could not reconcile metadata for PR #{}: {}",
+                                                pr_id, e
+                                            ));
+                                            continue;
+                                        }
+                                        // Save reconciled metadata
+                                        if let Err(e) = self.stack_manager.save_to_disk() {
+                                            Output::warning(format!(
+                                                "Could not save reconciled metadata: {}",
+                                                e
+                                            ));
+                                        }
+                                    }
                                 }
                             }
 
