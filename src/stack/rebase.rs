@@ -366,6 +366,16 @@ impl RebaseManager {
                 current_base = original_branch.clone();
                 continue;
             }
+            
+            // CRITICAL: Bail early if a previous entry failed
+            // Don't continue rebasing subsequent entries or we'll create corrupt state
+            if !result.success {
+                tracing::debug!(
+                    "Skipping entry '{}' because previous entry failed",
+                    original_branch
+                );
+                break;
+            }
 
             // Create a temporary branch from the current base
             // This avoids committing directly to protected branches like develop/main
@@ -638,13 +648,25 @@ impl RebaseManager {
             }
         }
 
-        // Phase 2: Push all branches with PRs to remote (git CLI - after all libgit2 operations)
-        // This batch approach prevents index lock conflicts between libgit2 and git CLI
+        // CRITICAL: Don't push branches if rebase failed
+        // If result.success is false, we had a conflict or error during rebase
+        // Pushing partial results would create corrupt state
+        
+        // Declare these variables outside the block so they're accessible for summary
         let pushed_count = branches_to_push.len();
-        let skipped_count = entry_count - pushed_count;
+        let _skipped_count = entry_count - pushed_count; // Not used in new summary logic
         let mut successful_pushes = 0; // Track successful pushes for summary
+        
+        if !result.success {
+            print_blank();
+            Output::error("Rebase failed - not pushing any branches");
+            // Error details are in result.error, will be returned at end of function
+            // Skip the push phase and jump straight to cleanup/return
+        } else {
+            // Phase 2: Push all branches with PRs to remote (git CLI - after all libgit2 operations)
+            // This batch approach prevents index lock conflicts between libgit2 and git CLI
 
-        if !branches_to_push.is_empty() {
+            if !branches_to_push.is_empty() {
             print_blank();
 
             // Only create a new spinner if no progress printer exists
@@ -696,16 +718,49 @@ impl RebaseManager {
                 }
             }
 
-            // If any pushes failed, show recovery instructions
-            if failed_pushes > 0 {
-                println!(); // Spacing
-                Output::warning(format!(
-                    "{} branch(es) failed to push to remote",
-                    failed_pushes
-                ));
-                Output::tip("To retry failed pushes, run: ca sync");
+                // If any pushes failed, show recovery instructions
+                if failed_pushes > 0 {
+                    println!(); // Spacing
+                    Output::warning(format!(
+                        "{} branch(es) failed to push to remote",
+                        failed_pushes
+                    ));
+                    Output::tip("To retry failed pushes, run: ca sync");
+                }
             }
-        }
+
+            // Build result summary
+            let entries_word = if entry_count == 1 {
+                "entry"
+            } else {
+                "entries"
+            };
+            let pr_word = if successful_pushes == 1 {
+                "PR"
+            } else {
+                "PRs"
+            };
+
+            result.summary = if successful_pushes > 0 {
+                let not_submitted_count = entry_count - successful_pushes;
+                if not_submitted_count > 0 {
+                    format!(
+                        "{} {} rebased ({} {} updated, {} not yet submitted)",
+                        entry_count, entries_word, successful_pushes, pr_word, not_submitted_count
+                    )
+                } else {
+                    format!(
+                        "{} {} rebased ({} {} updated)",
+                        entry_count, entries_word, successful_pushes, pr_word
+                    )
+                }
+            } else {
+                format!(
+                    "{} {} rebased (none submitted to Bitbucket yet)",
+                    entry_count, entries_word
+                )
+            };
+        } // End of successful rebase block
 
         // Update working branch to point to the top of the rebased stack
         // This ensures subsequent `ca push` doesn't re-add old commits
@@ -843,35 +898,8 @@ impl RebaseManager {
                 }
             }
         }
-
-        // Build summary message based on actual push success count
-        // IMPORTANT: successful_pushes is tracked during the push loop above
-        result.summary = if successful_pushes > 0 {
-            let pr_plural = if successful_pushes == 1 { "" } else { "s" };
-            let entry_plural = if entry_count == 1 { "entry" } else { "entries" };
-
-            if skipped_count > 0 {
-                format!(
-                    "{} {} rebased ({} PR{} updated, {} not yet submitted)",
-                    entry_count, entry_plural, successful_pushes, pr_plural, skipped_count
-                )
-            } else {
-                format!(
-                    "{} {} rebased ({} PR{} updated)",
-                    entry_count, entry_plural, successful_pushes, pr_plural
-                )
-            }
-        } else if pushed_count > 0 {
-            // We attempted pushes but none succeeded
-            let entry_plural = if entry_count == 1 { "entry" } else { "entries" };
-            format!(
-                "{} {} rebased (pushes failed - retry with 'ca sync')",
-                entry_count, entry_plural
-            )
-        } else {
-            let plural = if entry_count == 1 { "entry" } else { "entries" };
-            format!("{} {} rebased (no PRs to update yet)", entry_count, plural)
-        };
+        // Note: Summary is now built inside the successful rebase block above (around line 745)
+        // If rebase failed, we'll have an error message but no summary
 
         // Display result with proper formatting
         print_blank();
