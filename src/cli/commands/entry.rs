@@ -53,19 +53,19 @@ pub enum EntryAction {
         yes: bool,
     },
     /// Amend the current stack entry commit and update working branch
+    ///
+    /// By default, automatically includes all modified tracked files (like 'git commit -a --amend')
+    /// After amending, run 'ca sync' to rebase dependent entries
     Amend {
         /// New commit message (optional, uses git editor if not provided)
         #[arg(long, short)]
         message: Option<String>,
-        /// Include all changes (staged + unstaged) like 'git commit -a --amend'
+        /// (Deprecated: now default behavior) Include all changes
         #[arg(long, short)]
         all: bool,
         /// Automatically force-push after amending (if PR exists)
         #[arg(long)]
         push: bool,
-        /// Auto-restack dependent entries after amending
-        #[arg(long)]
-        restack: bool,
     },
 }
 
@@ -78,12 +78,7 @@ pub async fn run(action: EntryAction) -> Result<()> {
         EntryAction::Status { quiet } => show_edit_status(quiet).await,
         EntryAction::List { verbose } => list_entries(verbose).await,
         EntryAction::Clear { yes } => clear_edit_mode(yes).await,
-        EntryAction::Amend {
-            message,
-            all,
-            push,
-            restack,
-        } => amend_entry(message, all, push, restack).await,
+        EntryAction::Amend { message, all, push } => amend_entry(message, all, push).await,
     }
 }
 
@@ -746,7 +741,7 @@ async fn clear_edit_mode(skip_confirmation: bool) -> Result<()> {
 }
 
 /// Amend the current stack entry commit and update working branch
-async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bool) -> Result<()> {
+async fn amend_entry(message: Option<String>, _all: bool, push: bool) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -805,11 +800,9 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
     Output::section(format!("Amending stack entry #{}", entry_index + 1));
 
     // 1. Perform the git commit --amend
-    let mut amend_args = vec!["commit", "--amend"];
-
-    if all {
-        amend_args.insert(1, "-a");
-    }
+    // Always auto-stage changes (like 'git commit -a --amend')
+    // This matches user expectations: "amend my changes" should include all working changes
+    let mut amend_args = vec!["commit", "-a", "--amend"];
 
     if let Some(ref msg) = message {
         amend_args.push("-m");
@@ -888,72 +881,7 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
         Output::warning("No working branch found - create one with 'ca stack create' for safety");
     }
 
-    // 5. Auto-restack dependent entries if requested
-    if restack && has_dependents {
-        println!();
-        Output::info("Auto-restacking dependent entries");
-
-        // Create fresh instances for rebase manager
-        let rebase_manager_stack = StackManager::new(&repo_root)?;
-        let stack_for_count = rebase_manager_stack
-            .get_stack(&stack_id)
-            .ok_or_else(|| CascadeError::config("Stack not found"))?;
-
-        // Count dependent entries (entries after the current one)
-        let entry_index = stack_for_count
-            .entries
-            .iter()
-            .position(|e| e.id == entry_id)
-            .unwrap_or(0);
-        let dependent_count = stack_for_count
-            .entries
-            .len()
-            .saturating_sub(entry_index + 1);
-
-        if dependent_count > 0 {
-            let rebase_manager_repo = crate::git::GitRepository::open(&repo_root)?;
-            let plural = if dependent_count == 1 {
-                "entry"
-            } else {
-                "entries"
-            };
-
-            println!(); // Spacing
-            let rebase_spinner = crate::utils::spinner::Spinner::new_with_output_below(format!(
-                "Restacking {} dependent {}",
-                dependent_count, plural
-            ));
-
-            // Use the sync_stack mechanism to rebase dependent entries
-            let mut rebase_manager = crate::stack::RebaseManager::new(
-                rebase_manager_stack,
-                rebase_manager_repo,
-                crate::stack::RebaseOptions {
-                    strategy: crate::stack::RebaseStrategy::ForcePush,
-                    target_base: Some(entry_branch.clone()),
-                    skip_pull: Some(true), // Don't pull, we're rebasing on local changes
-                    ..Default::default()
-                },
-            );
-
-            let rebase_result = rebase_manager.rebase_stack(&stack_id);
-
-            rebase_spinner.stop();
-            println!(); // Spacing
-
-            match rebase_result {
-                Ok(_) => {
-                    Output::success("Dependent entries restacked");
-                }
-                Err(e) => {
-                    Output::warning(format!("Could not auto-restack: {}", e));
-                    Output::tip("Run 'ca sync' manually to restack dependent entries");
-                }
-            }
-        }
-    }
-
-    // 6. Auto-push if requested and entry has a PR
+    // 5. Auto-push if requested and entry has a PR
     if push {
         println!();
 
@@ -983,23 +911,39 @@ async fn amend_entry(message: Option<String>, all: bool, push: bool, restack: bo
     if working_branch.is_some() {
         Output::bullet("Working branch updated");
     }
-    if restack {
-        Output::bullet("Dependent entries restacked");
-    }
     if push {
         Output::bullet("Changes force-pushed to remote");
     }
 
-    // Tips section (separated from summary)
-    // Note: restack auto-pushes, so don't show push tip if restack is enabled
-    if (has_dependents || !push) && !restack {
+    // Warning about dependent entries needing rebase
+    if has_dependents {
         println!();
-        if !push && !restack {
-            Output::tip("Use --push to automatically force-push after amending");
-        }
-        if !restack && has_dependents {
-            Output::tip("Use --restack to automatically update dependent entries");
-        }
+        let dependent_count = {
+            let stack = manager
+                .get_stack(&stack_id)
+                .ok_or_else(|| CascadeError::config("Stack not found"))?;
+            let entry_idx = stack
+                .entries
+                .iter()
+                .position(|e| e.id == entry_id)
+                .unwrap_or(0);
+            stack.entries.len().saturating_sub(entry_idx + 1)
+        };
+
+        let plural = if dependent_count == 1 {
+            "entry needs"
+        } else {
+            "entries need"
+        };
+
+        Output::warning(format!("{} dependent {} rebasing", dependent_count, plural));
+        Output::tip("Run 'ca sync' to rebase dependent entries onto your changes");
+    }
+
+    // Tip about --push flag
+    if !push && !has_dependents {
+        println!();
+        Output::tip("Use --push to automatically force-push after amending");
     }
 
     Ok(())
