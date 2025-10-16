@@ -350,7 +350,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_doctor_initialized() {
-        let (_temp_dir, repo_path) = create_test_repo().await;
+        let (temp_dir, repo_path) = create_test_repo().await;
 
         // Initialize Cascade
         initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
@@ -360,14 +360,16 @@ mod tests {
 
         let result = run().await;
 
-        // Restore directory (best effort - may fail if temp dir already cleaned up)
+        // Restore directory before assertions (best effort)
         let _ = env::set_current_dir(&original_dir);
 
+        // Assert while temp_dir is still alive
         if let Err(e) = &result {
             eprintln!("Doctor command failed: {e}");
         }
         assert!(result.is_ok());
 
-        // _temp_dir dropped here automatically
+        // temp_dir dropped here automatically
+        drop(temp_dir);
     }
 }
