@@ -699,17 +699,18 @@ impl RebaseManager {
 
         // Update working branch to point to the top of the rebased stack
         // This ensures subsequent `ca push` doesn't re-add old commits
-        if let Some(ref orig_branch) = original_branch {
+        // CRITICAL: Use the authoritative working_branch from stack metadata, not current Git state!
+        // This prevents corruption when user runs `ca sync` while checked out to a stack entry branch
+        if let Some(ref working_branch_name) = stack.working_branch {
             // CRITICAL: Never update the base branch! Only update working branches
-            if orig_branch != &target_base {
-                // Get the last entry's branch (top of stack)
+            if working_branch_name != &target_base {
                 if let Some(last_entry) = stack.entries.last() {
                     let top_branch = &last_entry.branch;
 
                     // SAFETY CHECK: Detect if working branch has commits beyond the last stack entry
                     // If it does, we need to preserve them - don't force-update the working branch
                     if let (Ok(working_head), Ok(top_commit)) = (
-                        self.git_repo.get_branch_head(orig_branch),
+                        self.git_repo.get_branch_head(working_branch_name),
                         self.git_repo.get_branch_head(top_branch),
                     ) {
                         // Check if working branch is ahead of top stack entry
@@ -750,7 +751,7 @@ impl RebaseManager {
                                         // These are truly new commits not in the stack!
                                         Output::error(format!(
                                             "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
-                                            orig_branch,
+                                            working_branch_name,
                                             commits.len()
                                         ));
                                         println!();
@@ -787,7 +788,7 @@ impl RebaseManager {
                                         return Err(CascadeError::validation(
                                             format!(
                                                 "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
-                                                orig_branch, commits.len()
+                                                working_branch_name, commits.len()
                                             )
                                         ));
                                     }
@@ -798,41 +799,39 @@ impl RebaseManager {
                         // Safe to update - working branch matches top of stack or is behind
                         debug!(
                             "Updating working branch '{}' to match top of stack ({})",
-                            orig_branch,
+                            working_branch_name,
                             &top_commit[..8]
                         );
 
                         if let Err(e) = self
                             .git_repo
-                            .update_branch_to_commit(orig_branch, &top_commit)
+                            .update_branch_to_commit(working_branch_name, &top_commit)
                         {
                             Output::warning(format!(
                                 "Could not update working branch '{}' to top of stack: {}",
-                                orig_branch, e
+                                working_branch_name, e
                             ));
                         }
                     }
                 }
-
-                // Return to original working branch
-                // Use unsafe checkout to force it (we're in cleanup phase, no uncommitted changes)
-                if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
-                    debug!(
-                        "Could not return to original branch '{}': {}",
-                        orig_branch, e
-                    );
-                    // Non-critical: User is left on base branch instead of working branch
-                }
             } else {
-                // User was on base branch - this is unusual but valid
-                // Don't update base branch, just checkout back to it
+                // Working branch is the base branch - this is unusual
                 debug!(
-                    "Skipping working branch update - user was on base branch '{}'",
-                    orig_branch
+                    "Skipping working branch update - working branch '{}' is the base branch",
+                    working_branch_name
                 );
-                if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
-                    debug!("Could not return to base branch '{}': {}", orig_branch, e);
-                }
+            }
+        }
+
+        // Return user to their original Git branch (regardless of working branch updates)
+        // This ensures user experience is preserved even when they ran `ca sync` from a stack entry branch
+        if let Some(ref orig_branch) = original_branch {
+            if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
+                debug!(
+                    "Could not return to original branch '{}': {}",
+                    orig_branch, e
+                );
+                // Non-critical: User is left on base branch instead
             }
         }
         // Note: Summary is now built inside the successful rebase block above (around line 745)
