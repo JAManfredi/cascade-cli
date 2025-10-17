@@ -432,24 +432,30 @@ git commit
 #
 # Your choice (A/n/c): A
 #
-# ✅ Running: git commit --amend
-# [Opens editor with: "Add user model (fixed validation logic)"]
-# 💡 Entry updated! Run 'ca sync' to update PRs
+# Modern approach with automatic restacking:
 
-# Sync all dependent entries automatically
-ca rebase  # Cascade handles all dependencies
-# ✅ All dependent commits automatically incorporate the model changes
-# ✅ All PRs (#110, #111, #112) updated with new code but preserve review history
+# Checkout the entry to edit
+ca entry checkout 2  # Or use interactive: ca entry checkout
 
-# Alternative: Interactive picker for multiple entries
-ca entry checkout  # Shows TUI picker to select which entry to edit
+# Make your changes and amend (automatic restacking!)
+ca entry amend -m "Add user model (fixed validation logic)"
+# ✅ Entry #2 amended
+# ✅ Entries #3, #4, #5 automatically rebased onto the changes
+# ✅ Working branch updated
+# ✅ Stack metadata updated
+
+# That's it! All dependent entries are updated automatically.
+# No need to run ca sync or ca rebase for dependent entries.
+
+# Optionally sync with remote (if base branch moved forward)
+ca sync  # Only needed if develop has new commits
 
 # Check edit status anytime
 ca entry status    # Shows current edit mode info
 ca entry list      # Shows all entries with edit indicators
 
-# Legacy Method (still works but not recommended):
-# git checkout def456 && git commit --amend && ca rebase
+# Legacy Method (still works but requires manual ca sync):
+# git checkout def456 && git commit --amend && ca sync
 ```
 
 ### **Managing Multiple Related Stacks**

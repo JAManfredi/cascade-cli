@@ -2216,11 +2216,29 @@ async fn continue_sync() -> Result<()> {
     Output::info(format!("Updating stack branch: {}", stack_branch));
 
     // Force-push temp branch to stack branch
-    std::process::Command::new("git")
+    let output = std::process::Command::new("git")
         .args(["branch", "-f", &stack_branch])
         .current_dir(&repo_root)
         .output()
         .map_err(CascadeError::Io)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CascadeError::validation(format!(
+            "Failed to update branch '{}': {}\n\n\
+            This could be due to:\n\
+            • Git lock file (.git/index.lock or .git/refs/heads/{}.lock)\n\
+            • Insufficient permissions\n\
+            • Branch is checked out in another worktree\n\n\
+            Recovery:\n\
+            1. Check for lock files: find .git -name '*.lock'\n\
+            2. Remove stale lock files if safe\n\
+            3. Run 'ca sync' to retry",
+            stack_branch,
+            stderr.trim(),
+            stack_branch
+        )));
+    }
 
     // Load stack to get working branch and update metadata
     let mut manager = crate::stack::StackManager::new(&repo_root)?;

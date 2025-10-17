@@ -532,9 +532,11 @@ ca switch <name>                        # Switch to different stack
 # 🔍 Automatic branch change detection: Cascade detects when you switch branches
 #     and prompts you to continue with current stack, deactivate, or switch stacks
 
-# Entry Editing (Modern Convenience)
+# Entry Editing (Modern Convenience - Auto-stages + Auto-restacks!)
 ca entry checkout [number]              # Interactive checkout for editing entries
-ca entry amend                          # Amend current entry + update working branch  
+ca entry amend                          # Amend + auto-restack dependents + update working branch  
+ca entry continue                       # Continue after resolving conflicts
+ca entry abort                          # Abort in-progress restack
 ca entry status                         # Show current edit mode status  
 ca entry list                           # List all entries with edit indicators
 ca entry clear                          # Clear/exit edit mode (useful for recovery)
@@ -588,29 +590,35 @@ ca entry status --quiet                     # Brief status only
 ca entry list                               # List all entries with edit status
 ca entry list --verbose                     # Show detailed entry information
 
-# Amend the current stack entry (safer than raw git commit --amend)
-ca entry amend                              # Amend with editor
-ca entry amend -m "New message"             # Amend with message
-ca entry amend --all                        # Amend all changes (like git commit -a --amend)
-ca entry amend --restack                    # Auto-restack dependent entries after amend
-ca entry amend --push                       # Auto force-push to PR after amend
-ca entry amend --restack --push             # Full workflow: amend + restack + push
+# Amend the current stack entry (auto-stages + auto-restacks!)
+ca entry amend                              # Amend with editor (auto-stages changes)
+ca entry amend -m "New message"             # Amend with new message
+ca entry amend --push                       # Amend + auto force-push to PR
+
+# Recovery commands for conflict resolution
+ca entry continue                           # Continue after resolving conflicts
+ca entry abort                              # Abort in-progress restack
 
 # Clear edit mode
 ca entry clear                              # Clear/exit edit mode (with confirmation)
 ca entry clear --yes                        # Clear without confirmation (for corrupted state)
 ```
 
-**🛡️ Working Branch Safety Net:**
+**🚀 Automatic Features:**
 
-When you use `ca entry amend`, Cascade automatically updates your **original working branch** to include the amended changes. This ensures your working branch always serves as a reliable safety net/fallback, even after amending stack entries.
+When you use `ca entry amend`, Cascade automatically:
+1. **Stages all modified tracked files** (like `git commit -a --amend`)
+2. **Amends the current entry's commit** with your changes
+3. **Rebases all dependent entries** onto the amended commit
+4. **Updates the working branch** to the new top of the stack
+5. **Updates stack metadata** to keep everything consistent
 
 ```bash
-# Safe amend workflow:
+# Modern amend workflow (all automatic!):
 ca entry checkout 2                         # Checkout entry #2
 # make changes...
-ca entry amend --all                        # Amend + update working branch automatically
-# ✅ Both the stack branch AND working branch are updated!
+ca entry amend -m "Updated validation"      # Auto-stages + auto-restacks + updates working branch
+# ✅ Entry #2 amended, entries #3-5 rebased, working branch updated!
 
 # Compare to unsafe raw git:
 git commit --amend                          # ❌ Only updates stack branch

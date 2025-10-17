@@ -277,11 +277,10 @@ ca entry list --verbose
 ca entry checkout         # Interactive picker
 
 # 2. Make changes normally
-git add src/auth.rs
-git commit --amend -m "Add database schema (fixed column types)"
+# (changes are auto-staged)
 
-# 3. Update all dependent entries automatically
-ca rebase               # Cascade handles dependencies
+# 3. Amend the entry (automatic restacking!)
+ca entry amend -m "Add database schema (fixed column types)"
 
 # 4. Verify changes
 ca entry list           # Check updated status
@@ -293,6 +292,155 @@ ca stack               # See full stack state
 - **Convenience**: No need to remember commit hashes
 - **Intelligence**: Interactive picker with rich information
 - **Guidance**: Clear next steps and status tracking
+- **Automatic**: Dependent entries are rebased automatically
+
+---
+
+#### **`ca entry amend`** - Amend Current Entry with Automatic Restacking
+
+Amend the current stack entry's commit and automatically rebase all dependent entries onto the new commit.
+
+**Synopsis:**
+```bash
+ca entry amend [OPTIONS]
+```
+
+**Options:**
+- `-m, --message <MESSAGE>` - New commit message (optional, uses editor if not provided)
+- `--push` - Automatically force-push after amending (if PR exists)
+
+**How It Works:**
+1. Automatically stages all modified tracked files (like `git commit -a --amend`)
+2. Amends the current entry's commit
+3. **Automatically rebases** all dependent entries onto the amended commit
+4. Updates working branch to top of stack
+5. Updates stack metadata
+
+**Examples:**
+```bash
+# Amend with new message
+ca entry amend -m "Fixed validation logic"
+
+# Amend and open editor for message
+ca entry amend
+
+# Amend and push to PR
+ca entry amend --push
+
+# Just amend (keeps same message)
+ca entry amend
+```
+
+**Important Notes:**
+- ✅ **Automatic restacking**: No need to run `ca sync` - dependent entries are updated automatically
+- ✅ **Auto-staging**: All modified tracked files are included (no need for `git add`)
+- ✅ **Safety**: If conflicts occur, you'll get clear recovery instructions
+- ⚠️ **Must be on stack entry**: Use `ca entry checkout <N>` first
+
+**Conflict Resolution:**
+If dependent entries have conflicts during automatic restacking:
+```bash
+# Cascade pauses and shows:
+# "Failed to restack entry #4: conflicts"
+
+# 1. Resolve conflicts in your editor
+# 2. Continue the restack
+ca entry continue
+
+# Or abort and undo changes
+ca entry abort
+```
+
+---
+
+#### **`ca entry continue`** - Continue After Resolving Conflicts
+
+Continue an in-progress restack after manually resolving conflicts from `ca entry amend`.
+
+**Synopsis:**
+```bash
+ca entry continue
+```
+
+**When to Use:**
+- After `ca entry amend` hits conflicts during automatic restacking
+- After resolving all conflict markers in your editor
+
+**What It Does:**
+1. Auto-stages resolved conflict files
+2. Completes the cherry-pick (bypassing hooks)
+3. Updates entry branch pointer to new commit
+4. Updates stack metadata
+5. Cleans up temporary branches
+6. Leaves you on the resolved entry branch
+
+**Example Workflow:**
+```bash
+# Amend entry #3
+ca entry checkout 3
+ca entry amend -m "Updated schema"
+
+# Conflict on entry #4!
+# Error: Failed to restack entry #4: conflicts
+
+# Resolve conflicts
+vim src/models.rs  # Fix conflict markers
+git status         # Check what needs resolving
+
+# Continue
+ca entry continue
+
+# Complete the stack
+ca sync
+```
+
+**Next Steps After Continue:**
+- Run `ca sync` to finish rebasing remaining entries
+- Run `ca validate` to verify stack consistency
+
+---
+
+#### **`ca entry abort`** - Abort In-Progress Restack
+
+Abort an in-progress restack and undo partial changes from `ca entry amend`.
+
+**Synopsis:**
+```bash
+ca entry abort
+```
+
+**When to Use:**
+- After `ca entry amend` hits conflicts you can't resolve
+- When you want to undo a failed restack attempt
+- To get back to a clean state
+
+**What It Does:**
+1. Aborts the cherry-pick (bypassing hooks)
+2. Cleans up temporary branches  
+3. Returns you to a clean Git state
+4. Stack may be partially inconsistent
+
+**Example:**
+```bash
+# Amend hits conflicts
+ca entry amend -m "Major refactor"
+# Error: Failed to restack entry #4: conflicts
+
+# Decide to abort instead of resolving
+ca entry abort
+
+# Check and fix stack state
+ca validate
+
+# Choose "Reset" or "Incorporate" as needed
+```
+
+**After Aborting:**
+1. Run `ca validate` to check stack state
+2. Fix any inconsistencies (usually choose "Reset")
+3. Try a different approach or smaller changes
+
+---
 
 ### **📤 Stack Operations**
 

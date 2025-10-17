@@ -68,6 +68,14 @@ pub enum EntryAction {
         #[arg(long)]
         push: bool,
     },
+    /// Continue restacking after resolving cherry-pick conflicts
+    ///
+    /// Use this after manually resolving conflicts during 'ca entry amend'
+    Continue,
+    /// Abort an in-progress restack operation
+    ///
+    /// Safely aborts the cherry-pick and cleans up any partial restack state
+    Abort,
 }
 
 pub async fn run(action: EntryAction) -> Result<()> {
@@ -80,6 +88,8 @@ pub async fn run(action: EntryAction) -> Result<()> {
         EntryAction::List { verbose } => list_entries(verbose).await,
         EntryAction::Clear { yes } => clear_edit_mode(yes).await,
         EntryAction::Amend { message, all, push } => amend_entry(message, all, push).await,
+        EntryAction::Continue => continue_restack().await,
+        EntryAction::Abort => abort_restack().await,
     }
 }
 
@@ -954,7 +964,7 @@ async fn amend_entry(message: Option<String>, _all: bool, push: bool) -> Result<
                 Output::bullet("Resolve any conflicts in your editor");
                 Output::bullet("Stage resolved files: git add <files>");
                 Output::bullet("Continue: ca entry continue");
-                Output::bullet("Or abort: git cherry-pick --abort");
+                Output::bullet("Or abort: ca entry abort");
                 println!();
                 return Err(CascadeError::validation(
                     "Restack failed - resolve conflicts and run 'ca entry continue'",
@@ -1080,29 +1090,45 @@ async fn restack_dependent_entries(
                 current_base_commit = new_commit_hash;
             }
             Err(e) => {
-                // Cherry-pick failed - clean up and give user recovery instructions
-                let _ = git_repo.checkout_branch_unsafe(&original_branch);
-                let _ = git_repo.delete_branch(&temp_branch);
+                // Cherry-pick failed - LEAVE EVERYTHING INTACT for recovery
+                // CRITICAL: DO NOT checkout or delete temp branch!
+                // The user needs CHERRY_PICK_HEAD and conflict state to resolve/abort
+
+                println!();
+                Output::error(format!(
+                    "Failed to restack entry #{} ({}): {}",
+                    entry_num, entry.branch, e
+                ));
+                println!();
+                Output::section("Recovery Options");
+                println!();
+                Output::sub_item("To continue after resolving conflicts:");
+                Output::bullet("1. Check for conflicts: git status");
+                Output::bullet("2. Resolve conflicts in your editor");
+                Output::bullet("3. Stage resolved files: git add <files>");
+                Output::bullet("4. Continue restack: ca entry continue");
+                println!();
+                Output::sub_item("To abort and undo the restack:");
+                Output::bullet("→ Run: ca entry abort");
+                Output::bullet("→ Then check: ca validate");
+                println!();
+                Output::tip("Both commands bypass hooks to avoid edit-mode detection");
 
                 return Err(CascadeError::validation(format!(
-                    "Failed to restack entry #{} ({}): {}\n\n\
-                    The stack is partially restacked. To recover:\n\
-                    1. Resolve conflicts if any: git status\n\
-                    2. Fix conflicts and stage: git add <files>\n\
-                    3. Continue: git cherry-pick --continue\n\
-                    4. Run: ca validate to check stack state\n\
-                    5. Or abort: git cherry-pick --abort",
-                    entry_num, entry.branch, e
+                    "Restack paused at entry #{} - resolve conflicts or abort",
+                    entry_num
                 )));
             }
         }
 
-        // Clean up temp branch
-        git_repo.delete_branch(&temp_branch)?;
+        // Clean up temp branch - checkout away first, then force delete
+        // CRITICAL: Must checkout away from temp branch before deleting it
+        git_repo.checkout_branch_unsafe(&original_branch)?;
+        // Use unsafe delete to avoid interactive prompts for unpushed commits
+        git_repo.delete_branch_unsafe(&temp_branch)?;
     }
 
-    // Restore original branch (the amended branch)
-    git_repo.checkout_branch_unsafe(&original_branch)?;
+    // At this point we're already on original_branch from the last loop iteration
 
     // Update working branch to point to the NEW top of stack (last dependent entry)
     if let Some(ref working_branch_name) = stack.working_branch {
@@ -1115,5 +1141,223 @@ async fn restack_dependent_entries(
     }
 
     debug!("Successfully restacked {} entries", dependent_entries.len());
+    Ok(())
+}
+
+/// Continue restacking after resolving cherry-pick conflicts
+/// This completes the cherry-pick (skipping hooks) and updates metadata
+async fn continue_restack() -> Result<()> {
+    use tracing::debug;
+
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)?;
+    let git_repo = GitRepository::open(&repo_root)?;
+
+    // Check if there's a cherry-pick in progress
+    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    if !cherry_pick_head.exists() {
+        return Err(CascadeError::validation(
+            "No cherry-pick in progress. Nothing to continue.".to_string(),
+        ));
+    }
+
+    Output::section("Continuing restack");
+
+    // Get current branch (should be *-restack-temp)
+    let current_branch = git_repo.get_current_branch()?;
+    if !current_branch.ends_with("-restack-temp") {
+        return Err(CascadeError::validation(format!(
+            "Expected to be on a *-restack-temp branch, but on '{}'. Cannot continue safely.",
+            current_branch
+        )));
+    }
+
+    // Extract the original entry branch name
+    let entry_branch = current_branch.trim_end_matches("-restack-temp");
+
+    // Auto-stage resolved conflict files (only files that had conflicts)
+    // This prevents leaking unrelated changes while helping users who forget git add
+    match git_repo.stage_conflict_resolved_files() {
+        Ok(_) => {
+            Output::sub_item("Auto-staged resolved conflict files");
+        }
+        Err(e) => {
+            debug!("Could not auto-stage conflict files: {}", e);
+            Output::warning("Could not auto-stage files. Make sure you've run 'git add <files>'");
+        }
+    }
+
+    // Complete the cherry-pick with CASCADE_SKIP_HOOKS to bypass pre-commit hook
+    let output = std::process::Command::new("git")
+        .args(["cherry-pick", "--continue"])
+        .env("CASCADE_SKIP_HOOKS", "1")
+        .current_dir(&repo_root)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(CascadeError::Io)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CascadeError::validation(format!(
+            "Failed to continue cherry-pick: {}\n\n\
+            Make sure all conflicts are resolved and staged:\n\
+            1. Check status: git status\n\
+            2. Stage resolved files: git add <files>\n\
+            3. Try again: ca entry continue",
+            stderr.trim()
+        )));
+    }
+
+    Output::success("Cherry-pick completed");
+
+    // CRITICAL: Get the new commit hash BEFORE cleaning up temp branch
+    let new_commit_hash = git_repo.get_head_commit()?.id().to_string();
+    debug!("New commit hash: {}", &new_commit_hash[..8]);
+
+    // CRITICAL: Update the entry branch to point to the new commit
+    // This must happen BEFORE deleting the temp branch!
+    Output::sub_item(format!("Updating branch '{}' to new commit", entry_branch));
+    git_repo.update_branch_to_commit(entry_branch, &new_commit_hash)?;
+
+    // CRITICAL: Update metadata with the new commit hash
+    let mut stack_manager = StackManager::new(&repo_root)?;
+    let active_stack = stack_manager
+        .get_active_stack()
+        .ok_or_else(|| CascadeError::config("No active stack"))?;
+
+    // Find the entry by branch name
+    let entry_id = active_stack
+        .entries
+        .iter()
+        .find(|e| e.branch == entry_branch)
+        .map(|e| e.id)
+        .ok_or_else(|| {
+            CascadeError::config(format!(
+                "Could not find entry for branch '{}'",
+                entry_branch
+            ))
+        })?;
+
+    let stack_id = active_stack.id;
+
+    {
+        let stack_mut = stack_manager
+            .get_stack_mut(&stack_id)
+            .ok_or_else(|| CascadeError::config("Stack not found"))?;
+
+        stack_mut
+            .update_entry_commit_hash(&entry_id, new_commit_hash.clone())
+            .map_err(CascadeError::config)?;
+    }
+    stack_manager.save_to_disk()?;
+
+    Output::sub_item(format!("Updated metadata: {}", &new_commit_hash[..8]));
+
+    // Now safe to clean up temp branch
+    Output::sub_item(format!("Cleaning up temp branch '{}'", current_branch));
+
+    // Checkout to entry branch (which now points to the new commit)
+    git_repo.checkout_branch_unsafe(entry_branch)?;
+
+    // Delete the temp branch
+    git_repo.delete_branch_unsafe(&current_branch)?;
+
+    println!();
+    Output::warning("Restack is incomplete!");
+    Output::sub_item("The current entry has been resolved, but:");
+    Output::sub_item("• Remaining dependent entries still need restacking");
+    Output::sub_item("• Working branch needs updating");
+    println!();
+    Output::section("Next Steps");
+    Output::bullet("Complete restack: ca sync");
+    Output::bullet("This will rebase remaining entries and update working branch");
+    println!();
+
+    Ok(())
+}
+
+/// Abort an in-progress restack operation
+/// Safely aborts the cherry-pick using CASCADE_SKIP_HOOKS to bypass hook issues
+async fn abort_restack() -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)?;
+
+    // Check if there's a cherry-pick in progress
+    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    if !cherry_pick_head.exists() {
+        return Err(CascadeError::validation(
+            "No cherry-pick in progress. Nothing to abort.".to_string(),
+        ));
+    }
+
+    Output::section("Aborting restack");
+
+    // Abort the cherry-pick with CASCADE_SKIP_HOOKS to bypass pre-commit hook
+    let output = std::process::Command::new("git")
+        .args(["cherry-pick", "--abort"])
+        .env("CASCADE_SKIP_HOOKS", "1")
+        .current_dir(&repo_root)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(CascadeError::Io)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CascadeError::validation(format!(
+            "Failed to abort cherry-pick: {}\n\n\
+            You may need to manually clean up the Git state:\n\
+            1. Check status: git status\n\
+            2. Reset if needed: git reset --hard HEAD",
+            stderr.trim()
+        )));
+    }
+
+    Output::success("Cherry-pick aborted");
+
+    // Clean up any temp restack branches
+    let git_repo = GitRepository::open(&repo_root)?;
+    let current_branch = git_repo.get_current_branch().ok();
+
+    // If we're on a *-restack-temp branch, clean it up
+    if let Some(ref branch) = current_branch {
+        if branch.ends_with("-restack-temp") {
+            // Extract the original branch name
+            let original_branch = branch.trim_end_matches("-restack-temp");
+
+            Output::sub_item(format!("Cleaning up temp branch '{}'", branch));
+
+            // Checkout to original branch first
+            if let Err(e) = git_repo.checkout_branch_unsafe(original_branch) {
+                Output::warning(format!(
+                    "Could not checkout to '{}': {}. You may need to checkout manually.",
+                    original_branch, e
+                ));
+            } else {
+                // Delete the temp branch
+                if let Err(e) = git_repo.delete_branch_unsafe(branch) {
+                    Output::warning(format!(
+                        "Could not delete temp branch '{}': {}. You may need to delete it manually.",
+                        branch, e
+                    ));
+                }
+            }
+        }
+    }
+
+    println!();
+    Output::warning("Restack was aborted - stack may be in inconsistent state");
+    println!();
+    Output::section("Next Steps");
+    Output::bullet("Check stack state: ca validate");
+    Output::bullet("If needed, fix issues with: ca validate (choose 'Incorporate' or 'Reset')");
+    Output::bullet("Or try restack again: ca sync");
+    println!();
+
     Ok(())
 }
