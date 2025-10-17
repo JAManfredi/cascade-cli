@@ -1,6 +1,6 @@
 [package]
 name = "cascade-cli"
-version = "0.2.0"
+version = "0.1.126"
 edition = "2021"
 description = "Stacked diffs CLI for Bitbucket Server"
 authors = ["Jared Manfredi <jared@jaredm.dev>"]
