@@ -472,22 +472,27 @@ impl RebaseManager {
                             if staged_files.is_empty() {
                                 // Empty commit detected - this happens when base branch moved forward
                                 // and the cherry-pick resulted in no changes (all changes already present)
-                                debug!("Cherry-pick resulted in empty commit for {}", &entry.commit_hash[..8]);
-                                
+                                debug!(
+                                    "Cherry-pick resulted in empty commit for {}",
+                                    &entry.commit_hash[..8]
+                                );
+
                                 // This is normal when develop has moved forward - skip this commit
                                 Output::warning(format!(
                                     "Skipping entry '{}' - cherry-pick resulted in no changes",
                                     original_branch
                                 ));
-                                Output::sub_item("This usually means the base branch has moved forward");
+                                Output::sub_item(
+                                    "This usually means the base branch has moved forward",
+                                );
                                 Output::sub_item("and this entry's changes are already present");
-                                
+
                                 // Clean up the failed cherry-pick
                                 let _ = std::process::Command::new("git")
                                     .args(["cherry-pick", "--abort"])
                                     .current_dir(self.git_repo.path())
                                     .output();
-                                
+
                                 // Continue to next entry instead of failing
                                 continue;
                             }
