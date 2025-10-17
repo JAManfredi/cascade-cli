@@ -1,8 +1,9 @@
 use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
-use crate::git::find_repository_root;
+use crate::git::{find_repository_root, GitRepository};
 use crate::stack::StackManager;
 use clap::Subcommand;
+use std::path::Path;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -52,10 +53,10 @@ pub enum EntryAction {
         #[arg(long, short)]
         yes: bool,
     },
-    /// Amend the current stack entry commit and update working branch
+    /// Amend the current stack entry commit and automatically restack dependent entries
     ///
-    /// By default, automatically includes all modified tracked files (like 'git commit -a --amend')
-    /// After amending, run 'ca sync' to rebase dependent entries
+    /// Automatically includes all modified tracked files (like 'git commit -a --amend')
+    /// and rebases all dependent entries onto the amended commit
     Amend {
         /// New commit message (optional, uses git editor if not provided)
         #[arg(long, short)]
@@ -915,29 +916,41 @@ async fn amend_entry(message: Option<String>, _all: bool, push: bool) -> Result<
         Output::bullet("Changes force-pushed to remote");
     }
 
-    // Warning about dependent entries needing rebase
+    // Automatically restack dependent entries (no flag needed - always required)
     if has_dependents {
         println!();
         let dependent_count = {
             let stack = manager
                 .get_stack(&stack_id)
                 .ok_or_else(|| CascadeError::config("Stack not found"))?;
-            let entry_idx = stack
-                .entries
-                .iter()
-                .position(|e| e.id == entry_id)
-                .unwrap_or(0);
-            stack.entries.len().saturating_sub(entry_idx + 1)
+            stack.entries.len().saturating_sub(entry_index + 1)
         };
 
-        let plural = if dependent_count == 1 {
-            "entry needs"
-        } else {
-            "entries need"
-        };
+        let plural = if dependent_count == 1 { "entry" } else { "entries" };
 
-        Output::warning(format!("{} dependent {} rebasing", dependent_count, plural));
-        Output::tip("Run 'ca sync' to rebase dependent entries onto your changes");
+        Output::section(format!("Restacking {} dependent {}", dependent_count, plural));
+        
+        // Rebase dependent entries using the same logic as ca sync
+        // This ensures entries #4, #5, etc. are rebased onto the amended entry #3
+        match restack_dependent_entries(&repo_root, &stack_id, entry_index).await {
+            Ok(_) => {
+                Output::success(format!("Restacked {} dependent {}", dependent_count, plural));
+            }
+            Err(e) => {
+                println!();
+                Output::error(format!("Failed to restack dependent entries: {}", e));
+                println!();
+                Output::section("Recovery Steps");
+                Output::bullet("Resolve any conflicts in your editor");
+                Output::bullet("Stage resolved files: git add <files>");
+                Output::bullet("Continue: ca entry continue");
+                Output::bullet("Or abort: git cherry-pick --abort");
+                println!();
+                return Err(CascadeError::validation(
+                    "Restack failed - resolve conflicts and run 'ca entry continue'"
+                ));
+            }
+        }
     }
 
     // Tip about --push flag
@@ -946,5 +959,147 @@ async fn amend_entry(message: Option<String>, _all: bool, push: bool) -> Result<
         Output::tip("Use --push to automatically force-push after amending");
     }
 
+    Ok(())
+}
+
+/// Restack dependent entries after amending
+/// This ensures entries after the amended one are rebased onto the new commit
+/// 
+/// CRITICAL CONSTRAINTS:
+/// - User is currently on the amended branch (e.g., entry #3)
+/// - We must NOT touch the amended entry or any entries before it
+/// - We only rebase entries AFTER the amended one (e.g., #4, #5)
+/// - Each dependent entry is rebased onto its parent (not develop!)
+/// - After restacking, update working branch to point to new top of stack
+async fn restack_dependent_entries(
+    repo_root: &Path,
+    stack_id: &uuid::Uuid,
+    amended_entry_index: usize,
+) -> Result<()> {
+    use tracing::debug;
+    
+    debug!(
+        "Restacking dependent entries after amending entry #{}",
+        amended_entry_index + 1
+    );
+
+    // Load fresh stack manager and repo
+    let mut stack_manager = StackManager::new(repo_root)?;
+    let git_repo = GitRepository::open(repo_root)?;
+
+    // Get the stack (clone to avoid borrow issues)
+    let stack = stack_manager
+        .get_stack(stack_id)
+        .ok_or_else(|| CascadeError::config("Stack not found"))?
+        .clone();
+
+    // Get the amended entry (this is the new "base" for dependents)
+    let amended_entry = &stack.entries[amended_entry_index];
+    let amended_branch = &amended_entry.branch;
+    let amended_commit = &amended_entry.commit_hash;
+
+    debug!(
+        "Amended entry: branch='{}', commit={}",
+        amended_branch,
+        &amended_commit[..8]
+    );
+
+    // Collect entries AFTER the amended one (these need rebasing)
+    let dependent_entries: Vec<_> = stack
+        .entries
+        .iter()
+        .skip(amended_entry_index + 1)
+        .cloned()
+        .collect();
+
+    if dependent_entries.is_empty() {
+        debug!("No dependent entries to rebase");
+        return Ok(());
+    }
+
+    debug!("Will rebase {} dependent entries", dependent_entries.len());
+
+    // We're currently on the amended branch - save it to restore later
+    let original_branch = git_repo.get_current_branch()?;
+    debug!("Currently on branch: {}", original_branch);
+
+    // Rebase each dependent entry sequentially
+    // Entry #4 onto amended entry #3, then entry #5 onto new entry #4, etc.
+    let mut current_base_commit = amended_commit.clone();
+    
+    for (i, entry) in dependent_entries.iter().enumerate() {
+        let entry_num = amended_entry_index + i + 2; // +2 because we're 1-indexed and skipping amended
+        
+        debug!(
+            "Rebasing entry #{} ({}): {} onto {}",
+            entry_num,
+            entry.branch,
+            &entry.commit_hash[..8],
+            &current_base_commit[..8]
+        );
+
+        // Cherry-pick this entry's commit onto the current base
+        // This is similar to what rebase_all_entries does, but for one entry at a time
+        let temp_branch = format!("{}-restack-temp", entry.branch);
+        
+        // Create temp branch from current base
+        git_repo.create_branch(&temp_branch, Some(&current_base_commit))?;
+        git_repo.checkout_branch_silent(&temp_branch)?;
+        
+        // Cherry-pick the entry's commit
+        match git_repo.cherry_pick(&entry.commit_hash) {
+            Ok(new_commit_hash) => {
+                // Update the entry's branch to point to the new commit
+                git_repo.update_branch_to_commit(&entry.branch, &new_commit_hash)?;
+                
+                // Update metadata
+                {
+                    let stack_mut = stack_manager
+                        .get_stack_mut(stack_id)
+                        .ok_or_else(|| CascadeError::config("Stack not found"))?;
+                    
+                    stack_mut
+                        .update_entry_commit_hash(&entry.id, new_commit_hash.clone())
+                        .map_err(CascadeError::config)?;
+                }
+                stack_manager.save_to_disk()?;
+                
+                debug!("  → New commit: {}", &new_commit_hash[..8]);
+                
+                // This becomes the base for the next entry
+                current_base_commit = new_commit_hash;
+            }
+            Err(e) => {
+                // Cherry-pick failed - clean up and give user recovery instructions
+                let _ = git_repo.checkout_branch_unsafe(&original_branch);
+                let _ = git_repo.delete_branch(&temp_branch);
+                
+                return Err(CascadeError::validation(format!(
+                    "Failed to restack entry #{} ({}): {}\n\n\
+                    The stack is partially restacked. To recover:\n\
+                    1. Resolve conflicts if any: git status\n\
+                    2. Fix conflicts and stage: git add <files>\n\
+                    3. Continue: git cherry-pick --continue\n\
+                    4. Run: ca validate to check stack state\n\
+                    5. Or abort: git cherry-pick --abort",
+                    entry_num, entry.branch, e
+                )));
+            }
+        }
+        
+        // Clean up temp branch
+        git_repo.delete_branch(&temp_branch)?;
+    }
+
+    // Restore original branch (the amended branch)
+    git_repo.checkout_branch_unsafe(&original_branch)?;
+
+    // Update working branch to point to the NEW top of stack (last dependent entry)
+    if let Some(ref working_branch_name) = stack.working_branch {
+        debug!("Updating working branch '{}' to {}", working_branch_name, &current_base_commit[..8]);
+        git_repo.update_branch_to_commit(working_branch_name, &current_base_commit)?;
+    }
+
+    debug!("Successfully restacked {} entries", dependent_entries.len());
     Ok(())
 }
