@@ -470,34 +470,26 @@ impl RebaseManager {
                             let staged_files = self.git_repo.get_staged_files()?;
 
                             if staged_files.is_empty() {
-                                // NO FILES STAGED! This means auto-resolve didn't actually stage anything
-                                // This is the bug - cherry-pick failed, but has_conflicts() returned false
-                                // so auto-resolve exited early without staging anything
-                                result.success = false;
-                                result.error = Some(format!(
-                                    "CRITICAL BUG DETECTED: Cherry-pick failed but no files were staged!\n\n\
-                                    This indicates a Git state issue after cherry-pick failure.\n\n\
-                                    RECOVERY STEPS:\n\
-                                    ================\n\n\
-                                    Step 1: Check Git status\n\
-                                    → Run: git status\n\
-                                    → Check if there are any changes in working directory\n\n\
-                                    Step 2: Check for conflicts manually\n\
-                                    → Run: git diff\n\
-                                    → Look for conflict markers (<<<<<<, ======, >>>>>>)\n\n\
-                                    Step 3: Abort the cherry-pick\n\
-                                    → Run: git cherry-pick --abort\n\n\
-                                    Step 4: Report this bug\n\
-                                    → This is a known issue we're investigating\n\
-                                    → Cherry-pick failed for commit {}\n\
-                                    → But Git reported no conflicts and no staged files\n\n\
-                                    Step 5: Try manual resolution\n\
-                                    → Run: ca sync --no-auto-resolve\n\
-                                    → Manually resolve conflicts as they appear",
-                                    &entry.commit_hash[..8]
+                                // Empty commit detected - this happens when base branch moved forward
+                                // and the cherry-pick resulted in no changes (all changes already present)
+                                debug!("Cherry-pick resulted in empty commit for {}", &entry.commit_hash[..8]);
+                                
+                                // This is normal when develop has moved forward - skip this commit
+                                Output::warning(format!(
+                                    "Skipping entry '{}' - cherry-pick resulted in no changes",
+                                    original_branch
                                 ));
-                                tracing::error!("CRITICAL - No files staged after auto-resolve!");
-                                break;
+                                Output::sub_item("This usually means the base branch has moved forward");
+                                Output::sub_item("and this entry's changes are already present");
+                                
+                                // Clean up the failed cherry-pick
+                                let _ = std::process::Command::new("git")
+                                    .args(["cherry-pick", "--abort"])
+                                    .current_dir(self.git_repo.path())
+                                    .output();
+                                
+                                // Continue to next entry instead of failing
+                                continue;
                             }
 
                             debug!("{} files staged", staged_files.len());
