@@ -468,7 +468,19 @@ impl StackManager {
         // 🆕 CREATE ACTUAL GIT BRANCH from the specific commit
         // Check if branch already exists
         if self.repo.branch_exists(&branch) {
-            // Branch already exists, skip creation
+            // Branch already exists - update it to point to the new commit
+            // This is critical: if we skip this, the branch points to the old commit
+            // but metadata points to the new commit, causing stack corruption
+            self.repo
+                .update_branch_to_commit(&branch, &commit_hash)
+                .map_err(|e| {
+                    CascadeError::branch(format!(
+                        "Failed to update existing branch '{}' to commit {}: {}",
+                        branch,
+                        &commit_hash[..8],
+                        e
+                    ))
+                })?;
         } else {
             // Create the branch from the specific commit hash
             self.repo
