@@ -1025,10 +1025,12 @@ async fn restack_dependent_entries(
     );
 
     // Collect entries AFTER the amended one (these need rebasing)
+    // Skip merged entries - they're already in the base branch and shouldn't be rebased
     let dependent_entries: Vec<_> = stack
         .entries
         .iter()
         .skip(amended_entry_index + 1)
+        .filter(|entry| !entry.is_merged) // Skip merged entries
         .cloned()
         .collect();
 

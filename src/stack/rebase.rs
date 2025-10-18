@@ -267,17 +267,23 @@ impl RebaseManager {
         }
 
         let mut current_base = target_base.clone();
-        let entry_count = stack.entries.len();
+        // Count only unmerged entries for display purposes
+        let entry_count = stack.entries.iter().filter(|e| !e.is_merged).count();
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
         let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, index)
 
-        // Handle empty stack early
+        // Handle empty stack early (no unmerged entries)
         if entry_count == 0 {
             println!();
-            Output::info("Stack has no entries yet");
-            Output::tip("Use 'ca push' to add commits to this stack");
-
-            result.summary = "Stack is empty".to_string();
+            if stack.entries.is_empty() {
+                Output::info("Stack has no entries yet");
+                Output::tip("Use 'ca push' to add commits to this stack");
+                result.summary = "Stack is empty".to_string();
+            } else {
+                Output::info("All entries in this stack have been merged");
+                Output::tip("Use 'ca push' to add new commits, or 'ca stack prune' to clean up");
+                result.summary = "All entries merged".to_string();
+            }
 
             // Print success with summary (consistent with non-empty path)
             println!();
@@ -288,12 +294,16 @@ impl RebaseManager {
             return Ok(result);
         }
 
-        // Check if ALL entries are already correctly based - if so, skip rebase entirely
-        let all_up_to_date = stack.entries.iter().all(|entry| {
-            self.git_repo
-                .is_commit_based_on(&entry.commit_hash, &target_base)
-                .unwrap_or(false)
-        });
+        // Check if ALL unmerged entries are already correctly based - if so, skip rebase entirely
+        let all_up_to_date = stack
+            .entries
+            .iter()
+            .filter(|entry| !entry.is_merged) // Only check unmerged entries
+            .all(|entry| {
+                self.git_repo
+                    .is_commit_based_on(&entry.commit_hash, &target_base)
+                    .unwrap_or(false)
+            });
 
         if all_up_to_date {
             println!();
@@ -306,6 +316,13 @@ impl RebaseManager {
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
         for (index, entry) in stack.entries.iter().enumerate() {
             let original_branch = &entry.branch;
+
+            // Skip merged entries - they're already in the base branch
+            if entry.is_merged {
+                tracing::debug!("Entry '{}' is merged, skipping rebase", original_branch);
+                // Don't update current_base - merged entries are already part of the base
+                continue;
+            }
 
             // Check if this entry is already correctly based on the current base
             // If so, skip rebasing it (avoids creating duplicate commits)
