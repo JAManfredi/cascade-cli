@@ -263,7 +263,17 @@ impl RebaseManager {
 
         // Reset working directory to clean state before rebase
         if let Err(e) = self.git_repo.reset_to_head() {
-            Output::warning(format!("Could not reset working directory: {}", e));
+            // Attempt to restore the original branch before bailing
+            if let Some(ref orig) = original_branch_for_cleanup {
+                let _ = self.git_repo.checkout_branch_unsafe(orig);
+            }
+
+            return Err(CascadeError::branch(format!(
+                "Could not reset working directory to HEAD: {}.\n\
+                Another Git process may still be holding the index lock. \
+                Resolve the lock (remove .git/index.lock if safe) and retry.",
+                e
+            )));
         }
 
         let mut current_base = target_base.clone();
