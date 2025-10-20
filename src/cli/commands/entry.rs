@@ -32,6 +32,8 @@ struct RestackState {
     stack_id: Uuid,
     /// Index of the entry that was amended (starting point)
     amended_entry_index: usize,
+    /// Branch name of the amended entry (to return to after restack)
+    amended_branch: String,
     /// Index of the entry currently being cherry-picked
     current_entry_index: usize,
     /// List of (index, entry) pairs that still need to be restacked
@@ -1157,6 +1159,7 @@ async fn restack_dependent_entries(
         let restack_state = RestackState {
             stack_id: *stack_id,
             amended_entry_index,
+            amended_branch: amended_branch.clone(),
             current_entry_index: original_index,
             remaining_entries,
         };
@@ -1329,14 +1332,30 @@ async fn continue_restack() -> Result<()> {
     Output::sub_item(format!("Updating branch '{}' to new commit", entry_branch));
     git_repo.update_branch_to_commit(entry_branch, &new_commit_hash)?;
 
+    // Load restack state BEFORE updating metadata to get the correct stack ID
+    // This prevents issues if user switched active stack during conflict resolution
+    let restack_state = RestackState::load(&repo_root)?;
+
     // CRITICAL: Update metadata with the new commit hash
     let mut stack_manager = StackManager::new(&repo_root)?;
-    let active_stack = stack_manager
-        .get_active_stack()
-        .ok_or_else(|| CascadeError::config("No active stack"))?;
 
-    // Find the entry by branch name
-    let entry_id = active_stack
+    // Use the stack ID from restack state if available, otherwise fall back to active stack
+    let stack_id = if let Some(ref state) = restack_state {
+        state.stack_id
+    } else {
+        // No restack state - this is a standalone continue, use active stack
+        stack_manager
+            .get_active_stack()
+            .ok_or_else(|| CascadeError::config("No active stack"))?
+            .id
+    };
+
+    // Get the stack and find the entry by branch name
+    let stack = stack_manager
+        .get_stack(&stack_id)
+        .ok_or_else(|| CascadeError::config("Stack not found"))?;
+
+    let entry_id = stack
         .entries
         .iter()
         .find(|e| e.branch == entry_branch)
@@ -1347,8 +1366,6 @@ async fn continue_restack() -> Result<()> {
                 entry_branch
             ))
         })?;
-
-    let stack_id = active_stack.id;
 
     {
         let stack_mut = stack_manager
@@ -1372,9 +1389,7 @@ async fn continue_restack() -> Result<()> {
     // Delete the temp branch
     git_repo.delete_branch_unsafe(&current_branch)?;
 
-    // Check if there are remaining entries to restack
-    let restack_state = RestackState::load(&repo_root)?;
-
+    // Continue with restack if there are remaining entries
     if let Some(state) = restack_state {
         if !state.remaining_entries.is_empty() {
             println!();
@@ -1421,6 +1436,7 @@ async fn continue_restack() -> Result<()> {
                 let updated_state = RestackState {
                     stack_id: state.stack_id,
                     amended_entry_index: state.amended_entry_index,
+                    amended_branch: state.amended_branch.clone(),
                     current_entry_index: original_index,
                     remaining_entries: remaining_after_this,
                 };
@@ -1500,6 +1516,9 @@ async fn continue_restack() -> Result<()> {
             // Delete state file - restack completed
             RestackState::delete(&repo_root)?;
 
+            // Checkout back to the amended branch (where we started)
+            git_repo.checkout_branch_unsafe(&state.amended_branch)?;
+
             println!();
             Output::success("Restack completed successfully!");
             Output::sub_item("All dependent entries have been rebased");
@@ -1527,6 +1546,9 @@ async fn continue_restack() -> Result<()> {
 
             // Clean up state file
             RestackState::delete(&repo_root)?;
+
+            // Checkout back to the amended branch (where we started)
+            git_repo.checkout_branch_unsafe(&state.amended_branch)?;
 
             println!();
             Output::success("Restack completed!");
