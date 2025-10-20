@@ -17,10 +17,68 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Terminal,
 };
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::debug;
+use uuid::Uuid;
+
+/// State tracking for in-progress restack operations
+/// Persisted to .git/CASCADE_RESTACK_STATE
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RestackState {
+    /// ID of the stack being restacked
+    stack_id: Uuid,
+    /// Index of the entry that was amended (starting point)
+    amended_entry_index: usize,
+    /// Index of the entry currently being cherry-picked
+    current_entry_index: usize,
+    /// List of (index, entry) pairs that still need to be restacked
+    remaining_entries: Vec<(usize, StackEntry)>,
+}
+
+impl RestackState {
+    fn state_file_path(repo_root: &Path) -> PathBuf {
+        repo_root.join(".git").join("CASCADE_RESTACK_STATE")
+    }
+
+    fn save(&self, repo_root: &Path) -> Result<()> {
+        let path = Self::state_file_path(repo_root);
+        let json = serde_json::to_string_pretty(self).map_err(|e| {
+            CascadeError::config(format!("Failed to serialize restack state: {}", e))
+        })?;
+        std::fs::write(&path, json)
+            .map_err(|e| CascadeError::config(format!("Failed to write restack state: {}", e)))?;
+        debug!("Saved restack state to {:?}", path);
+        Ok(())
+    }
+
+    fn load(repo_root: &Path) -> Result<Option<Self>> {
+        let path = Self::state_file_path(repo_root);
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let json = std::fs::read_to_string(&path)
+            .map_err(|e| CascadeError::config(format!("Failed to read restack state: {}", e)))?;
+        let state: Self = serde_json::from_str(&json)
+            .map_err(|e| CascadeError::config(format!("Failed to parse restack state: {}", e)))?;
+        debug!("Loaded restack state from {:?}", path);
+        Ok(Some(state))
+    }
+
+    fn delete(repo_root: &Path) -> Result<()> {
+        let path = Self::state_file_path(repo_root);
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|e| {
+                CascadeError::config(format!("Failed to delete restack state: {}", e))
+            })?;
+            debug!("Deleted restack state file: {:?}", path);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Subcommand)]
 pub enum EntryAction {
@@ -1067,7 +1125,7 @@ async fn restack_dependent_entries(
     // Entry #4 onto amended entry #3, then entry #5 onto new entry #4, etc.
     let mut current_base_commit = amended_commit.clone();
 
-    for &(original_index, ref entry) in dependent_entries.iter() {
+    for (i, &(original_index, ref entry)) in dependent_entries.iter().enumerate() {
         let entry_num = original_index + 1; // Convert 0-based index to 1-based entry number
 
         // Skip merged entries - they're already in the base branch
@@ -1090,6 +1148,19 @@ async fn restack_dependent_entries(
             &entry.commit_hash[..8],
             &current_base_commit[..8]
         );
+
+        // Save restack state BEFORE cherry-picking
+        // This allows ca entry continue to resume if there are conflicts
+        let remaining_entries: Vec<(usize, StackEntry)> =
+            dependent_entries.iter().skip(i + 1).cloned().collect();
+
+        let restack_state = RestackState {
+            stack_id: *stack_id,
+            amended_entry_index,
+            current_entry_index: original_index,
+            remaining_entries,
+        };
+        restack_state.save(repo_root)?;
 
         // Cherry-pick this entry's commit onto the current base
         // This is similar to what rebase_all_entries does, but for one entry at a time
@@ -1172,6 +1243,9 @@ async fn restack_dependent_entries(
         );
         git_repo.update_branch_to_commit(working_branch_name, &current_base_commit)?;
     }
+
+    // Delete restack state file - restack completed successfully
+    RestackState::delete(repo_root)?;
 
     debug!("Successfully restacked {} entries", dependent_entries.len());
     Ok(())
@@ -1298,16 +1372,173 @@ async fn continue_restack() -> Result<()> {
     // Delete the temp branch
     git_repo.delete_branch_unsafe(&current_branch)?;
 
-    println!();
-    Output::warning("Restack is incomplete!");
-    Output::sub_item("The current entry has been resolved, but:");
-    Output::sub_item("• Remaining dependent entries still need restacking");
-    Output::sub_item("• Working branch needs updating");
-    println!();
-    Output::section("Next Steps");
-    Output::bullet("Complete restack: ca sync");
-    Output::bullet("This will rebase remaining entries and update working branch");
-    println!();
+    // Check if there are remaining entries to restack
+    let restack_state = RestackState::load(&repo_root)?;
+
+    if let Some(state) = restack_state {
+        if !state.remaining_entries.is_empty() {
+            println!();
+            Output::info(format!(
+                "Continuing restack: {} remaining entries",
+                state.remaining_entries.len()
+            ));
+            println!();
+
+            // Continue restacking remaining entries
+            // Use the new commit as the base for the next entry
+            let mut current_base_commit = new_commit_hash;
+
+            for &(original_index, ref entry) in state.remaining_entries.iter() {
+                let entry_num = original_index + 1;
+
+                // Skip merged entries
+                if entry.is_merged {
+                    debug!(
+                        "Entry #{} ({}) is merged, advancing base",
+                        entry_num, entry.branch
+                    );
+                    current_base_commit = entry.commit_hash.clone();
+                    continue;
+                }
+
+                debug!(
+                    "Restacking entry #{} ({}): {} onto {}",
+                    entry_num,
+                    entry.branch,
+                    &entry.commit_hash[..8],
+                    &current_base_commit[..8]
+                );
+
+                // Update state for this entry
+                let remaining_after_this: Vec<(usize, StackEntry)> = state
+                    .remaining_entries
+                    .iter()
+                    .skip_while(|(idx, _)| *idx != original_index)
+                    .skip(1)
+                    .cloned()
+                    .collect();
+
+                let updated_state = RestackState {
+                    stack_id: state.stack_id,
+                    amended_entry_index: state.amended_entry_index,
+                    current_entry_index: original_index,
+                    remaining_entries: remaining_after_this,
+                };
+                updated_state.save(&repo_root)?;
+
+                // Cherry-pick this entry
+                let temp_branch = format!("{}-restack-temp", entry.branch);
+                git_repo.create_branch(&temp_branch, Some(&current_base_commit))?;
+                git_repo.checkout_branch_silent(&temp_branch)?;
+
+                match git_repo.cherry_pick(&entry.commit_hash) {
+                    Ok(new_hash) => {
+                        // Update branch and metadata
+                        git_repo.update_branch_to_commit(&entry.branch, &new_hash)?;
+
+                        {
+                            let stack_mut = stack_manager
+                                .get_stack_mut(&state.stack_id)
+                                .ok_or_else(|| CascadeError::config("Stack not found"))?;
+
+                            stack_mut
+                                .update_entry_commit_hash(&entry.id, new_hash.clone())
+                                .map_err(CascadeError::config)?;
+                        }
+                        stack_manager.save_to_disk()?;
+
+                        debug!("  → New commit: {}", &new_hash[..8]);
+
+                        // Clean up temp branch
+                        git_repo.checkout_branch_unsafe(&entry.branch)?;
+                        git_repo.delete_branch_unsafe(&temp_branch)?;
+
+                        // This becomes the base for the next entry
+                        current_base_commit = new_hash;
+                    }
+                    Err(e) => {
+                        // Cherry-pick failed - leave state intact for next continue
+                        println!();
+                        Output::error(format!(
+                            "Failed to restack entry #{} ({}): {}",
+                            entry_num, entry.branch, e
+                        ));
+                        println!();
+                        Output::section("Recovery Options");
+                        println!();
+                        Output::sub_item("To continue after resolving conflicts:");
+                        Output::bullet("1. Check for conflicts: git status");
+                        Output::bullet("2. Resolve conflicts in your editor");
+                        Output::bullet("3. Continue restack: ca entry continue");
+                        println!();
+                        Output::sub_item("To abort:");
+                        Output::bullet("→ Run: ca entry abort");
+                        println!();
+
+                        return Err(CascadeError::validation(format!(
+                            "Restack paused at entry #{} - resolve conflicts or abort",
+                            entry_num
+                        )));
+                    }
+                }
+            }
+
+            // All entries restacked successfully - update working branch
+            let stack = stack_manager
+                .get_stack(&state.stack_id)
+                .ok_or_else(|| CascadeError::config("Stack not found"))?;
+
+            if let Some(ref working_branch_name) = stack.working_branch {
+                debug!(
+                    "Updating working branch '{}' to {}",
+                    working_branch_name,
+                    &current_base_commit[..8]
+                );
+                git_repo.update_branch_to_commit(working_branch_name, &current_base_commit)?;
+            }
+
+            // Delete state file - restack completed
+            RestackState::delete(&repo_root)?;
+
+            println!();
+            Output::success("Restack completed successfully!");
+            Output::sub_item("All dependent entries have been rebased");
+            Output::sub_item("Working branch updated");
+            println!();
+        } else {
+            // No remaining entries - this was the last one!
+            // Update working branch to point to the newly resolved commit
+            let stack = stack_manager
+                .get_stack(&state.stack_id)
+                .ok_or_else(|| CascadeError::config("Stack not found"))?;
+
+            if let Some(ref working_branch_name) = stack.working_branch {
+                debug!(
+                    "Updating working branch '{}' to {}",
+                    working_branch_name,
+                    &new_commit_hash[..8]
+                );
+                git_repo.update_branch_to_commit(working_branch_name, &new_commit_hash)?;
+                Output::sub_item(format!(
+                    "Updated working branch '{}' to latest commit",
+                    working_branch_name
+                ));
+            }
+
+            // Clean up state file
+            RestackState::delete(&repo_root)?;
+
+            println!();
+            Output::success("Restack completed!");
+            Output::sub_item("All dependent entries have been rebased");
+            println!();
+        }
+    } else {
+        // No state file - this was a standalone continue (not part of restack)
+        println!();
+        Output::success("Cherry-pick completed!");
+        println!();
+    }
 
     Ok(())
 }
@@ -1382,6 +1613,9 @@ async fn abort_restack() -> Result<()> {
             }
         }
     }
+
+    // Delete restack state file - operation was aborted
+    RestackState::delete(&repo_root)?;
 
     println!();
     Output::warning("Restack was aborted - stack may be in inconsistent state");
