@@ -270,7 +270,8 @@ impl RebaseManager {
         // Count only unmerged entries for display purposes
         let entry_count = stack.entries.iter().filter(|e| !e.is_merged).count();
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
-        let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, index)
+        let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, display_index)
+        let mut processed_entries: usize = 0; // Count unmerged entries we actually process
 
         // Handle empty stack early (no unmerged entries)
         if entry_count == 0 {
@@ -281,7 +282,7 @@ impl RebaseManager {
                 result.summary = "Stack is empty".to_string();
             } else {
                 Output::info("All entries in this stack have been merged");
-                Output::tip("Use 'ca push' to add new commits, or 'ca stack prune' to clean up");
+                Output::tip("Use 'ca push' to add new commits, or 'ca stack cleanup' to prune merged branches");
                 result.summary = "All entries merged".to_string();
             }
 
@@ -314,15 +315,18 @@ impl RebaseManager {
         }
 
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
-        for (index, entry) in stack.entries.iter().enumerate() {
+        for entry in stack.entries.iter() {
             let original_branch = &entry.branch;
 
             // Skip merged entries - they're already in the base branch
             if entry.is_merged {
                 tracing::debug!("Entry '{}' is merged, skipping rebase", original_branch);
-                // Don't update current_base - merged entries are already part of the base
+                // Advance the base to this merged entry's branch so later entries build on it
+                current_base = original_branch.clone();
                 continue;
             }
+
+            processed_entries += 1;
 
             // Check if this entry is already correctly based on the current base
             // If so, skip rebasing it (avoids creating duplicate commits)
@@ -337,9 +341,13 @@ impl RebaseManager {
                     current_base
                 );
 
-                // Track for push phase (tree already printed by caller)
+                // Track for push phase (tree already printed elsewhere)
                 if let Some(pr_num) = &entry.pull_request_id {
-                    branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
+                    branches_to_push.push((
+                        original_branch.clone(),
+                        pr_num.clone(),
+                        processed_entries - 1,
+                    ));
                 }
 
                 result
@@ -401,13 +409,17 @@ impl RebaseManager {
 
                     // Print tree item immediately and track for push phase
                     if let Some(pr_num) = &entry.pull_request_id {
-                        let tree_char = if index + 1 == entry_count {
+                        let tree_char = if processed_entries == entry_count {
                             "└─"
                         } else {
                             "├─"
                         };
                         println!("   {} {} (PR #{})", tree_char, original_branch, pr_num);
-                        branches_to_push.push((original_branch.clone(), pr_num.clone(), index));
+                        branches_to_push.push((
+                            original_branch.clone(),
+                            pr_num.clone(),
+                            processed_entries - 1,
+                        ));
                     }
 
                     result
@@ -539,7 +551,7 @@ impl RebaseManager {
 
                                     // Print tree item immediately and track for push phase
                                     if let Some(pr_num) = &entry.pull_request_id {
-                                        let tree_char = if index + 1 == entry_count {
+                                        let tree_char = if processed_entries == entry_count {
                                             "└─"
                                         } else {
                                             "├─"
@@ -551,7 +563,7 @@ impl RebaseManager {
                                         branches_to_push.push((
                                             original_branch.clone(),
                                             pr_num.clone(),
-                                            index,
+                                            processed_entries - 1,
                                         ));
                                     }
 

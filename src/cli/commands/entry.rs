@@ -1,7 +1,7 @@
 use crate::cli::output::Output;
 use crate::errors::{CascadeError, Result};
 use crate::git::{find_repository_root, GitRepository};
-use crate::stack::StackManager;
+use crate::stack::{StackEntry, StackManager};
 use clap::Subcommand;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -787,7 +787,11 @@ async fn amend_entry(message: Option<String>, _all: bool, push: bool) -> Result<
 
         match found_entry {
             Some((idx, id, branch, pr_id)) => {
-                let has_dependents = idx + 1 < active_stack.entries.len();
+                let has_dependents = active_stack
+                    .entries
+                    .iter()
+                    .skip(idx + 1)
+                    .any(|entry| !entry.is_merged);
                 (
                     active_stack.id,
                     idx,
@@ -933,7 +937,12 @@ async fn amend_entry(message: Option<String>, _all: bool, push: bool) -> Result<
             let stack = manager
                 .get_stack(&stack_id)
                 .ok_or_else(|| CascadeError::config("Stack not found"))?;
-            stack.entries.len().saturating_sub(entry_index + 1)
+            stack
+                .entries
+                .iter()
+                .skip(entry_index + 1)
+                .filter(|entry| !entry.is_merged)
+                .count()
         };
 
         let plural = if dependent_count == 1 {
@@ -1024,22 +1033,31 @@ async fn restack_dependent_entries(
         &amended_commit[..8]
     );
 
-    // Collect entries AFTER the amended one (these need rebasing)
-    // Skip merged entries - they're already in the base branch and shouldn't be rebased
-    let dependent_entries: Vec<_> = stack
+    // Collect entries AFTER the amended one
+    // We need ALL entries (including merged) to correctly advance the base commit
+    let dependent_entries: Vec<(usize, StackEntry)> = stack
         .entries
         .iter()
+        .enumerate()
         .skip(amended_entry_index + 1)
-        .filter(|entry| !entry.is_merged) // Skip merged entries
-        .cloned()
+        .map(|(idx, entry)| (idx, entry.clone()))
         .collect();
 
     if dependent_entries.is_empty() {
-        debug!("No dependent entries to rebase");
+        debug!("No dependent entries after amended entry");
         return Ok(());
     }
 
-    debug!("Will rebase {} dependent entries", dependent_entries.len());
+    let unmerged_count = dependent_entries
+        .iter()
+        .filter(|(_, e)| !e.is_merged)
+        .count();
+    debug!(
+        "Will process {} dependent entries ({} unmerged, {} merged)",
+        dependent_entries.len(),
+        unmerged_count,
+        dependent_entries.len() - unmerged_count
+    );
 
     // We're currently on the amended branch - save it to restore later
     let original_branch = git_repo.get_current_branch()?;
@@ -1049,8 +1067,21 @@ async fn restack_dependent_entries(
     // Entry #4 onto amended entry #3, then entry #5 onto new entry #4, etc.
     let mut current_base_commit = amended_commit.clone();
 
-    for (i, entry) in dependent_entries.iter().enumerate() {
-        let entry_num = amended_entry_index + i + 2; // +2 because we're 1-indexed and skipping amended
+    for &(original_index, ref entry) in dependent_entries.iter() {
+        let entry_num = original_index + 1; // Convert 0-based index to 1-based entry number
+
+        // Skip merged entries - they're already in the base branch
+        // But we still need to advance current_base_commit past them
+        if entry.is_merged {
+            debug!(
+                "Entry #{} ({}) is merged, advancing base to {}",
+                entry_num,
+                entry.branch,
+                &entry.commit_hash[..8]
+            );
+            current_base_commit = entry.commit_hash.clone();
+            continue;
+        }
 
         debug!(
             "Rebasing entry #{} ({}): {} onto {}",
