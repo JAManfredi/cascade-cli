@@ -546,6 +546,14 @@ impl RebaseManager {
                                         commit_message
                                     );
 
+                                    // Clean up any in-progress cherry-pick state (CHERRY_PICK_HEAD, etc.)
+                                    if let Err(e) = self.git_repo.cleanup_state() {
+                                        tracing::warn!(
+                                            "Failed to clean up repository state after auto-resolve: {}",
+                                            e
+                                        );
+                                    }
+
                                     Output::success("Auto-resolved conflicts");
                                     result.new_commits.push(new_commit_id.clone());
                                     let rebased_commit_id = new_commit_id;

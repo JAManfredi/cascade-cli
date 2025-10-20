@@ -853,6 +853,22 @@ impl GitRepository {
         Ok(())
     }
 
+    /// Clean up any in-progress merge/revert/cherry-pick state (removes CHERRY_PICK_HEAD etc.)
+    pub fn cleanup_state(&self) -> Result<()> {
+        let state = self.repo.state();
+        if state == git2::RepositoryState::Clean {
+            return Ok(());
+        }
+
+        tracing::debug!("Cleaning up repository state: {:?}", state);
+        self.repo.cleanup_state().map_err(|e| {
+            CascadeError::branch(format!(
+                "Failed to clean up repository state ({:?}): {}",
+                state, e
+            ))
+        })
+    }
+
     /// Get repository path
     pub fn path(&self) -> &Path {
         &self.path
