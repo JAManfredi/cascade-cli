@@ -519,6 +519,8 @@ ca push                                 # Push commits to stack
 ca land                                 # Merge approved PRs
 ca autoland                             # Auto-merge all ready PRs
 ca sync                                 # Sync with remote repository
+ca sync continue                        # Continue after resolving conflicts
+ca sync abort                           # Abort in-progress sync
 ca rebase                               # Rebase stack on updated base
 
 # Branch Management & Safety
@@ -679,6 +681,8 @@ ca stacks prs -v                             # Short form
 # Sync with remote
 ca sync                                      # Sync active stack with remote
 ca sync --force                              # Force sync even with conflicts
+ca sync continue                             # Continue after resolving conflicts
+ca sync abort                                # Abort in-progress sync
 
 # Rebase operations
 ca rebase                                    # Rebase stack on latest base branch
@@ -689,8 +693,8 @@ ca rebase --strategy force-push              # Industry standard (default)
 ca rebase --strategy interactive             # Manual conflict resolution mode
 
 # Rebase conflict resolution
-ca stacks continue-rebase                    # Continue after resolving conflicts
-ca stacks abort-rebase                       # Abort rebase operation
+ca rebase continue                    # Continue after resolving conflicts
+ca rebase abort                       # Abort rebase operation
 ca stacks rebase-status                      # Show rebase status and guidance
 ```
 

@@ -8,6 +8,7 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 // Progress bars removed - using professional Output module instead
 use std::env;
 use tracing::{debug, warn};
+use uuid::Uuid;
 
 /// CLI argument version of RebaseStrategy
 #[derive(ValueEnum, Clone, Debug)]
@@ -184,9 +185,6 @@ pub enum StackAction {
         /// Interactive mode for conflict resolution
         #[arg(long, short)]
         interactive: bool,
-        /// Continue from in-progress cherry-pick after resolving conflicts
-        #[arg(long)]
-        r#continue: bool,
     },
 
     /// Rebase stack on updated base branch
@@ -387,14 +385,7 @@ pub async fn run(action: StackAction) -> Result<()> {
             force,
             cleanup,
             interactive,
-            r#continue,
-        } => {
-            if r#continue {
-                continue_sync().await
-            } else {
-                sync_stack(force, cleanup, interactive).await
-            }
-        }
+        } => sync_stack(force, cleanup, interactive).await,
         StackAction::Rebase {
             interactive,
             onto,
@@ -528,17 +519,8 @@ pub async fn autoland(
     auto_land_stack(force, dry_run, wait_for_builds, strategy, build_timeout).await
 }
 
-pub async fn sync(
-    force: bool,
-    skip_cleanup: bool,
-    interactive: bool,
-    r#continue: bool,
-) -> Result<()> {
-    if r#continue {
-        continue_sync().await
-    } else {
-        sync_stack(force, skip_cleanup, interactive).await
-    }
+pub async fn sync(force: bool, skip_cleanup: bool, interactive: bool) -> Result<()> {
+    sync_stack(force, skip_cleanup, interactive).await
 }
 
 pub async fn rebase(
@@ -2143,7 +2125,7 @@ async fn check_stack(_force: bool) -> Result<()> {
     Ok(())
 }
 
-async fn continue_sync() -> Result<()> {
+pub async fn continue_sync() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -2170,6 +2152,8 @@ async fn continue_sync() -> Result<()> {
         .current_dir(&repo_root)
         .output()
         .map_err(CascadeError::Io)?;
+
+    let sync_state = crate::stack::SyncState::load(&repo_root).ok();
 
     Output::info("Continuing cherry-pick");
 
@@ -2201,9 +2185,27 @@ async fn continue_sync() -> Result<()> {
     let git_repo = crate::git::GitRepository::open(&repo_root)?;
     let current_branch = git_repo.get_current_branch()?;
 
-    // Parse temp branch name to get the original branch
-    // Format: {original-branch}-temp-{timestamp}
-    let stack_branch = if let Some(idx) = current_branch.rfind("-temp-") {
+    let stack_branch = if let Some(state) = &sync_state {
+        if !state.current_entry_branch.is_empty() {
+            if !state.current_temp_branch.is_empty() && current_branch != state.current_temp_branch
+            {
+                tracing::warn!(
+                    "Sync state temp branch '{}' differs from current branch '{}'",
+                    state.current_temp_branch,
+                    current_branch
+                );
+            }
+            state.current_entry_branch.clone()
+        } else if let Some(idx) = current_branch.rfind("-temp-") {
+            current_branch[..idx].to_string()
+        } else {
+            return Err(CascadeError::config(format!(
+                "Current branch '{}' doesn't appear to be a temp branch created by cascade.\n\
+                 Expected format: <branch>-temp-<timestamp>",
+                current_branch
+            )));
+        }
+    } else if let Some(idx) = current_branch.rfind("-temp-") {
         current_branch[..idx].to_string()
     } else {
         return Err(CascadeError::config(format!(
@@ -2247,13 +2249,37 @@ async fn continue_sync() -> Result<()> {
     // This prevents sync_stack() from thinking the working branch has "untracked" commits
     let new_commit_hash = git_repo.get_branch_head(&stack_branch)?;
 
-    // Get data we need from active_stack before mutably borrowing manager
-    let (stack_id, entry_id_opt, working_branch) = {
+    let (stack_id, entry_id_opt, working_branch) = if let Some(state) = &sync_state {
+        let stack_uuid = Uuid::parse_str(&state.stack_id)
+            .map_err(|e| CascadeError::config(format!("Invalid stack ID in sync state: {e}")))?;
+
+        let stack_snapshot = manager
+            .get_stack(&stack_uuid)
+            .cloned()
+            .ok_or_else(|| CascadeError::config("Stack not found in sync state".to_string()))?;
+
+        let working_branch = stack_snapshot
+            .working_branch
+            .clone()
+            .ok_or_else(|| CascadeError::config("Stack has no working branch".to_string()))?;
+
+        let entry_id = if !state.current_entry_id.is_empty() {
+            Uuid::parse_str(&state.current_entry_id).ok()
+        } else {
+            stack_snapshot
+                .entries
+                .iter()
+                .find(|e| e.branch == stack_branch)
+                .map(|e| e.id)
+        };
+
+        (stack_uuid, entry_id, working_branch)
+    } else {
         let active_stack = manager
             .get_active_stack()
             .ok_or_else(|| CascadeError::config("No active stack found"))?;
 
-        let entry_id_opt = active_stack
+        let entry_id = active_stack
             .entries
             .iter()
             .find(|e| e.branch == stack_branch)
@@ -2265,21 +2291,26 @@ async fn continue_sync() -> Result<()> {
             .ok_or_else(|| CascadeError::config("Active stack has no working branch"))?
             .clone();
 
-        (active_stack.id, entry_id_opt, working_branch)
+        (active_stack.id, entry_id, working_branch)
     };
 
     // Now we can mutably borrow manager to update the entry
-    if let Some(entry_id) = entry_id_opt {
-        let stack = manager
-            .get_stack_mut(&stack_id)
-            .ok_or_else(|| CascadeError::config("Could not get mutable stack reference"))?;
+    let entry_id = entry_id_opt.ok_or_else(|| {
+        CascadeError::config(format!(
+            "Could not find stack entry for branch '{}'",
+            stack_branch
+        ))
+    })?;
 
-        stack
-            .update_entry_commit_hash(&entry_id, new_commit_hash.clone())
-            .map_err(CascadeError::config)?;
+    let stack = manager
+        .get_stack_mut(&stack_id)
+        .ok_or_else(|| CascadeError::config("Could not get mutable stack reference"))?;
 
-        manager.save_to_disk()?;
-    }
+    stack
+        .update_entry_commit_hash(&entry_id, new_commit_hash.clone())
+        .map_err(CascadeError::config)?;
+
+    manager.save_to_disk()?;
 
     // Get the top of the stack to update the working branch
     let top_commit = {
@@ -2316,12 +2347,112 @@ async fn continue_sync() -> Result<()> {
         }
     }
 
+    if sync_state.is_some() {
+        crate::stack::SyncState::delete(&repo_root)?;
+    }
+
     println!();
     Output::info("Resuming sync to complete the rebase...");
     println!();
 
     // Continue with the full sync to process remaining entries
     sync_stack(false, false, false).await
+}
+
+pub async fn abort_sync() -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)?;
+
+    Output::section("Aborting sync");
+    println!();
+
+    // Check if there's an in-progress cherry-pick
+    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    if !cherry_pick_head.exists() {
+        return Err(CascadeError::config(
+            "No in-progress cherry-pick found. Nothing to abort.\n\n\
+             The sync may have already completed or been aborted."
+                .to_string(),
+        ));
+    }
+
+    Output::info("Aborting cherry-pick");
+
+    // Abort the cherry-pick with CASCADE_SKIP_HOOKS to avoid hook interference
+    let abort_output = std::process::Command::new("git")
+        .args(["cherry-pick", "--abort"])
+        .env("CASCADE_SKIP_HOOKS", "1")
+        .current_dir(&repo_root)
+        .output()
+        .map_err(CascadeError::Io)?;
+
+    if !abort_output.status.success() {
+        let stderr = String::from_utf8_lossy(&abort_output.stderr);
+        return Err(CascadeError::Branch(format!(
+            "Failed to abort cherry-pick: {}",
+            stderr
+        )));
+    }
+
+    Output::success("Cherry-pick aborted");
+
+    // Load sync state if it exists to clean up temp branches
+    let git_repo = crate::git::GitRepository::open(&repo_root)?;
+
+    if let Ok(state) = crate::stack::SyncState::load(&repo_root) {
+        println!();
+        Output::info("Cleaning up temporary branches");
+
+        // Clean up all temp branches
+        for temp_branch in &state.temp_branches {
+            if let Err(e) = git_repo.delete_branch_unsafe(temp_branch) {
+                tracing::warn!("Could not delete temp branch '{}': {}", temp_branch, e);
+            }
+        }
+
+        // Return to original branch
+        Output::info(format!(
+            "Returning to original branch: {}",
+            state.original_branch
+        ));
+        if let Err(e) = git_repo.checkout_branch_unsafe(&state.original_branch) {
+            // Fall back to base branch if original branch checkout fails
+            tracing::warn!("Could not checkout original branch: {}", e);
+            if let Err(e2) = git_repo.checkout_branch_unsafe(&state.target_base) {
+                tracing::warn!("Could not checkout base branch: {}", e2);
+            }
+        }
+
+        // Delete sync state file
+        crate::stack::SyncState::delete(&repo_root)?;
+    } else {
+        // No state file - try to figure out where to go
+        let current_branch = git_repo.get_current_branch()?;
+
+        // If on a temp branch, try to parse and return to original
+        if let Some(idx) = current_branch.rfind("-temp-") {
+            let original_branch = &current_branch[..idx];
+            Output::info(format!("Returning to branch: {}", original_branch));
+
+            if let Err(e) = git_repo.checkout_branch_unsafe(original_branch) {
+                tracing::warn!("Could not checkout original branch: {}", e);
+            }
+
+            // Try to delete the temp branch
+            if let Err(e) = git_repo.delete_branch_unsafe(&current_branch) {
+                tracing::warn!("Could not delete temp branch: {}", e);
+            }
+        }
+    }
+
+    println!();
+    Output::success("Sync aborted");
+    println!();
+    Output::tip("You can start a fresh sync with: ca sync");
+
+    Ok(())
 }
 
 async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()> {
@@ -2833,7 +2964,7 @@ async fn rebase_stack(
     Ok(())
 }
 
-async fn continue_rebase() -> Result<()> {
+pub async fn continue_rebase() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -2868,7 +2999,7 @@ async fn continue_rebase() -> Result<()> {
     Ok(())
 }
 
-async fn abort_rebase() -> Result<()> {
+pub async fn abort_rebase() -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 

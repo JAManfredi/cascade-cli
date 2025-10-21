@@ -1029,6 +1029,10 @@ exit 0
                  if not exist \\\"%REPO_ROOT%\\.cascade\\\" exit /b 0\n\n\
                  rem Skip hook if called from ca entry amend ^(avoid infinite loop^)\n\
                  if \\\"%CASCADE_SKIP_HOOKS%\\\"==\\\"1\\\" exit /b 0\n\n\
+                 rem Skip hook during cherry-pick/rebase/merge operations\n\
+                 if exist \\\"%REPO_ROOT%\\.git\\CHERRY_PICK_HEAD\\\" exit /b 0\n\
+                 if exist \\\"%REPO_ROOT%\\.git\\REBASE_HEAD\\\" exit /b 0\n\
+                 if exist \\\"%REPO_ROOT%\\.git\\MERGE_HEAD\\\" exit /b 0\n\n\
                  rem Get edit status\n\
                  for /f \\\"tokens=*\\\" %%i in ('\\\"{0}\\\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
                  if \\\"%EDIT_STATUS%\\\"==\\\"\\\" set EDIT_STATUS=inactive\n\n\
@@ -1103,6 +1107,11 @@ exit 0
                 "".to_string(),
                 "# Skip hook if called from ca entry amend (avoid infinite loop)".to_string(),
                 r#"if [ "$CASCADE_SKIP_HOOKS" = "1" ]; then"#.to_string(),
+                "    exit 0".to_string(),
+                "fi".to_string(),
+                "".to_string(),
+                "# Skip hook during cherry-pick/rebase/merge operations".to_string(),
+                r#"if [ -f "$REPO_ROOT/.git/CHERRY_PICK_HEAD" ] || [ -f "$REPO_ROOT/.git/REBASE_HEAD" ] || [ -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then"#.to_string(),
                 "    exit 0".to_string(),
                 "fi".to_string(),
                 "".to_string(),

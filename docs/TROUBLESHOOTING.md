@@ -287,10 +287,10 @@ Error: Base branch 'main' not found
    
    # Resolve conflicts manually
    git add .
-   ca stacks rebase --continue
+   ca rebase continue
    
    # Or abort and try different strategy
-   ca stacks rebase --abort
+   ca rebase abort
    ca stacks sync --strategy merge
    ```
 
@@ -853,7 +853,7 @@ git log --oneline origin/your-branch..your-branch-v2
 | E002 | Git repository not found | Ensure you're in a Git repository |
 | E003 | Bitbucket connection failed | Check credentials and network |
 | E004 | Stack not found | Use `ca stacks list` to see available stacks |
-| E005 | Merge conflict detected | Resolve conflicts and run `ca stacks rebase --continue` |
+| E005 | Merge conflict detected | Resolve conflicts and run `ca rebase continue` or `ca sync continue` |
 | E006 | Invalid commit hash | Check commit exists with `git log` |
 | E007 | Permission denied | Check file permissions and access rights |
 | E008 | Network timeout | Increase timeout with `ca config set network.timeout 120` |

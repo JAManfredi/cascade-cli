@@ -12,6 +12,7 @@ pub mod metadata;
 pub mod rebase;
 #[allow(clippy::module_inception)]
 pub mod stack;
+pub mod sync_state;
 
 pub use cleanup::{
     CleanupCandidate, CleanupManager, CleanupOptions, CleanupReason, CleanupResult, CleanupStats,
@@ -20,3 +21,4 @@ pub use manager::StackManager;
 pub use metadata::{CommitMetadata, EditModeState, StackMetadata};
 pub use rebase::{RebaseManager, RebaseOptions, RebaseResult, RebaseStrategy};
 pub use stack::{Stack, StackEntry, StackStatus};
+pub use sync_state::SyncState;

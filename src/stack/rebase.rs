@@ -1,6 +1,6 @@
 use crate::errors::{CascadeError, Result};
 use crate::git::{ConflictAnalyzer, GitRepository};
-use crate::stack::{Stack, StackManager};
+use crate::stack::{Stack, StackManager, SyncState};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -280,8 +280,6 @@ impl RebaseManager {
         // Count only unmerged entries for display purposes
         let entry_count = stack.entries.iter().filter(|e| !e.is_merged).count();
         let mut temp_branches: Vec<String> = Vec::new(); // Track temp branches for cleanup
-        let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, display_index)
-        let mut processed_entries: usize = 0; // Count unmerged entries we actually process
 
         // Handle empty stack early (no unmerged entries)
         if entry_count == 0 {
@@ -324,9 +322,40 @@ impl RebaseManager {
             return Ok(result);
         }
 
+        let repo_root = self.git_repo.path().to_path_buf();
+        let mut sync_state = SyncState {
+            stack_id: stack.id.to_string(),
+            stack_name: stack.name.clone(),
+            original_branch: original_branch_for_cleanup
+                .clone()
+                .unwrap_or_else(|| target_base.clone()),
+            target_base: target_base.clone(),
+            remaining_entry_ids: stack.entries.iter().map(|e| e.id.to_string()).collect(),
+            current_entry_id: String::new(),
+            current_entry_branch: String::new(),
+            current_temp_branch: String::new(),
+            temp_branches: Vec::new(),
+        };
+
+        // Remove any stale sync state before starting
+        let _ = SyncState::delete(&repo_root);
+
         // Phase 1: Rebase all entries locally (libgit2 only - no CLI commands)
-        for entry in stack.entries.iter() {
+        // Track which branches actually changed so we only push what’s needed
+        let mut branches_with_new_commits: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let mut branches_to_push: Vec<(String, String, usize)> = Vec::new(); // (branch_name, pr_number, display_index)
+        let mut processed_entries: usize = 0; // Count unmerged entries we actually process
+        for (index, entry) in stack.entries.iter().enumerate() {
             let original_branch = &entry.branch;
+            let entry_id_str = entry.id.to_string();
+
+            sync_state.remaining_entry_ids = stack
+                .entries
+                .iter()
+                .skip(index + 1)
+                .map(|e| e.id.to_string())
+                .collect();
 
             // Skip merged entries - they're already in the base branch
             if entry.is_merged {
@@ -337,6 +366,9 @@ impl RebaseManager {
             }
 
             processed_entries += 1;
+
+            sync_state.current_entry_id = entry_id_str.clone();
+            sync_state.current_entry_branch = original_branch.clone();
 
             // Check if this entry is already correctly based on the current base
             // If so, skip rebasing it (avoids creating duplicate commits)
@@ -350,15 +382,6 @@ impl RebaseManager {
                     original_branch,
                     current_base
                 );
-
-                // Track for push phase (tree already printed elsewhere)
-                if let Some(pr_num) = &entry.pull_request_id {
-                    branches_to_push.push((
-                        original_branch.clone(),
-                        pr_num.clone(),
-                        processed_entries - 1,
-                    ));
-                }
 
                 result
                     .branch_mapping
@@ -383,6 +406,7 @@ impl RebaseManager {
             // This avoids committing directly to protected branches like develop/main
             let temp_branch = format!("{}-temp-{}", original_branch, Utc::now().timestamp());
             temp_branches.push(temp_branch.clone()); // Track for cleanup
+            sync_state.current_temp_branch = temp_branch.clone();
 
             // Create and checkout temp branch - restore original branch on error
             if let Err(e) = self
@@ -404,6 +428,10 @@ impl RebaseManager {
                 return Err(e);
             }
 
+            // Persist sync state now that the temp branch exists and we're on it
+            sync_state.temp_branches = temp_branches.clone();
+            sync_state.save(&repo_root)?;
+
             // Cherry-pick the commit onto the temp branch (NOT the protected base!)
             match self.cherry_pick_commit(&entry.commit_hash) {
                 Ok(new_commit_hash) => {
@@ -416,6 +444,19 @@ impl RebaseManager {
                     // This is LOCAL ONLY - moves refs/heads/<branch> to the commit on temp branch
                     self.git_repo
                         .update_branch_to_commit(original_branch, &rebased_commit_id)?;
+
+                    result
+                        .branch_mapping
+                        .insert(original_branch.clone(), original_branch.clone());
+
+                    // Update stack entry with new commit hash
+                    self.update_stack_entry(
+                        stack.id,
+                        &entry.id,
+                        original_branch,
+                        &rebased_commit_id,
+                    )?;
+                    branches_with_new_commits.insert(original_branch.clone());
 
                     // Print tree item immediately and track for push phase
                     if let Some(pr_num) = &entry.pull_request_id {
@@ -432,22 +473,43 @@ impl RebaseManager {
                         ));
                     }
 
-                    result
-                        .branch_mapping
-                        .insert(original_branch.clone(), original_branch.clone());
-
-                    // Update stack entry with new commit hash
-                    self.update_stack_entry(
-                        stack.id,
-                        &entry.id,
-                        original_branch,
-                        &rebased_commit_id,
-                    )?;
-
                     // This branch becomes the base for the next entry
                     current_base = original_branch.clone();
+
+                    let _ = SyncState::delete(&repo_root);
                 }
                 Err(e) => {
+                    // Detect no-op cherry-picks (commit already applied)
+                    if self.git_repo.get_conflicted_files()?.is_empty() {
+                        debug!(
+                            "Cherry-pick produced no changes for {} ({}), skipping entry",
+                            original_branch,
+                            &entry.commit_hash[..8]
+                        );
+
+                        Output::warning(format!(
+                            "Skipping entry '{}' - cherry-pick resulted in no changes",
+                            original_branch
+                        ));
+                        Output::sub_item("This usually means the base branch has moved forward");
+                        Output::sub_item("and this entry's changes are already present");
+
+                        // Abort the empty cherry-pick to clean state
+                        let _ = std::process::Command::new("git")
+                            .args(["cherry-pick", "--abort"])
+                            .current_dir(self.git_repo.path())
+                            .output();
+
+                        // Clean up temp branch and return to base for next entry
+                        let _ = self.git_repo.checkout_branch_unsafe(&target_base);
+                        let _ = self.git_repo.delete_branch_unsafe(&temp_branch);
+                        let _ = temp_branches.pop();
+                        let _ = SyncState::delete(&repo_root);
+
+                        // Continue with next entry without marking failure
+                        continue;
+                    }
+
                     result.conflicts.push(entry.commit_hash.clone());
 
                     if !self.options.auto_resolve {
@@ -532,6 +594,12 @@ impl RebaseManager {
                                     .current_dir(self.git_repo.path())
                                     .output();
 
+                                let _ = self.git_repo.checkout_branch_unsafe(&target_base);
+                                let _ = self.git_repo.delete_branch_unsafe(&temp_branch);
+                                let _ = temp_branches.pop();
+
+                                let _ = SyncState::delete(&repo_root);
+
                                 // Continue to next entry instead of failing
                                 continue;
                             }
@@ -566,6 +634,8 @@ impl RebaseManager {
                                         original_branch,
                                         &rebased_commit_id,
                                     )?;
+
+                                    branches_with_new_commits.insert(original_branch.clone());
 
                                     // Print tree item immediately and track for push phase
                                     if let Some(pr_num) = &entry.pull_request_id {
@@ -637,9 +707,10 @@ impl RebaseManager {
             }
         }
 
-        // Cleanup temp branches before returning to original branch
-        // Must checkout away from temp branches first
-        if !temp_branches.is_empty() {
+        // Cleanup temp branches before returning to original branch.
+        // Only do this when the rebase succeeded; on conflicts we leave the temp
+        // branch intact so the user can resolve the issue.
+        if result.success && !temp_branches.is_empty() {
             // Force checkout to base branch to allow temp branch deletion
             // Use unsafe checkout to bypass safety checks since we know this is cleanup
             if let Err(e) = self.git_repo.checkout_branch_unsafe(&target_base) {
@@ -741,141 +812,143 @@ impl RebaseManager {
             };
         } // End of successful rebase block
 
-        // Update working branch to point to the top of the rebased stack
-        // This ensures subsequent `ca push` doesn't re-add old commits
-        // CRITICAL: Use the authoritative working_branch from stack metadata, not current Git state!
-        // This prevents corruption when user runs `ca sync` while checked out to a stack entry branch
-        if let Some(ref working_branch_name) = stack.working_branch {
-            // CRITICAL: Never update the base branch! Only update working branches
-            if working_branch_name != &target_base {
-                if let Some(last_entry) = stack.entries.last() {
-                    let top_branch = &last_entry.branch;
+        if result.success {
+            // Update working branch to point to the top of the rebased stack
+            // This ensures subsequent `ca push` doesn't re-add old commits
+            // CRITICAL: Use the authoritative working_branch from stack metadata, not current Git state!
+            // This prevents corruption when user runs `ca sync` while checked out to a stack entry branch
+            if let Some(ref working_branch_name) = stack.working_branch {
+                // CRITICAL: Never update the base branch! Only update working branches
+                if working_branch_name != &target_base {
+                    if let Some(last_entry) = stack.entries.last() {
+                        let top_branch = &last_entry.branch;
 
-                    // SAFETY CHECK: Detect if working branch has commits beyond the last stack entry
-                    // If it does, we need to preserve them - don't force-update the working branch
-                    if let (Ok(working_head), Ok(top_commit)) = (
-                        self.git_repo.get_branch_head(working_branch_name),
-                        self.git_repo.get_branch_head(top_branch),
-                    ) {
-                        // Check if working branch is ahead of top stack entry
-                        if working_head != top_commit {
-                            // Get commits between top of stack and working branch head
-                            if let Ok(commits) = self
-                                .git_repo
-                                .get_commits_between(&top_commit, &working_head)
-                            {
-                                if !commits.is_empty() {
-                                    // Check if these commits match the stack entry messages
-                                    // If so, they're likely old pre-rebase versions, not new work
-                                    let stack_messages: Vec<String> = stack
-                                        .entries
-                                        .iter()
-                                        .map(|e| e.message.trim().to_string())
-                                        .collect();
+                        // SAFETY CHECK: Detect if working branch has commits beyond the last stack entry
+                        // If it does, we need to preserve them - don't force-update the working branch
+                        if let (Ok(working_head), Ok(top_commit)) = (
+                            self.git_repo.get_branch_head(working_branch_name),
+                            self.git_repo.get_branch_head(top_branch),
+                        ) {
+                            // Check if working branch is ahead of top stack entry
+                            if working_head != top_commit {
+                                // Get commits between top of stack and working branch head
+                                if let Ok(commits) = self
+                                    .git_repo
+                                    .get_commits_between(&top_commit, &working_head)
+                                {
+                                    if !commits.is_empty() {
+                                        // Check if these commits match the stack entry messages
+                                        // If so, they're likely old pre-rebase versions, not new work
+                                        let stack_messages: Vec<String> = stack
+                                            .entries
+                                            .iter()
+                                            .map(|e| e.message.trim().to_string())
+                                            .collect();
 
-                                    let all_match_stack = commits.iter().all(|commit| {
-                                        if let Some(msg) = commit.summary() {
-                                            stack_messages
-                                                .iter()
-                                                .any(|stack_msg| stack_msg == msg.trim())
-                                        } else {
-                                            false
-                                        }
-                                    });
+                                        let all_match_stack = commits.iter().all(|commit| {
+                                            if let Some(msg) = commit.summary() {
+                                                stack_messages
+                                                    .iter()
+                                                    .any(|stack_msg| stack_msg == msg.trim())
+                                            } else {
+                                                false
+                                            }
+                                        });
 
-                                    if all_match_stack {
-                                        // These are the old pre-rebase versions of stack entries
-                                        // Safe to update working branch to new rebased top
-                                        // Note: commits.len() may be less than stack.entries.len() if only
-                                        // some entries were rebased (e.g., after amending one entry)
-                                        debug!(
+                                        if all_match_stack {
+                                            // These are the old pre-rebase versions of stack entries
+                                            // Safe to update working branch to new rebased top
+                                            // Note: commits.len() may be less than stack.entries.len() if only
+                                            // some entries were rebased (e.g., after amending one entry)
+                                            debug!(
                                             "Working branch has old pre-rebase commits (matching stack messages) - safe to update"
                                         );
-                                    } else {
-                                        // These are truly new commits not in the stack!
-                                        Output::error(format!(
+                                        } else {
+                                            // These are truly new commits not in the stack!
+                                            Output::error(format!(
                                             "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
                                             working_branch_name,
                                             commits.len()
                                         ));
-                                        println!();
-                                        Output::sub_item(
-                                            "These commits would be lost if we proceed:",
-                                        );
-                                        for (i, commit) in commits.iter().take(5).enumerate() {
-                                            let message =
-                                                commit.summary().unwrap_or("(no message)");
-                                            Output::sub_item(format!(
-                                                "  {}. {} - {}",
-                                                i + 1,
-                                                &commit.id().to_string()[..8],
-                                                message
-                                            ));
-                                        }
-                                        if commits.len() > 5 {
-                                            Output::sub_item(format!(
-                                                "  ... and {} more",
-                                                commits.len() - 5
-                                            ));
-                                        }
-                                        println!();
-                                        Output::tip("Add these commits to the stack first:");
-                                        Output::bullet("Run: ca stack push");
-                                        Output::bullet("Then run: ca sync");
-                                        println!();
+                                            println!();
+                                            Output::sub_item(
+                                                "These commits would be lost if we proceed:",
+                                            );
+                                            for (i, commit) in commits.iter().take(5).enumerate() {
+                                                let message =
+                                                    commit.summary().unwrap_or("(no message)");
+                                                Output::sub_item(format!(
+                                                    "  {}. {} - {}",
+                                                    i + 1,
+                                                    &commit.id().to_string()[..8],
+                                                    message
+                                                ));
+                                            }
+                                            if commits.len() > 5 {
+                                                Output::sub_item(format!(
+                                                    "  ... and {} more",
+                                                    commits.len() - 5
+                                                ));
+                                            }
+                                            println!();
+                                            Output::tip("Add these commits to the stack first:");
+                                            Output::bullet("Run: ca stack push");
+                                            Output::bullet("Then run: ca sync");
+                                            println!();
 
-                                        // Restore original branch before returning error
-                                        if let Some(ref orig) = original_branch_for_cleanup {
-                                            let _ = self.git_repo.checkout_branch_unsafe(orig);
-                                        }
+                                            // Restore original branch before returning error
+                                            if let Some(ref orig) = original_branch_for_cleanup {
+                                                let _ = self.git_repo.checkout_branch_unsafe(orig);
+                                            }
 
-                                        return Err(CascadeError::validation(
+                                            return Err(CascadeError::validation(
                                             format!(
                                                 "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
                                                 working_branch_name, commits.len()
                                             )
                                         ));
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        // Safe to update - working branch matches top of stack or is behind
-                        debug!(
-                            "Updating working branch '{}' to match top of stack ({})",
-                            working_branch_name,
-                            &top_commit[..8]
-                        );
+                            // Safe to update - working branch matches top of stack or is behind
+                            debug!(
+                                "Updating working branch '{}' to match top of stack ({})",
+                                working_branch_name,
+                                &top_commit[..8]
+                            );
 
-                        if let Err(e) = self
-                            .git_repo
-                            .update_branch_to_commit(working_branch_name, &top_commit)
-                        {
-                            Output::warning(format!(
-                                "Could not update working branch '{}' to top of stack: {}",
-                                working_branch_name, e
-                            ));
+                            if let Err(e) = self
+                                .git_repo
+                                .update_branch_to_commit(working_branch_name, &top_commit)
+                            {
+                                Output::warning(format!(
+                                    "Could not update working branch '{}' to top of stack: {}",
+                                    working_branch_name, e
+                                ));
+                            }
                         }
                     }
+                } else {
+                    // Working branch is the base branch - this is unusual
+                    debug!(
+                        "Skipping working branch update - working branch '{}' is the base branch",
+                        working_branch_name
+                    );
                 }
-            } else {
-                // Working branch is the base branch - this is unusual
-                debug!(
-                    "Skipping working branch update - working branch '{}' is the base branch",
-                    working_branch_name
-                );
             }
-        }
 
-        // Return user to their original Git branch (regardless of working branch updates)
-        // This ensures user experience is preserved even when they ran `ca sync` from a stack entry branch
-        if let Some(ref orig_branch) = original_branch {
-            if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
-                debug!(
-                    "Could not return to original branch '{}': {}",
-                    orig_branch, e
-                );
-                // Non-critical: User is left on base branch instead
+            // Return user to their original Git branch (regardless of working branch updates)
+            // This ensures user experience is preserved even when they ran `ca sync` from a stack entry branch
+            if let Some(ref orig_branch) = original_branch {
+                if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
+                    debug!(
+                        "Could not return to original branch '{}': {}",
+                        orig_branch, e
+                    );
+                    // Non-critical: User is left on base branch instead
+                }
             }
         }
         // Note: Summary is now built inside the successful rebase block above (around line 745)
@@ -900,17 +973,6 @@ impl RebaseManager {
         // CRITICAL: Return error if rebase failed
         // Don't return Ok(result) with result.success = false - that's confusing!
         if !result.success {
-            // Before returning error, try to restore original branch
-            if let Some(ref orig_branch) = original_branch {
-                if let Err(e) = self.git_repo.checkout_branch_unsafe(orig_branch) {
-                    debug!(
-                        "Could not return to original branch '{}' after error: {}",
-                        orig_branch, e
-                    );
-                }
-            }
-
-            // Include the detailed error message (which contains conflict info)
             let detailed_error = result.error.as_deref().unwrap_or("Rebase failed");
             return Err(CascadeError::Branch(detailed_error.to_string()));
         }

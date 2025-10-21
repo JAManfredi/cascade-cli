@@ -8,6 +8,22 @@ use commands::entry::EntryAction;
 use commands::stack::StackAction;
 use commands::{MergeStrategyArg, RebaseStrategyArg};
 
+#[derive(Debug, Subcommand)]
+pub enum SyncAction {
+    /// Continue after resolving conflicts
+    Continue,
+    /// Abort in-progress sync
+    Abort,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RebaseAction {
+    /// Continue after resolving conflicts
+    Continue,
+    /// Abort in-progress rebase
+    Abort,
+}
+
 #[derive(Parser)]
 #[command(name = "ca")]
 #[command(about = "Cascade CLI - Stacked Diffs for Bitbucket")]
@@ -203,32 +219,35 @@ pub enum Commands {
         build_timeout: u64,
     },
 
-    /// Sync stack with remote repository (shortcut for 'stack sync')
+    /// Sync operations (shortcut for 'stack sync')
     Sync {
+        #[command(subcommand)]
+        action: Option<SyncAction>,
+
         /// Force sync even if there are conflicts
-        #[arg(long)]
+        #[arg(long, global = true)]
         force: bool,
         /// Also cleanup merged branches after sync
-        #[arg(long)]
+        #[arg(long, global = true)]
         cleanup: bool,
         /// Interactive mode for conflict resolution
-        #[arg(long, short)]
+        #[arg(long, short, global = true)]
         interactive: bool,
-        /// Continue from in-progress cherry-pick after resolving conflicts
-        #[arg(long)]
-        r#continue: bool,
     },
 
-    /// Rebase stack on updated base branch (shortcut for 'stack rebase')
+    /// Rebase operations (shortcut for 'stack rebase')
     Rebase {
+        #[command(subcommand)]
+        action: Option<RebaseAction>,
+
         /// Interactive rebase
-        #[arg(long, short)]
+        #[arg(long, short, global = true)]
         interactive: bool,
         /// Target base branch (defaults to stack's base branch)
-        #[arg(long)]
+        #[arg(long, global = true)]
         onto: Option<String>,
         /// Rebase strategy to use
-        #[arg(long, value_enum)]
+        #[arg(long, value_enum, global = true)]
         strategy: Option<RebaseStrategyArg>,
     },
 
@@ -619,17 +638,26 @@ impl Cli {
             }
 
             Commands::Sync {
+                action,
                 force,
                 cleanup,
                 interactive,
-                r#continue,
-            } => commands::stack::sync(force, cleanup, interactive, r#continue).await,
+            } => match action {
+                Some(SyncAction::Continue) => commands::stack::continue_sync().await,
+                Some(SyncAction::Abort) => commands::stack::abort_sync().await,
+                None => commands::stack::sync(force, cleanup, interactive).await,
+            },
 
             Commands::Rebase {
+                action,
                 interactive,
                 onto,
                 strategy,
-            } => commands::stack::rebase(interactive, onto, strategy).await,
+            } => match action {
+                Some(RebaseAction::Continue) => commands::stack::continue_rebase().await,
+                Some(RebaseAction::Abort) => commands::stack::abort_rebase().await,
+                None => commands::stack::rebase(interactive, onto, strategy).await,
+            },
 
             Commands::Switch { name } => commands::stack::switch(name).await,
 

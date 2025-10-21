@@ -603,6 +603,7 @@ ca sync [OPTIONS]
 # Options:
 --force                 # Force sync even with conflicts
 --interactive           # Interactive mode for conflict resolution
+--cleanup               # Also cleanup merged branches after sync
 ```
 
 **Examples:**
@@ -615,6 +616,81 @@ ca sync --force
 
 # Interactive mode for manual conflict resolution
 ca sync --interactive
+
+# Sync and cleanup merged branches
+ca sync --cleanup
+```
+
+**Conflict Resolution:**
+If `ca sync` encounters conflicts it cannot auto-resolve:
+```bash
+# After ca sync reports conflicts:
+# 1. Resolve conflicts manually
+git add <resolved-files>
+
+# 2. Continue the sync
+ca sync continue
+
+# OR abort the sync
+ca sync abort
+```
+
+#### **`ca sync continue`** - Continue After Resolving Conflicts
+Continue an in-progress sync after manually resolving conflicts.
+
+```bash
+ca sync continue
+```
+
+**When to use:**
+- After `ca sync` hits conflicts during rebase
+- After you've resolved conflicts and staged changes with `git add`
+
+**What it does:**
+1. Completes the current cherry-pick
+2. Updates stack metadata
+3. Re-enters the sync loop to process remaining entries
+4. Cleans up temporary branches
+5. Returns you to your original branch
+
+**Example:**
+```bash
+ca sync                    # Hits conflict on entry #2
+
+# Resolve conflicts...
+vim conflict.txt
+git add conflict.txt
+
+ca sync continue          # Continues with entries #3, #4, #5...
+```
+
+#### **`ca sync abort`** - Abort In-Progress Sync
+Abort an in-progress sync and clean up temporary state.
+
+```bash
+ca sync abort
+```
+
+**When to use:**
+- After `ca sync` hits conflicts you can't resolve
+- When you want to start over with a fresh sync
+- To recover from a stuck sync state
+
+**What it does:**
+1. Aborts the current cherry-pick
+2. Cleans up all temporary branches
+3. Returns you to your original branch
+4. Deletes sync state file
+
+**Example:**
+```bash
+ca sync                    # Hits complex conflicts
+
+# Decide to abort and try a different approach
+ca sync abort
+
+# Now you're back to clean state
+ca sync --interactive      # Try with interactive mode
 ```
 
 #### **`ca rebase`** - Rebase Stack
@@ -625,8 +701,8 @@ ca rebase [OPTIONS]
 
 # Options:
 --interactive          # Interactive rebase mode for manual conflict resolution
---continue            # Continue after resolving conflicts
---abort               # Abort rebase operation
+--onto <branch>        # Rebase onto specific branch (defaults to stack's base)
+--strategy <strategy>  # Rebase strategy: force-push (default) or interactive
 ```
 
 **Smart Force Push Behavior:**
@@ -642,16 +718,31 @@ This approach follows industry standards (Graphite, Phabricator, spr, GitHub CLI
 **Examples:**
 ```bash
 # Standard rebase with PR history preservation
-ca stacks rebase
+ca rebase
 
 # Interactive rebase
+ca rebase --interactive
+
+# Rebase onto specific branch
+ca rebase --onto develop
+
+# Using stacks subcommand (equivalent)
+ca stacks rebase
 ca stacks rebase --interactive
+```
 
-# Continue after conflict resolution
-ca stacks rebase --continue
+**Conflict Resolution:**
+If rebase encounters conflicts:
+```bash
+# After ca rebase reports conflicts:
+# 1. Resolve conflicts manually
+git add <resolved-files>
 
-# Abort rebase
-ca stacks rebase --abort
+# 2. Continue the rebase
+ca rebase continue
+
+# OR abort the rebase
+ca rebase abort
 ```
 
 **What you'll see:**

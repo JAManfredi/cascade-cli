@@ -376,11 +376,15 @@ git pull origin main
 # Sync your stack with new base
 ca sync
 
-# Resolve any conflicts
+# If conflicts occur, resolve them
 # Git will guide you through conflict resolution
+git add <resolved-files>
 
-# Continue after resolving conflicts
-ca rebase --continue
+# Continue the sync
+ca sync continue
+
+# Or abort if needed
+ca sync abort
 
 # Update affected PRs
 ca submit 2 --title "Add user database schema (updated for new DB version)"
