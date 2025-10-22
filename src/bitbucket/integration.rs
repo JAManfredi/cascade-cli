@@ -694,8 +694,8 @@ impl BitbucketIntegration {
         match git_repo.get_remote_branch_head(original_branch) {
             Ok(remote_head) => {
                 if remote_head != new_head && !git_repo.is_descendant_of(&new_head, &remote_head)? {
-                    tracing::warn!(
-                        "Local branch '{}' no longer contains remote commit {} -> {} (expected during rebase). Force-push safeguards will create a backup before updating the remote.",
+                    tracing::debug!(
+                        "Stack sync: '{}' rewrote remote history ({} -> {}). This is expected after rebase.",
                         new_branch,
                         &remote_head[..8],
                         &new_head[..8]

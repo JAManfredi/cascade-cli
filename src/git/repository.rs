@@ -2209,46 +2209,10 @@ impl GitRepository {
                     Output::warning("FORCE PUSH WARNING");
                     println!("Force push to '{target_branch}' would overwrite {commits_to_lose} commits on remote:");
 
-                    // Show the commits that would be lost
-                    match self
-                        .get_commits_between(&merge_base_oid.to_string(), &remote.id().to_string())
-                    {
-                        Ok(commits) => {
-                            println!();
-                            println!("Commits that would be lost:");
-                            for (i, commit) in commits.iter().take(5).enumerate() {
-                                let short_hash = &commit.id().to_string()[..8];
-                                let summary = commit.summary().unwrap_or("<no message>");
-                                println!("  {}. {} - {}", i + 1, short_hash, summary);
-                            }
-                            if commits.len() > 5 {
-                                println!("  ... and {} more commits", commits.len() - 5);
-                            }
-                        }
-                        Err(_) => {
-                            println!("  (Unable to retrieve commit details)");
-                        }
-                    }
-
-                    println!();
-                    Output::info(format!(
-                        "A backup branch '{backup_branch_name}' will be created before proceeding."
-                    ));
-
-                    let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Do you want to proceed with the force push?")
-                        .default(false)
-                        .interact()
-                        .map_err(|e| {
-                            CascadeError::config(format!("Failed to get user confirmation: {e}"))
-                        })?;
-
-                    if !confirmed {
-                        return Err(CascadeError::config(
-                            "Force push cancelled by user. Use --force to bypass this check."
-                                .to_string(),
-                        ));
-                    }
+                    info!(
+                        "Remote '{}' has {} commit(s) not present locally. Creating backup branch '{}' before force push.",
+                        target_branch, commits_to_lose, backup_branch_name
+                    );
 
                     return Ok(Some(ForceBackupInfo {
                         backup_branch_name,
