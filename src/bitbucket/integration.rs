@@ -694,18 +694,20 @@ impl BitbucketIntegration {
         match git_repo.get_remote_branch_head(original_branch) {
             Ok(remote_head) => {
                 if remote_head != new_head && !git_repo.is_descendant_of(&new_head, &remote_head)? {
-                    return Err(CascadeError::validation(format!(
-                        "Local branch '{new_branch}' (commit {}) does not contain remote commit {}. Aborting force push.",
+                    tracing::warn!(
+                        "Local branch '{}' no longer contains remote commit {} -> {} (expected during rebase). Force-push safeguards will create a backup before updating the remote.",
+                        new_branch,
+                        &remote_head[..8],
+                        &new_head[..8]
+                    );
+                } else {
+                    tracing::debug!(
+                        "Validated ancestry for '{}': {} descends from {}",
+                        new_branch,
                         &new_head[..8],
                         &remote_head[..8]
-                    )));
+                    );
                 }
-                tracing::debug!(
-                    "Validated ancestry for '{}': {} descends from {}",
-                    new_branch,
-                    &new_head[..8],
-                    &remote_head[..8]
-                );
             }
             Err(_) => {
                 tracing::debug!(
