@@ -2344,6 +2344,9 @@ pub async fn continue_sync() -> Result<()> {
     if let Ok(working_head) = git_repo.get_branch_head(&working_branch) {
         if working_head != top_commit {
             git_repo.update_branch_to_commit(&working_branch, &top_commit)?;
+
+            // Reset the working tree to the updated commit so the branch is clean
+            git_repo.reset_to_head()?;
         }
     }
 
