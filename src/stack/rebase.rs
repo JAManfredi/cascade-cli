@@ -532,10 +532,10 @@ impl RebaseManager {
                             → Run: git add <resolved-files>\n\
                             → Or: git add -A (to stage all resolved files)\n\n\
                             Step 4: Complete the sync\n\
-                            → Run: ca sync\n\
-                            → Cascade will detect resolved conflicts and continue\n\n\
+                            → Run: ca sync continue\n\
+                            → Cascade will complete the cherry-pick and continue\n\n\
                             Alternative: Abort and start over\n\
-                            → Run: git cherry-pick --abort\n\
+                            → Run: ca sync abort\n\
                             → Then: ca sync (starts fresh)\n\n\
                             TIP: Enable auto-resolution for simple conflicts:\n\
                             → Run: ca sync --auto-resolve\n\
@@ -554,9 +554,10 @@ impl RebaseManager {
                                     "Conflicts in commit {}\n\n\
                                     To resolve:\n\
                                     1. Fix conflicts in your editor\n\
-                                    2. Run: ca sync --continue\n\n\
+                                    2. Stage resolved files: git add <files>\n\
+                                    3. Continue: ca sync continue\n\n\
                                     Or abort:\n\
-                                    → Run: git cherry-pick --abort",
+                                    → Run: ca sync abort",
                                     &entry.commit_hash[..8]
                                 ));
                                 break;
@@ -1734,10 +1735,10 @@ impl RebaseManager {
                     → Run: git add <resolved-files>\n\
                     → Or: git add -A (to stage all resolved files)\n\n\
                     Step 4: Complete the sync\n\
-                    → Run: ca sync\n\
-                    → Cascade will continue from where it left off\n\n\
+                    → Run: ca sync continue\n\
+                    → Cascade will complete the cherry-pick and continue\n\n\
                     Alternative: Abort and start over\n\
-                    → Run: git cherry-pick --abort\n\
+                    → Run: ca sync abort\n\
                     → Then: ca sync (starts fresh)",
                     conflicted_files.len(),
                     conflicted_files
@@ -1805,7 +1806,7 @@ impl RebaseManager {
                         3. Run 'git status' to check repo state\n\
                         4. Retry 'ca sync' after fixing the issue\n\n\
                         Or abort and start fresh:\n\
-                        → Run: git cherry-pick --abort\n\
+                        → Run: ca sync abort\n\
                         → Then: ca sync",
                         e
                     )),

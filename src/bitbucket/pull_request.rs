@@ -279,19 +279,51 @@ impl PullRequestManager {
 
         match self.client.get::<BuildStatusResponse>(&path).await {
             Ok(response) => {
-                if let Some(build) = response.values.first() {
-                    Ok(BuildStatus {
-                        state: build.state.clone(),
-                        url: build.url.clone(),
-                        description: build.description.clone(),
-                        context: build.name.clone(),
-                    })
-                } else {
+                if response.values.is_empty() {
                     Ok(BuildStatus {
                         state: BuildState::Unknown,
                         url: None,
                         description: Some("No builds found".to_string()),
                         context: None,
+                    })
+                } else {
+                    let mut aggregated_state = BuildState::Unknown;
+
+                    for build in &response.values {
+                        match build.state {
+                            BuildState::Failed => {
+                                aggregated_state = BuildState::Failed;
+                                break;
+                            }
+                            BuildState::InProgress => {
+                                if !matches!(aggregated_state, BuildState::Failed) {
+                                    aggregated_state = BuildState::InProgress;
+                                }
+                            }
+                            BuildState::Successful => {
+                                if matches!(
+                                    aggregated_state,
+                                    BuildState::Unknown | BuildState::Cancelled
+                                ) {
+                                    aggregated_state = BuildState::Successful;
+                                }
+                            }
+                            BuildState::Cancelled => {
+                                if matches!(aggregated_state, BuildState::Unknown) {
+                                    aggregated_state = BuildState::Cancelled;
+                                }
+                            }
+                            BuildState::Unknown => {}
+                        }
+                    }
+
+                    let representative = response.values.first().unwrap();
+
+                    Ok(BuildStatus {
+                        state: aggregated_state,
+                        url: representative.url.clone(),
+                        description: representative.description.clone(),
+                        context: representative.name.clone(),
                     })
                 }
             }
@@ -717,34 +749,57 @@ impl PullRequestStatus {
 
         // Build status
         if let Some(build) = &self.build_status {
-            match build.state {
-                BuildState::Successful => status_parts.push("✅ Builds"),
-                BuildState::Failed => status_parts.push("❌ Builds"),
-                BuildState::InProgress => status_parts.push("🔄 Building"),
-                _ => status_parts.push("⚪ Builds"),
-            }
+            let build_text = match build.state {
+                BuildState::Successful => "Builds: Passing",
+                BuildState::Failed => "Builds: Failing",
+                BuildState::InProgress => "Builds: Running",
+                BuildState::Cancelled => "Builds: Cancelled",
+                BuildState::Unknown => "Builds: Unknown",
+            };
+            status_parts.push(build_text.to_string());
+        } else {
+            status_parts.push("Builds: Unknown".to_string());
         }
 
         // Review status
-        if self.review_status.can_merge {
-            status_parts.push("✅ Reviews");
+        let review_text = if self.review_status.can_merge {
+            "Reviews: Approved".to_string()
         } else if self.review_status.needs_work_count > 0 {
-            status_parts.push("❌ Reviews");
+            "Reviews: Changes Requested".to_string()
+        } else if self.review_status.current_approvals > 0
+            && self.review_status.required_approvals > 0
+        {
+            format!(
+                "Reviews: {}/{} approvals",
+                self.review_status.current_approvals, self.review_status.required_approvals
+            )
         } else {
-            status_parts.push("⏳ Reviews");
-        }
+            "Reviews: Pending".to_string()
+        };
+        status_parts.push(review_text);
 
-        // Merge conflicts
-        if let Some(mergeable) = self.mergeable {
-            if mergeable {
-                status_parts.push("✅ Mergeable");
+        // Merge readiness / conflicts
+        let merge_text = if let Some(details) = &self.mergeable_details {
+            if details.can_merge {
+                "Merge: Ready".to_string()
+            } else if !details.blocking_reasons.is_empty() {
+                format!("Merge: Blocked ({})", details.blocking_reasons[0])
+            } else if details.conflicted {
+                "Merge: Blocked (Conflicts)".to_string()
             } else {
-                status_parts.push("❌ Conflicts");
+                "Merge: Blocked".to_string()
             }
-        }
+        } else {
+            match self.mergeable {
+                Some(true) => "Merge: Ready".to_string(),
+                Some(false) => "Merge: Blocked".to_string(),
+                None => "Merge: Unknown".to_string(),
+            }
+        };
+        status_parts.push(merge_text);
 
         if status_parts.is_empty() {
-            "🔄 Open".to_string()
+            "Open".to_string()
         } else {
             status_parts.join(" | ")
         }
@@ -774,55 +829,53 @@ impl PullRequestStatus {
             if !mergeable_details.can_merge {
                 // Add specific server-side blocking reasons
                 for reason in &mergeable_details.blocking_reasons {
-                    reasons.push(format!("🔒 Server Check: {reason}"));
+                    reasons.push(format!("Server Check: {reason}"));
                 }
 
                 // If no specific reasons but still not mergeable
                 if mergeable_details.blocking_reasons.is_empty() {
-                    reasons.push("🔒 Server Check: Merge blocked by repository policy".to_string());
+                    reasons.push("Server Check: Merge blocked by repository policy".to_string());
                 }
             }
         } else if self.mergeable == Some(false) {
             // Fallback if we don't have detailed info
-            reasons.push("🔒 Server Check: Merge blocked by repository policy".to_string());
+            reasons.push("Server Check: Merge blocked by repository policy".to_string());
         }
 
-        // ❌ PR State Check
+        // PR State Check
         if !self.pr.is_open() {
             reasons.push(format!(
-                "❌ PR Status: Pull request is {}",
+                "PR Status: Pull request is {}",
                 self.pr.state.as_str()
             ));
         }
 
-        // 🔄 Build Status Check
+        // Build Status Check
         if let Some(build_status) = &self.build_status {
             match build_status.state {
-                BuildState::Failed => reasons.push("❌ Build Status: Build failed".to_string()),
+                BuildState::Failed => reasons.push("Build Status: Build failed".to_string()),
                 BuildState::InProgress => {
-                    reasons.push("⏳ Build Status: Build in progress".to_string())
+                    reasons.push("Build Status: Build in progress".to_string())
                 }
-                BuildState::Cancelled => {
-                    reasons.push("❌ Build Status: Build cancelled".to_string())
-                }
+                BuildState::Cancelled => reasons.push("Build Status: Build cancelled".to_string()),
                 BuildState::Unknown => {
-                    reasons.push("❓ Build Status: Build status unknown".to_string())
+                    reasons.push("Build Status: Build status unknown".to_string())
                 }
                 BuildState::Successful => {} // No blocking reason
             }
         }
 
-        // 👥 Review Status Check (supplementary to server checks)
+        // Review Status Check (supplementary to server checks)
         if !self.review_status.can_merge {
             // Don't show approval count requirement since we don't know the real number
             // The server-side checks (above) already include approval requirements
             if self.review_status.current_approvals == 0 {
-                reasons.push("👥 Review Status: No approvals yet".to_string());
+                reasons.push("Review Status: No approvals yet".to_string());
             }
 
             if self.review_status.needs_work_count > 0 {
                 reasons.push(format!(
-                    "👥 Review Status: {} reviewer{} requested changes",
+                    "Review Status: {} reviewer{} requested changes",
                     self.review_status.needs_work_count,
                     if self.review_status.needs_work_count == 1 {
                         ""
@@ -834,7 +887,7 @@ impl PullRequestStatus {
 
             if !self.review_status.missing_reviewers.is_empty() {
                 reasons.push(format!(
-                    "👥 Review Status: Missing approval from: {}",
+                    "Review Status: Missing approval from: {}",
                     self.review_status.missing_reviewers.join(", ")
                 ));
             }

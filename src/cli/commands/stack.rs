@@ -1009,7 +1009,7 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
     // Enhanced PR status if requested and available
     if show_mergeable {
-        Output::section("Mergability Status");
+        Output::section("Mergeability Status");
 
         // Load configuration and create Bitbucket integration
         let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
