@@ -1120,9 +1120,9 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
                         // Show detailed status on separate lines for readability
                         if show_details {
-                            // Build status
-                            if let Some(build) = &enhanced.build_status {
-                                let build_display = match build.state {
+                            // Build status - infer from blocking reasons if not explicitly available
+                            let build_display = if let Some(build) = &enhanced.build_status {
+                                match build.state {
                                     crate::bitbucket::pull_request::BuildState::Successful => {
                                         style("Passing").green().to_string()
                                     }
@@ -1138,11 +1138,22 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                                     crate::bitbucket::pull_request::BuildState::Unknown => {
                                         style("Unknown").dim().to_string()
                                     }
-                                };
-                                println!("      Builds: {}", build_display);
+                                }
                             } else {
-                                println!("      Builds: {}", style("Unknown").dim());
-                            }
+                                // Infer build status from server blocking reasons
+                                let blocking = enhanced.get_blocking_reasons();
+                                if blocking.iter().any(|r| r.contains("required builds") || r.contains("Build Status")) {
+                                    // Server says builds are blocking
+                                    style("Pending").yellow().to_string()
+                                } else if blocking.is_empty() && enhanced.mergeable.unwrap_or(false) {
+                                    // No blockers and mergeable = builds must be passing
+                                    style("Passing").green().to_string()
+                                } else {
+                                    // Truly unknown
+                                    style("Unknown").dim().to_string()
+                                }
+                            };
+                            println!("      Builds: {}", build_display);
 
                             // Review status
                             let review_display = if enhanced.review_status.can_merge {
