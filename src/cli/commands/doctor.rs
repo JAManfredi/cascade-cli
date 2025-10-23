@@ -350,26 +350,37 @@ mod tests {
 
     #[tokio::test]
     async fn test_doctor_initialized() {
+        // Keep temp_dir alive for the entire test to prevent premature cleanup
         let (temp_dir, repo_path) = create_test_repo().await;
 
         // Initialize Cascade
         initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
 
-        let original_dir = env::current_dir().unwrap();
-        env::set_current_dir(&repo_path).unwrap();
+        // Save original directory for restoration
+        let original_dir = env::current_dir().expect("Failed to get current directory");
+        
+        // Change to repo directory - if this fails, the test environment is broken
+        env::set_current_dir(&repo_path)
+            .expect("Failed to change to test repository directory");
 
+        // Run doctor command
         let result = run().await;
 
-        // Restore directory before assertions (best effort)
-        let _ = env::set_current_dir(&original_dir);
-
-        // Assert while temp_dir is still alive
-        if let Err(e) = &result {
-            eprintln!("Doctor command failed: {e}");
+        // Best-effort directory restoration
+        // May fail on Linux/CI if temp directory cleanup is in progress
+        let restore_result = env::set_current_dir(&original_dir);
+        if restore_result.is_err() {
+            eprintln!("Warning: Could not restore original directory (temp dir may be cleaning up)");
         }
-        assert!(result.is_ok());
 
-        // temp_dir dropped here automatically
+        // Assert the result while temp_dir is still in scope
+        assert!(
+            result.is_ok(),
+            "Doctor command should succeed in initialized repo: {:?}",
+            result.err()
+        );
+
+        // Explicitly drop temp_dir at the end to ensure it stays alive
         drop(temp_dir);
     }
 }
