@@ -735,16 +735,23 @@ ca land  # Starts landing PRs
 # 1. Resolve conflicts
 git add <resolved-files>
 
-# 2. Complete the cherry-pick
+# 2. Complete conflict resolution and rebase remaining entries
 ca land continue
+# This automatically:
+#   - Completes the cherry-pick
+#   - Rebases remaining stack entries
+#   - Force-pushes updated branches
+#   - Updates PR targets
 
-# 3. Finish rebasing and push remaining entries
-ca sync
+# 2a. If ANOTHER conflict occurs during rebase (recursive conflicts):
+#     Repeat steps 1-2 until all conflicts are resolved
+git add <resolved-files>
+ca land continue  # Can be called multiple times
 
-# 4. ⚠️ IMPORTANT: Wait for builds to pass on rebased PR!
+# 3. ⚠️ IMPORTANT: Wait for builds to pass on rebased PRs!
 #    The conflict resolution changed the code, so builds must re-run.
 
-# 5. Once builds pass, resume landing
+# 4. Once builds pass, resume landing
 ca land  # Continues landing remaining PRs
 ```
 

@@ -4010,36 +4010,156 @@ async fn auto_land_stack(
 }
 
 async fn continue_land() -> Result<()> {
+    use crate::cli::output::Output;
+
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let stack_manager = StackManager::new(&repo_root)?;
+    // Check if there's a rebase in progress
     let git_repo = crate::git::GitRepository::open(&repo_root)?;
-    let options = crate::stack::RebaseOptions::default();
-    let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
+    let git_dir = repo_root.join(".git");
+    let has_cherry_pick = git_dir.join("CHERRY_PICK_HEAD").exists();
+    let has_rebase = git_dir.join("REBASE_HEAD").exists()
+        || git_dir.join("rebase-merge").exists()
+        || git_dir.join("rebase-apply").exists();
 
-    if !rebase_manager.is_rebase_in_progress() {
-        Output::info("  No rebase in progress");
+    if !has_cherry_pick && !has_rebase {
+        Output::info("No land operation in progress");
+        Output::tip("Use 'ca land' to start landing PRs");
         return Ok(());
     }
 
-    println!(" Continuing land operation...");
+    Output::section("Continuing land operation");
+    println!();
+
+    // Step 1: Complete the cherry-pick/rebase
+    Output::info("Completing conflict resolution...");
+    let stack_manager = StackManager::new(&repo_root)?;
+    let options = crate::stack::RebaseOptions::default();
+    let rebase_manager = crate::stack::RebaseManager::new(stack_manager, git_repo, options);
+
     match rebase_manager.continue_rebase() {
         Ok(_) => {
-            Output::success(" Land operation continued successfully");
-            println!("   Check 'ca stack land-status' for current state");
+            Output::success("Conflict resolution completed");
         }
         Err(e) => {
-            warn!("❌ Failed to continue land operation: {}", e);
-            Output::tip(" You may need to resolve conflicts first:");
-            println!("   1. Edit conflicted files");
-            println!("   2. Stage resolved files with 'git add'");
-            println!("   3. Run 'ca stack continue-land' again");
+            Output::error("Failed to complete conflict resolution");
+            Output::tip("You may need to resolve conflicts first:");
+            Output::bullet("Edit conflicted files");
+            Output::bullet("Stage resolved files: git add <files>");
+            Output::bullet("Run 'ca land continue' again");
+            return Err(e);
         }
     }
+
+    println!();
+
+    // Step 2: Get the active stack
+    let stack_manager = StackManager::new(&repo_root)?;
+    let active_stack = stack_manager.get_active_stack().ok_or_else(|| {
+        CascadeError::config("No active stack found. Cannot continue land operation.")
+    })?;
+    let stack_id = active_stack.id;
+    let base_branch = active_stack.base_branch.clone();
+
+    // Step 3: Rebase remaining stack entries (restack children)
+    Output::info("Rebasing remaining stack entries...");
+    println!();
+
+    let git_repo_for_rebase = crate::git::GitRepository::open(&repo_root)?;
+    let mut rebase_manager = crate::stack::RebaseManager::new(
+        StackManager::new(&repo_root)?,
+        git_repo_for_rebase,
+        crate::stack::RebaseOptions {
+            strategy: crate::stack::RebaseStrategy::ForcePush,
+            target_base: Some(base_branch.clone()),
+            ..Default::default()
+        },
+    );
+
+    let rebase_result = rebase_manager.rebase_stack(&stack_id)?;
+
+    if !rebase_result.success {
+        // Check if this is a conflict that needs resolution
+        if !rebase_result.conflicts.is_empty() {
+            println!();
+            Output::error("Additional conflicts detected during rebase");
+            println!();
+            Output::tip("To resolve and continue:");
+            Output::bullet("Resolve conflicts in your editor");
+            Output::bullet("Stage resolved files: git add <files>");
+            Output::bullet("Continue landing: ca land continue");
+            println!();
+            Output::tip("Or abort the land operation:");
+            Output::bullet("Abort landing: ca land abort");
+            
+            // Leave state intact for user to continue
+            return Ok(());
+        }
+        
+        // Non-conflict error - this is a real failure
+        Output::error("Failed to rebase remaining entries");
+        if let Some(error) = &rebase_result.error {
+            Output::sub_item(format!("Error: {}", error));
+        }
+        return Err(CascadeError::invalid_operation(
+            "Failed to rebase stack after conflict resolution",
+        ));
+    }
+
+    println!();
+    Output::success(format!(
+        "Rebased {} remaining entries",
+        rebase_result.branch_mapping.len()
+    ));
+
+    // Step 4: Update PRs if we have Bitbucket configured
+    let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
+    let config_path = config_dir.join("config.json");
+
+    if let Ok(settings) = crate::config::Settings::load_from_file(&config_path) {
+        if !rebase_result.branch_mapping.is_empty() {
+            println!();
+            Output::info("Updating pull requests...");
+
+            let cascade_config = crate::config::CascadeConfig {
+                bitbucket: Some(settings.bitbucket.clone()),
+                git: settings.git.clone(),
+                auth: crate::config::AuthConfig::default(),
+                cascade: settings.cascade.clone(),
+            };
+
+            let mut integration = crate::bitbucket::BitbucketIntegration::new(
+                StackManager::new(&repo_root)?,
+                cascade_config,
+            )?;
+
+            match integration
+                .update_prs_after_rebase(&stack_id, &rebase_result.branch_mapping)
+                .await
+            {
+                Ok(updated_prs) => {
+                    if !updated_prs.is_empty() {
+                        Output::success(format!("Updated {} pull requests", updated_prs.len()));
+                    }
+                }
+                Err(e) => {
+                    Output::warning(format!("Failed to update some PRs: {}", e));
+                    Output::tip("PRs may need manual updates in Bitbucket");
+                }
+            }
+        }
+    }
+
+    println!();
+    Output::success("Land operation continued successfully");
+    println!();
+    Output::tip("Next steps:");
+    Output::bullet("Wait for builds to pass on rebased PRs");
+    Output::bullet("Once builds are green, run: ca land");
 
     Ok(())
 }
