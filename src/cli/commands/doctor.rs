@@ -358,10 +358,9 @@ mod tests {
 
         // Save original directory for restoration
         let original_dir = env::current_dir().expect("Failed to get current directory");
-        
+
         // Change to repo directory - if this fails, the test environment is broken
-        env::set_current_dir(&repo_path)
-            .expect("Failed to change to test repository directory");
+        env::set_current_dir(&repo_path).expect("Failed to change to test repository directory");
 
         // Run doctor command
         let result = run().await;
@@ -370,7 +369,9 @@ mod tests {
         // May fail on Linux/CI if temp directory cleanup is in progress
         let restore_result = env::set_current_dir(&original_dir);
         if restore_result.is_err() {
-            eprintln!("Warning: Could not restore original directory (temp dir may be cleaning up)");
+            eprintln!(
+                "Warning: Could not restore original directory (temp dir may be cleaning up)"
+            );
         }
 
         // Assert the result while temp_dir is still in scope

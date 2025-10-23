@@ -968,13 +968,16 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
             // Create a separate stack_manager for the integration
             if let Ok(integration_stack_manager) = StackManager::new(&repo_root) {
-                let mut integration =
-                    crate::bitbucket::BitbucketIntegration::new(integration_stack_manager, cascade_config).ok();
-                
+                let mut integration = crate::bitbucket::BitbucketIntegration::new(
+                    integration_stack_manager,
+                    cascade_config,
+                )
+                .ok();
+
                 if let Some(ref mut integ) = integration {
                     // Silently refresh merge status (don't show errors to user)
                     let _ = integ.check_enhanced_stack_status(&stack_id).await;
-                    
+
                     // Reload stack to get updated is_merged flags
                     if let Ok(updated_manager) = StackManager::new(&repo_root) {
                         if let Some(updated_stack) = updated_manager.get_stack(&stack_id) {
@@ -1142,10 +1145,13 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                             } else {
                                 // Infer build status from server blocking reasons
                                 let blocking = enhanced.get_blocking_reasons();
-                                if blocking.iter().any(|r| r.contains("required builds") || r.contains("Build Status")) {
+                                if blocking.iter().any(|r| {
+                                    r.contains("required builds") || r.contains("Build Status")
+                                }) {
                                     // Server says builds are blocking
                                     style("Pending").yellow().to_string()
-                                } else if blocking.is_empty() && enhanced.mergeable.unwrap_or(false) {
+                                } else if blocking.is_empty() && enhanced.mergeable.unwrap_or(false)
+                                {
                                     // No blockers and mergeable = builds must be passing
                                     style("Passing").green().to_string()
                                 } else {
@@ -1184,9 +1190,13 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                                     let first_reason = &blocking[0];
                                     let simplified = if first_reason.contains("Code Owners") {
                                         "Waiting for Code Owners approval"
-                                    } else if first_reason.contains("required builds") || first_reason.contains("Build Status") {
+                                    } else if first_reason.contains("required builds")
+                                        || first_reason.contains("Build Status")
+                                    {
                                         "Waiting for required builds"
-                                    } else if first_reason.contains("approvals") || first_reason.contains("Requires approvals") {
+                                    } else if first_reason.contains("approvals")
+                                        || first_reason.contains("Requires approvals")
+                                    {
                                         "Waiting for approvals"
                                     } else if first_reason.contains("conflicts") {
                                         "Has merge conflicts"
@@ -1194,11 +1204,8 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                                         // Generic fallback
                                         "Blocked by repository policy"
                                     };
-                                    
-                                    println!(
-                                        "      Merge: {}",
-                                        style(simplified).red()
-                                    );
+
+                                    println!("      Merge: {}", style(simplified).red());
                                 }
                             } else if enhanced.is_ready_to_land() {
                                 println!("      Merge: {}", style("Ready").green());
@@ -2135,12 +2142,10 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
                 Output::section("Pull Requests");
                 for pr in &status.pull_requests {
                     use console::style;
-                    
+
                     // Color-coded state icons
                     let state_icon = match pr.state {
-                        crate::bitbucket::PullRequestState::Open => {
-                            style("→").cyan().to_string()
-                        }
+                        crate::bitbucket::PullRequestState::Open => style("→").cyan().to_string(),
                         crate::bitbucket::PullRequestState::Merged => {
                             style("✓").green().to_string()
                         }
@@ -2148,7 +2153,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
                             style("✗").red().to_string()
                         }
                     };
-                    
+
                     // Format: icon PR #123: title (from -> to)
                     // Dim the PR number and branch arrows for less visual noise
                     Output::bullet(format!(
@@ -2160,7 +2165,7 @@ async fn check_stack_status(name: Option<String>) -> Result<()> {
                         style("→").dim(),
                         style(&pr.to_ref.display_id).dim()
                     ));
-                    
+
                     // Make URL stand out with cyan/blue hyperlink color
                     if let Some(url) = pr.web_url() {
                         println!("      URL: {}", style(url).cyan().underlined());
