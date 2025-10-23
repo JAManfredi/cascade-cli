@@ -212,7 +212,20 @@ impl RebaseManager {
         // Print section header
         Output::section(format!("Rebasing stack: {}", stack.name));
         Output::sub_item(format!("Base branch: {}", stack.base_branch));
-        Output::sub_item(format!("Entries: {}", stack.entries.len()));
+        
+        // Show entry breakdown (total vs unmerged)
+        let total_entries = stack.entries.len();
+        let merged_count = stack.entries.iter().filter(|e| e.is_merged).count();
+        let unmerged_count = total_entries - merged_count;
+        
+        if merged_count > 0 {
+            Output::sub_item(format!(
+                "Entries: {} total ({} merged, {} to rebase)",
+                total_entries, merged_count, unmerged_count
+            ));
+        } else {
+            Output::sub_item(format!("Entries: {}", total_entries));
+        }
 
         let mut result = RebaseResult {
             success: true,
