@@ -676,6 +676,43 @@ ca stacks prs --verbose                      # Show detailed PR information
 ca stacks prs -v                             # Short form
 ```
 
+### **Landing (Merging) PRs**
+```bash
+# Land (merge) approved PRs
+ca land                                      # Land all ready PRs in dependency order
+ca land 2                                    # Land specific entry number
+ca land --dry-run                            # Preview what would be landed
+ca land -d                                   # Short form
+ca land --force                              # Force land even with blocking issues (dangerous)
+ca land -f                                   # Short form
+ca land --auto                               # Use server-side validation (safer)
+ca land --wait-for-builds                    # Wait for builds to complete first
+ca land --strategy squash                    # Merge strategy (squash/merge/fast-forward)
+ca land --build-timeout 3600                 # Max wait time for builds (seconds)
+
+# Auto-land with monitoring
+ca autoland                                  # Monitor and auto-merge when ready
+ca autoland --dry-run                        # Preview what would be auto-landed
+ca autoland --force                          # Force land even with blocking issues
+ca autoland --wait-for-builds                # Wait for builds to complete
+ca autoland --strategy merge                 # Use merge commits instead of squash
+ca autoland --build-timeout 3600             # Max wait time for builds
+
+# Land conflict resolution
+ca land continue                             # Continue after resolving conflicts
+ca land abort                                # Abort land operation
+ca land status                               # Show land status and guidance
+```
+
+**Land vs Autoland:**
+- **`ca land`**: One-time operation to merge ready PRs
+- **`ca autoland`**: Continuous monitoring + auto-merge when approved + builds pass
+
+**Merge Strategies:**
+- **`squash`** (default): Squash commits into single commit
+- **`merge`**: Create merge commit preserving history
+- **`fast-forward`**: Fast-forward merge (requires clean history)
+
 ### **Sync and Rebase Operations**
 ```bash
 # Sync with remote
@@ -693,8 +730,8 @@ ca rebase --strategy force-push              # Industry standard (default)
 ca rebase --strategy interactive             # Manual conflict resolution mode
 
 # Rebase conflict resolution
-ca rebase continue                    # Continue after resolving conflicts
-ca rebase abort                       # Abort rebase operation
+ca rebase continue                           # Continue after resolving conflicts
+ca rebase abort                              # Abort rebase operation
 ca stacks rebase-status                      # Show rebase status and guidance
 ```
 
