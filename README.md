@@ -735,13 +735,16 @@ ca land  # Starts landing PRs
 # 1. Resolve conflicts
 git add <resolved-files>
 
-# 2. Complete the rebase
+# 2. Complete the cherry-pick
 ca land continue
 
-# 3. ⚠️ IMPORTANT: Wait for builds to pass on rebased PR!
+# 3. Finish rebasing and push remaining entries
+ca sync
+
+# 4. ⚠️ IMPORTANT: Wait for builds to pass on rebased PR!
 #    The conflict resolution changed the code, so builds must re-run.
 
-# 4. Once builds pass, resume landing
+# 5. Once builds pass, resume landing
 ca land  # Continues landing remaining PRs
 ```
 
