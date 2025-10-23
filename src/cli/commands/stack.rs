@@ -980,8 +980,8 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
             String::new()
         };
 
-        // Use colored status: pending (yellow), submitted (muted green)
-        let status_colored = Output::entry_status(entry.is_submitted, false);
+        // Use colored status: pending (yellow), submitted (muted green), merged (bright green)
+        let status_colored = Output::entry_status(entry.is_submitted, entry.is_merged);
 
         Output::numbered_item(
             entry_num,
@@ -1044,11 +1044,19 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
                     for enhanced in &status.enhanced_statuses {
                         let status_display = enhanced.get_display_status();
-                        let ready_icon = if enhanced.is_ready_to_land() {
-                            ready_to_land += 1;
-                            "[READY]"
-                        } else {
-                            "[PENDING]"
+                        let ready_icon = match enhanced.pr.state {
+                            crate::bitbucket::pull_request::PullRequestState::Merged => "[MERGED]",
+                            crate::bitbucket::pull_request::PullRequestState::Declined => {
+                                "[DECLINED]"
+                            }
+                            crate::bitbucket::pull_request::PullRequestState::Open => {
+                                if enhanced.is_ready_to_land() {
+                                    ready_to_land += 1;
+                                    "[READY]"
+                                } else {
+                                    "[PENDING]"
+                                }
+                            }
                         };
 
                         Output::bullet(format!(
