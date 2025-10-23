@@ -340,18 +340,25 @@ impl GitRepository {
 
     /// Force-push a single branch to remote (simpler version for when branch is already updated locally)
     pub fn force_push_single_branch(&self, branch_name: &str) -> Result<()> {
-        self.force_push_single_branch_with_options(branch_name, false)
+        self.force_push_single_branch_with_options(branch_name, false, false)
     }
 
     /// Force push with option to skip user confirmation (for automated operations like sync)
     pub fn force_push_single_branch_auto(&self, branch_name: &str) -> Result<()> {
-        self.force_push_single_branch_with_options(branch_name, true)
+        self.force_push_single_branch_with_options(branch_name, true, false)
+    }
+
+    /// Force push a single branch without fetching first (assumes fetch already done)
+    /// Used in batch operations where we fetch once before pushing multiple branches
+    pub fn force_push_single_branch_auto_no_fetch(&self, branch_name: &str) -> Result<()> {
+        self.force_push_single_branch_with_options(branch_name, true, true)
     }
 
     fn force_push_single_branch_with_options(
         &self,
         branch_name: &str,
         auto_confirm: bool,
+        skip_fetch: bool,
     ) -> Result<()> {
         // Validate branch exists before attempting push
         // This provides a clearer error message than a failed git push
@@ -364,11 +371,14 @@ impl GitRepository {
 
         // CRITICAL: Fetch with retry to ensure we have latest remote state
         // Using stale refs could cause silent data loss on force push!
-        self.fetch_with_retry()?;
+        // Skip if caller already fetched (batch operations)
+        if !skip_fetch {
+            self.fetch_with_retry()?;
+        }
 
         // Check safety and create backup if needed
         let safety_result = if auto_confirm {
-            self.check_force_push_safety_auto(branch_name)?
+            self.check_force_push_safety_auto_no_fetch(branch_name)?
         } else {
             self.check_force_push_safety_enhanced(branch_name)?
         };
@@ -1622,7 +1632,7 @@ impl GitRepository {
 
     /// Fetch from remote with exponential backoff retry logic
     /// This is critical for force push safety checks to prevent data loss from stale refs
-    fn fetch_with_retry(&self) -> Result<()> {
+    pub fn fetch_with_retry(&self) -> Result<()> {
         const MAX_RETRIES: u32 = 3;
         const BASE_DELAY_MS: u64 = 500;
 
@@ -2228,11 +2238,13 @@ impl GitRepository {
 
     /// Check force push safety without user confirmation (auto-creates backup)
     /// Used for automated operations like sync where user already confirmed the operation
-    fn check_force_push_safety_auto(&self, target_branch: &str) -> Result<Option<ForceBackupInfo>> {
-        // CRITICAL: Fetch latest remote changes with retry logic
-        // Stale remote refs could cause silent data loss!
-        self.fetch_with_retry()?;
-
+    ///
+    /// When skip_fetch=false: Fetches latest remote state before checking (default behavior)
+    /// When skip_fetch=true: Assumes fetch already done (batch operations)
+    fn check_force_push_safety_auto_no_fetch(
+        &self,
+        target_branch: &str,
+    ) -> Result<Option<ForceBackupInfo>> {
         // Check if there are commits on the remote that would be lost
         let remote_ref = format!("refs/remotes/origin/{target_branch}");
         let local_ref = format!("refs/heads/{target_branch}");
@@ -2268,9 +2280,9 @@ impl GitRepository {
                     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
                     let backup_branch_name = format!("{target_branch}_backup_{timestamp}");
 
-                    debug!(
-                        "Auto-creating backup for force push to '{}' (would overwrite {} commits)",
-                        target_branch, commits_to_lose
+                    tracing::debug!(
+                        "Auto-creating backup '{}' for force push to '{}' (would overwrite {} commits)",
+                        backup_branch_name, target_branch, commits_to_lose
                     );
 
                     // Automatically create backup without confirmation

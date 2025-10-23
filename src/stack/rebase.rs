@@ -364,8 +364,7 @@ impl RebaseManager {
                     original_branch,
                     target_base
                 );
-                // Don't advance current_base - merged entries are already in target_base
-                // Next unmerged entry should rebase onto target_base, not the merged branch
+                // Don't advance current_base; next entry will rebase onto the base branch
                 continue;
             }
 
@@ -753,10 +752,18 @@ impl RebaseManager {
             if !branches_to_push.is_empty() {
                 println!();
 
-                // Push all branches
+                // Fetch once before pushing all branches (avoid redundant fetches per branch)
+                if let Err(e) = self.git_repo.fetch_with_retry() {
+                    Output::warning(format!("Could not fetch latest remote state: {}", e));
+                    Output::tip("Continuing with push, but backup branches may not be created if remote state is unknown");
+                }
+
+                // Push all branches (using no-fetch variant since we already fetched)
                 let mut push_results = Vec::new();
                 for (branch_name, _pr_num, _index) in branches_to_push.iter() {
-                    let result = self.git_repo.force_push_single_branch_auto(branch_name);
+                    let result = self
+                        .git_repo
+                        .force_push_single_branch_auto_no_fetch(branch_name);
                     push_results.push((branch_name.clone(), result));
                 }
 
