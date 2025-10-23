@@ -1310,7 +1310,9 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
                         // Color-coded state icons
                         let state_icon = match pr.state {
-                            crate::bitbucket::PullRequestState::Open => style("→").cyan().to_string(),
+                            crate::bitbucket::PullRequestState::Open => {
+                                style("→").cyan().to_string()
+                            }
                             crate::bitbucket::PullRequestState::Merged => {
                                 style("✓").green().to_string()
                             }
@@ -4095,11 +4097,11 @@ async fn continue_land() -> Result<()> {
             println!();
             Output::tip("Or abort the land operation:");
             Output::bullet("Abort landing: ca land abort");
-            
+
             // Leave state intact for user to continue
             return Ok(());
         }
-        
+
         // Non-conflict error - this is a real failure
         Output::error("Failed to rebase remaining entries");
         if let Some(error) = &rebase_result.error {
