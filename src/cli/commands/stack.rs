@@ -1043,37 +1043,95 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     let mut ready_to_land = 0;
 
                     for enhanced in &status.enhanced_statuses {
-                        let (ready_icon, show_details) = match enhanced.pr.state {
+                        // Determine status badge with color
+                        use console::style;
+                        let (ready_badge, show_details) = match enhanced.pr.state {
                             crate::bitbucket::pull_request::PullRequestState::Merged => {
-                                ("[MERGED]", false) // Don't show "(MERGED)" again
+                                // Bright green for merged
+                                (style("[MERGED]").green().bold().to_string(), false)
                             }
                             crate::bitbucket::pull_request::PullRequestState::Declined => {
-                                ("[DECLINED]", false) // Don't show "(DECLINED)" again
+                                // Red for declined
+                                (style("[DECLINED]").red().bold().to_string(), false)
                             }
                             crate::bitbucket::pull_request::PullRequestState::Open => {
                                 if enhanced.is_ready_to_land() {
                                     ready_to_land += 1;
-                                    ("[READY]", true) // Show build/review details
+                                    // Cyan for ready
+                                    (style("[READY]").cyan().bold().to_string(), true)
                                 } else {
-                                    ("[PENDING]", true) // Show build/review details
+                                    // Yellow for pending
+                                    (style("[PENDING]").yellow().bold().to_string(), true)
                                 }
                             }
                         };
 
-                        let output = if show_details {
-                            let status_display = enhanced.get_display_status();
-                            format!(
-                                "{} PR #{}: {} ({})",
-                                ready_icon, enhanced.pr.id, enhanced.pr.title, status_display
-                            )
-                        } else {
-                            format!(
-                                "{} PR #{}: {}",
-                                ready_icon, enhanced.pr.id, enhanced.pr.title
-                            )
-                        };
+                        // Main PR line
+                        Output::bullet(format!(
+                            "{} PR #{}: {}",
+                            ready_badge, enhanced.pr.id, enhanced.pr.title
+                        ));
 
-                        Output::bullet(output);
+                        // Show detailed status on separate lines for readability
+                        if show_details {
+                            // Build status
+                            if let Some(build) = &enhanced.build_status {
+                                let build_display = match build.state {
+                                    crate::bitbucket::pull_request::BuildState::Successful => {
+                                        style("Passing").green().to_string()
+                                    }
+                                    crate::bitbucket::pull_request::BuildState::Failed => {
+                                        style("Failing").red().to_string()
+                                    }
+                                    crate::bitbucket::pull_request::BuildState::InProgress => {
+                                        style("Running").yellow().to_string()
+                                    }
+                                    crate::bitbucket::pull_request::BuildState::Cancelled => {
+                                        style("Cancelled").dim().to_string()
+                                    }
+                                    crate::bitbucket::pull_request::BuildState::Unknown => {
+                                        style("Unknown").dim().to_string()
+                                    }
+                                };
+                                println!("      Builds: {}", build_display);
+                            } else {
+                                println!("      Builds: {}", style("Unknown").dim());
+                            }
+
+                            // Review status
+                            let review_display = if enhanced.review_status.can_merge {
+                                style("Approved").green().to_string()
+                            } else if enhanced.review_status.needs_work_count > 0 {
+                                style("Changes Requested").red().to_string()
+                            } else if enhanced.review_status.current_approvals > 0
+                                && enhanced.review_status.required_approvals > 0
+                            {
+                                style(format!(
+                                    "{}/{} approvals",
+                                    enhanced.review_status.current_approvals,
+                                    enhanced.review_status.required_approvals
+                                ))
+                                .yellow()
+                                .to_string()
+                            } else {
+                                style("Pending").yellow().to_string()
+                            };
+                            println!("      Reviews: {}", review_display);
+
+                            // Merge status
+                            if !enhanced.mergeable.unwrap_or(false) {
+                                // Show blocking reasons
+                                let blocking = enhanced.get_blocking_reasons();
+                                if !blocking.is_empty() {
+                                    println!(
+                                        "      Merge: {}",
+                                        style(format!("Blocked ({})", blocking.join(", "))).red()
+                                    );
+                                }
+                            } else if enhanced.is_ready_to_land() {
+                                println!("      Merge: {}", style("Ready").green());
+                            }
+                        }
 
                         if verbose {
                             println!(
