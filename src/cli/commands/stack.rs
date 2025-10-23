@@ -1043,26 +1043,37 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                     let mut ready_to_land = 0;
 
                     for enhanced in &status.enhanced_statuses {
-                        let status_display = enhanced.get_display_status();
-                        let ready_icon = match enhanced.pr.state {
-                            crate::bitbucket::pull_request::PullRequestState::Merged => "[MERGED]",
+                        let (ready_icon, show_details) = match enhanced.pr.state {
+                            crate::bitbucket::pull_request::PullRequestState::Merged => {
+                                ("[MERGED]", false) // Don't show "(MERGED)" again
+                            }
                             crate::bitbucket::pull_request::PullRequestState::Declined => {
-                                "[DECLINED]"
+                                ("[DECLINED]", false) // Don't show "(DECLINED)" again
                             }
                             crate::bitbucket::pull_request::PullRequestState::Open => {
                                 if enhanced.is_ready_to_land() {
                                     ready_to_land += 1;
-                                    "[READY]"
+                                    ("[READY]", true) // Show build/review details
                                 } else {
-                                    "[PENDING]"
+                                    ("[PENDING]", true) // Show build/review details
                                 }
                             }
                         };
 
-                        Output::bullet(format!(
-                            "{} PR #{}: {} ({})",
-                            ready_icon, enhanced.pr.id, enhanced.pr.title, status_display
-                        ));
+                        let output = if show_details {
+                            let status_display = enhanced.get_display_status();
+                            format!(
+                                "{} PR #{}: {} ({})",
+                                ready_icon, enhanced.pr.id, enhanced.pr.title, status_display
+                            )
+                        } else {
+                            format!(
+                                "{} PR #{}: {}",
+                                ready_icon, enhanced.pr.id, enhanced.pr.title
+                            )
+                        };
+
+                        Output::bullet(output);
 
                         if verbose {
                             println!(

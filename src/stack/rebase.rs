@@ -359,9 +359,13 @@ impl RebaseManager {
 
             // Skip merged entries - they're already in the base branch
             if entry.is_merged {
-                tracing::debug!("Entry '{}' is merged, skipping rebase", original_branch);
-                // Advance the base to this merged entry's branch so later entries build on it
-                current_base = original_branch.clone();
+                tracing::debug!(
+                    "Entry '{}' is merged into '{}', skipping rebase",
+                    original_branch,
+                    target_base
+                );
+                // Don't advance current_base - merged entries are already in target_base
+                // Next unmerged entry should rebase onto target_base, not the merged branch
                 continue;
             }
 
