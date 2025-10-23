@@ -713,6 +713,40 @@ ca land status                               # Show land status and guidance
 - **`merge`**: Create merge commit preserving history
 - **`fast-forward`**: Fast-forward merge (requires clean history)
 
+**🔄 Smart Auto-Retargeting:**
+
+After each successful merge, `ca land` automatically:
+1. ✅ Updates base branch with latest merged changes
+2. ✅ Rebases remaining PRs onto updated base
+3. ✅ Force-pushes updated branches
+4. ✅ Updates PR targets in Bitbucket
+
+**⚠️ Conflict Resolution Workflow:**
+
+If conflicts occur during auto-retargeting:
+
+```bash
+ca land  # Starts landing PRs
+
+# PR #1 merges ✅
+# PR #2 merges ✅
+# Auto-retargeting PR #3... ❌ Conflicts!
+
+# 1. Resolve conflicts
+git add <resolved-files>
+
+# 2. Complete the rebase
+ca land continue
+
+# 3. ⚠️ IMPORTANT: Wait for builds to pass on rebased PR!
+#    The conflict resolution changed the code, so builds must re-run.
+
+# 4. Once builds pass, resume landing
+ca land  # Continues landing remaining PRs
+```
+
+**💡 Pro tip**: Use `ca land --wait-for-builds` to automatically wait for builds before merging each PR.
+
 ### **Sync and Rebase Operations**
 ```bash
 # Sync with remote
