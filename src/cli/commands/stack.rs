@@ -954,16 +954,62 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Show entries
+    // 🔄 ALWAYS refresh PR status from Bitbucket to show accurate merge state
+    // This ensures [merged] badges are up-to-date even for regular `ca stack`
+    let refreshed_entries = if let Ok(config_dir) = crate::config::get_repo_config_dir(&repo_root) {
+        let config_path = config_dir.join("config.json");
+        if let Ok(settings) = crate::config::Settings::load_from_file(&config_path) {
+            let cascade_config = crate::config::CascadeConfig {
+                bitbucket: Some(settings.bitbucket.clone()),
+                git: settings.git.clone(),
+                auth: crate::config::AuthConfig::default(),
+                cascade: settings.cascade.clone(),
+            };
+
+            // Create a separate stack_manager for the integration
+            if let Ok(integration_stack_manager) = StackManager::new(&repo_root) {
+                let mut integration =
+                    crate::bitbucket::BitbucketIntegration::new(integration_stack_manager, cascade_config).ok();
+                
+                if let Some(ref mut integ) = integration {
+                    // Silently refresh merge status (don't show errors to user)
+                    let _ = integ.check_enhanced_stack_status(&stack_id).await;
+                    
+                    // Reload stack to get updated is_merged flags
+                    if let Ok(updated_manager) = StackManager::new(&repo_root) {
+                        if let Some(updated_stack) = updated_manager.get_stack(&stack_id) {
+                            updated_stack.entries.clone()
+                        } else {
+                            stack_entries.clone()
+                        }
+                    } else {
+                        stack_entries.clone()
+                    }
+                } else {
+                    stack_entries.clone()
+                }
+            } else {
+                stack_entries.clone()
+            }
+        } else {
+            stack_entries.clone()
+        }
+    } else {
+        stack_entries.clone()
+    };
+
+    // Show entries with refreshed merge status
     Output::section("Stack Entries");
-    for (i, entry) in stack_entries.iter().enumerate() {
+    for (i, entry) in refreshed_entries.iter().enumerate() {
         let entry_num = i + 1;
         let short_hash = entry.short_hash();
         let short_msg = entry.short_message(50);
 
         // Get source branch information for pending entries only
         // (submitted entries have their own branch, so source is no longer relevant)
-        let metadata = stack_manager.get_repository_metadata();
+        // Note: We need to create a new stack_manager here since the original was moved
+        let stack_manager_for_metadata = StackManager::new(&repo_root)?;
+        let metadata = stack_manager_for_metadata.get_repository_metadata();
         let source_branch_info = if !entry.is_submitted {
             if let Some(commit_meta) = metadata.get_commit(&entry.commit_hash) {
                 if commit_meta.source_branch != commit_meta.branch
@@ -1120,12 +1166,27 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
 
                             // Merge status
                             if !enhanced.mergeable.unwrap_or(false) {
-                                // Show blocking reasons
+                                // Show simplified blocking reason (just the first/most important one)
                                 let blocking = enhanced.get_blocking_reasons();
                                 if !blocking.is_empty() {
+                                    // Take first reason and simplify it
+                                    let first_reason = &blocking[0];
+                                    let simplified = if first_reason.contains("Code Owners") {
+                                        "Waiting for Code Owners approval"
+                                    } else if first_reason.contains("required builds") || first_reason.contains("Build Status") {
+                                        "Waiting for required builds"
+                                    } else if first_reason.contains("approvals") || first_reason.contains("Requires approvals") {
+                                        "Waiting for approvals"
+                                    } else if first_reason.contains("conflicts") {
+                                        "Has merge conflicts"
+                                    } else {
+                                        // Generic fallback
+                                        "Blocked by repository policy"
+                                    };
+                                    
                                     println!(
                                         "      Merge: {}",
-                                        style(format!("Blocked ({})", blocking.join(", "))).red()
+                                        style(simplified).red()
                                     );
                                 }
                             } else if enhanced.is_ready_to_land() {
