@@ -1306,21 +1306,34 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                 if !status.pull_requests.is_empty() {
                     println!("\nPull Requests:");
                     for pr in &status.pull_requests {
+                        use console::style;
+
+                        // Color-coded state icons
                         let state_icon = match pr.state {
-                            crate::bitbucket::PullRequestState::Open => "→",
-                            crate::bitbucket::PullRequestState::Merged => "✓",
-                            crate::bitbucket::PullRequestState::Declined => "✗",
+                            crate::bitbucket::PullRequestState::Open => style("→").cyan().to_string(),
+                            crate::bitbucket::PullRequestState::Merged => {
+                                style("✓").green().to_string()
+                            }
+                            crate::bitbucket::PullRequestState::Declined => {
+                                style("✗").red().to_string()
+                            }
                         };
+
+                        // Format: icon PR #123: title (from -> to)
+                        // Dim the PR number and branch arrows for less visual noise
                         println!(
-                            "   {} PR #{}: {} ({} -> {})",
+                            "   {} PR {}: {} ({} {} {})",
                             state_icon,
-                            pr.id,
+                            style(format!("#{}", pr.id)).dim(),
                             pr.title,
-                            pr.from_ref.display_id,
-                            pr.to_ref.display_id
+                            style(&pr.from_ref.display_id).dim(),
+                            style("→").dim(),
+                            style(&pr.to_ref.display_id).dim()
                         );
+
+                        // Make URL stand out with cyan/blue hyperlink color
                         if let Some(url) = pr.web_url() {
-                            println!("      URL: {url}");
+                            println!("      URL: {}", style(url).cyan().underlined());
                         }
                     }
                 }
