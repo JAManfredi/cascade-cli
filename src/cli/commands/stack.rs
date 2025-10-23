@@ -1985,11 +1985,14 @@ async fn submit_entry(
                 submitted_count += 1;
                 Output::success(format!("PR #{}", pr.id));
                 if let Some(url) = pr.web_url() {
+                    use console::style;
                     Output::sub_item(format!(
-                        "{} → {}",
-                        pr.from_ref.display_id, pr.to_ref.display_id
+                        "{} {} {}",
+                        pr.from_ref.display_id,
+                        style("→").dim(),
+                        pr.to_ref.display_id
                     ));
-                    Output::sub_item(format!("URL: {url}"));
+                    Output::sub_item(format!("URL: {}", style(url.clone()).cyan().underlined()));
                     pr_urls.push(url); // Collect for opening later
                 }
             }
