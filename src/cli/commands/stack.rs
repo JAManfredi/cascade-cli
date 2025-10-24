@@ -975,8 +975,14 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
                 .ok();
 
                 if let Some(ref mut integ) = integration {
+                    // Show spinner while checking PR status
+                    let spinner =
+                        crate::utils::spinner::Spinner::new("Checking PR status...".to_string());
+
                     // Silently refresh merge status (don't show errors to user)
                     let _ = integ.check_enhanced_stack_status(&stack_id).await;
+
+                    spinner.stop();
 
                     // Reload stack to get updated is_merged flags
                     if let Ok(updated_manager) = StackManager::new(&repo_root) {
@@ -1075,7 +1081,12 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         let mut integration =
             crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
 
-        match integration.check_enhanced_stack_status(&stack_id).await {
+        let spinner =
+            crate::utils::spinner::Spinner::new("Fetching detailed PR status...".to_string());
+        let status_result = integration.check_enhanced_stack_status(&stack_id).await;
+        spinner.stop();
+
+        match status_result {
             Ok(status) => {
                 Output::bullet(format!("Total entries: {}", status.total_entries));
                 Output::bullet(format!("Submitted: {}", status.submitted_entries));

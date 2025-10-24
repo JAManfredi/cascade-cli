@@ -274,10 +274,11 @@ impl PullRequestManager {
         let pr = self.get_pull_request(pr_id).await?;
         let commit_hash = &pr.from_ref.latest_commit;
 
-        // Get build status for the latest commit
-        let path = format!("commits/{commit_hash}/builds");
-
-        match self.client.get::<BuildStatusResponse>(&path).await {
+        match self
+            .client
+            .get_build_statuses::<BuildStatusResponse>(commit_hash)
+            .await
+        {
             Ok(response) => {
                 if response.values.is_empty() {
                     Ok(BuildStatus {

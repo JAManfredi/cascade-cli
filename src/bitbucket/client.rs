@@ -159,6 +159,28 @@ impl BitbucketClient {
         self.handle_response(response).await
     }
 
+    /// Fetch build statuses via the build-status API (base path differs from core REST API)
+    pub async fn get_build_statuses<T>(&self, commit_hash: &str) -> Result<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let url = format!(
+            "{}/rest/build-status/1.0/commits/{}",
+            self.base_url.trim_end_matches('/'),
+            commit_hash
+        );
+        debug!("GET {}", url);
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| CascadeError::bitbucket(format!("GET request failed: {e}")))?;
+
+        self.handle_response(response).await
+    }
+
     /// Make a DELETE request to the Bitbucket API
     pub async fn delete(&self, path: &str) -> Result<()> {
         let url = self.api_url(path);
