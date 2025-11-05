@@ -2218,11 +2218,10 @@ impl GitRepository {
                     println!();
                     Output::warning("FORCE PUSH WARNING");
                     println!("Force push to '{target_branch}' would overwrite {commits_to_lose} commits on remote:");
-
-                    info!(
+                    Output::sub_item(format!(
                         "Remote '{}' has {} commit(s) not present locally. Creating backup branch '{}' before force push.",
                         target_branch, commits_to_lose, backup_branch_name
-                    );
+                    ));
 
                     return Ok(Some(ForceBackupInfo {
                         backup_branch_name,
