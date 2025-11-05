@@ -282,9 +282,8 @@ impl RebaseManager {
             }
 
             return Err(CascadeError::branch(format!(
-                "Could not reset working directory to HEAD: {}.\n\
-                Another Git process may still be holding the index lock. \
-                Resolve the lock (remove .git/index.lock if safe) and retry.",
+                "Could not reset working directory to HEAD: {}\n\
+                Check if another Git process is running and wait for it to complete before retrying.",
                 e
             )));
         }
@@ -692,14 +691,13 @@ impl RebaseManager {
                                     result.error = Some(format!(
                                         "Could not commit auto-resolved conflicts: {}\n\n\
                                         This usually means:\n\
-                                        - Git index is locked (another process accessing repo)\n\
+                                        - Another Git process is accessing the repository\n\
                                         - File permissions issue\n\
                                         - Disk space issue\n\n\
                                         Recovery:\n\
                                         1. Check if another Git operation is running\n\
-                                        2. Run 'rm -f .git/index.lock' if stale lock exists\n\
-                                        3. Run 'git status' to check repo state\n\
-                                        4. Retry 'ca sync' after fixing the issue",
+                                        2. Run 'git status' to check repo state\n\
+                                        3. Retry 'ca sync' after fixing the issue",
                                         commit_err
                                     ));
                                     break;
@@ -1821,14 +1819,13 @@ impl RebaseManager {
                     error: Some(format!(
                         "Failed to complete cherry-pick: {}\n\n\
                         This usually means:\n\
-                        - Git index is locked (another process accessing repo)\n\
+                        - Another Git process is accessing the repository\n\
                         - File permissions issue\n\
                         - Disk space issue\n\n\
                         Recovery:\n\
                         1. Check if another Git operation is running\n\
-                        2. Run 'rm -f .git/index.lock' if stale lock exists\n\
-                        3. Run 'git status' to check repo state\n\
-                        4. Retry 'ca sync' after fixing the issue\n\n\
+                        2. Run 'git status' to check repo state\n\
+                        3. Retry 'ca sync' after fixing the issue\n\n\
                         Or abort and start fresh:\n\
                         → Run: ca sync abort\n\
                         → Then: ca sync",

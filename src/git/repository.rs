@@ -2926,21 +2926,26 @@ impl GitRepository {
     pub fn reset_to_head(&self) -> Result<()> {
         tracing::debug!("Resetting working directory and index to HEAD");
 
-        let head = self.repo.head().map_err(CascadeError::Git)?;
-        let head_commit = head.peel_to_commit().map_err(CascadeError::Git)?;
+        let repo_path = self.path();
 
-        // Hard reset: resets index and working tree
-        let mut checkout_builder = git2::build::CheckoutBuilder::new();
-        checkout_builder.force(); // Force checkout to overwrite any local changes
-        checkout_builder.remove_untracked(false); // Don't remove untracked files
+        // Use lock retry wrapper to handle stale locks automatically
+        crate::utils::git_lock::with_lock_retry(repo_path, || {
+            let head = self.repo.head()?;
+            let head_commit = head.peel_to_commit()?;
 
-        self.repo
-            .reset(
+            // Hard reset: resets index and working tree
+            let mut checkout_builder = git2::build::CheckoutBuilder::new();
+            checkout_builder.force(); // Force checkout to overwrite any local changes
+            checkout_builder.remove_untracked(false); // Don't remove untracked files
+
+            self.repo.reset(
                 head_commit.as_object(),
                 git2::ResetType::Hard,
                 Some(&mut checkout_builder),
-            )
-            .map_err(CascadeError::Git)?;
+            )?;
+
+            Ok(())
+        })?;
 
         tracing::debug!("Successfully reset working directory to HEAD");
         Ok(())

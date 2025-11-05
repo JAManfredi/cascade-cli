@@ -2711,6 +2711,16 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                     } else {
                         Output::error(format!("Failed to pull latest changes: {e}"));
                         Output::tip("Use --force to skip pull and continue with rebase");
+                        if let Some(ref branch) = original_branch {
+                            if branch != &base_branch {
+                                if let Err(restore_err) = git_repo.checkout_branch_silent(branch) {
+                                    Output::warning(format!(
+                                        "Could not restore original branch '{}': {}",
+                                        branch, restore_err
+                                    ));
+                                }
+                            }
+                        }
                         return Err(CascadeError::branch(format!(
                             "Failed to pull latest changes from '{base_branch}': {e}. Use --force to continue anyway."
                         )));
@@ -2728,6 +2738,16 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                     "Failed to checkout base branch '{base_branch}': {e}"
                 ));
                 Output::tip("Use --force to bypass checkout issues and continue anyway");
+                if let Some(ref branch) = original_branch {
+                    if branch != &base_branch {
+                        if let Err(restore_err) = git_repo.checkout_branch_silent(branch) {
+                            Output::warning(format!(
+                                "Could not restore original branch '{}': {}",
+                                branch, restore_err
+                            ));
+                        }
+                    }
+                }
                 return Err(CascadeError::branch(format!(
                     "Failed to checkout base branch '{base_branch}': {e}. Use --force to continue anyway."
                 )));
@@ -2927,6 +2947,16 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                     "Failed to check stack status: {e} (continuing due to --force)"
                 ));
             } else {
+                if let Some(ref branch) = original_branch {
+                    if branch != &base_branch {
+                        if let Err(restore_err) = git_repo.checkout_branch_silent(branch) {
+                            Output::warning(format!(
+                                "Could not restore original branch '{}': {}",
+                                branch, restore_err
+                            ));
+                        }
+                    }
+                }
                 return Err(e);
             }
         }

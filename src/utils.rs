@@ -235,6 +235,141 @@ pub mod async_ops {
     }
 }
 
+/// Git lock utilities for detecting and cleaning stale locks
+pub mod git_lock {
+    use super::*;
+    use std::path::Path;
+    use std::process::Command;
+
+    /// Check if any Git processes are currently running
+    /// Returns Some(true) if Git processes detected, Some(false) if none detected,
+    /// None if detection failed (unable to check)
+    fn has_running_git_processes() -> Option<bool> {
+        // Try to detect running git processes
+        #[cfg(unix)]
+        {
+            match Command::new("pgrep").arg("-i").arg("git").output() {
+                Ok(output) => {
+                    return Some(!output.stdout.is_empty());
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to run pgrep to detect Git processes: {}", e);
+                    return None;
+                }
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            match Command::new("tasklist")
+                .arg("/FI")
+                .arg("IMAGENAME eq git.exe")
+                .output()
+            {
+                Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    return Some(stdout.contains("git.exe"));
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to run tasklist to detect Git processes: {}", e);
+                    return None;
+                }
+            }
+        }
+
+        #[allow(unreachable_code)]
+        {
+            // Fallback for non-unix, non-windows platforms
+            None
+        }
+    }
+
+    /// Detect and remove stale Git index lock if safe to do so
+    /// Returns true if a stale lock was removed
+    pub fn clean_stale_index_lock(repo_path: &Path) -> Result<bool> {
+        let lock_path = repo_path.join(".git").join("index.lock");
+
+        if !lock_path.exists() {
+            return Ok(false);
+        }
+
+        // Check if any Git processes are running
+        match has_running_git_processes() {
+            Some(true) => {
+                // Git processes are definitely running, don't remove the lock
+                tracing::debug!(
+                    "Git index lock exists and Git processes are running - not removing"
+                );
+                Ok(false)
+            }
+            Some(false) => {
+                // No Git processes detected - safe to remove stale lock
+                tracing::debug!(
+                    "Detected stale Git index lock (no Git processes running), removing: {:?}",
+                    lock_path
+                );
+
+                fs::remove_file(&lock_path).map_err(|e| {
+                    CascadeError::config(format!(
+                        "Failed to remove stale index lock at {:?}: {}",
+                        lock_path, e
+                    ))
+                })?;
+
+                tracing::info!("Removed stale Git index lock at {:?}", lock_path);
+                Ok(true)
+            }
+            None => {
+                // Can't detect processes - fail safe by not removing the lock
+                tracing::debug!(
+                    "Cannot detect Git processes (pgrep/tasklist unavailable) - not removing lock for safety"
+                );
+                Ok(false)
+            }
+        }
+    }
+
+    /// Check if an error is a Git lock error
+    pub fn is_lock_error(error: &git2::Error) -> bool {
+        error.code() == git2::ErrorCode::Locked
+            || error.message().contains("index is locked")
+            || error.message().contains("index.lock")
+    }
+
+    /// Execute a git2 operation with automatic stale lock cleanup and retry
+    /// If the operation fails with a lock error, checks for stale locks and retries once
+    pub fn with_lock_retry<F, R>(repo_path: &Path, operation: F) -> Result<R>
+    where
+        F: Fn() -> std::result::Result<R, git2::Error>,
+    {
+        match operation() {
+            Ok(result) => Ok(result),
+            Err(e) if is_lock_error(&e) => {
+                // Got a lock error - check if we can clean up a stale lock
+                tracing::debug!("Git operation failed with lock error: {}", e);
+
+                match clean_stale_index_lock(repo_path) {
+                    Ok(true) => {
+                        // Stale lock was removed, retry the operation
+                        tracing::info!("Retrying operation after removing stale lock");
+                        operation().map_err(CascadeError::Git)
+                    }
+                    Ok(false) => {
+                        // Lock exists but is not stale (Git processes are running)
+                        Err(CascadeError::Git(e))
+                    }
+                    Err(cleanup_err) => {
+                        // Failed to clean up lock, return original error
+                        tracing::warn!("Failed to clean up stale lock: {}", cleanup_err);
+                        Err(CascadeError::Git(e))
+                    }
+                }
+            }
+            Err(e) => Err(CascadeError::Git(e)),
+        }
+    }
+}
+
 /// File locking utilities for concurrent access protection
 pub mod file_locking {
     use super::*;
