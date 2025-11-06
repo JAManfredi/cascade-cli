@@ -4027,6 +4027,104 @@ async fn land_stack(
 
     if landed_count > 0 {
         Output::success(" Landing operation completed!");
+
+        // Check if all entries in the stack are now merged
+        let final_stack_manager = StackManager::new(&repo_root)?;
+        if let Some(final_stack) = final_stack_manager.get_stack(&stack_id) {
+            let all_merged = final_stack
+                .entries
+                .iter()
+                .all(|entry| entry.is_merged);
+
+            if all_merged && !final_stack.entries.is_empty() {
+                println!();
+                Output::success("All PRs in stack merged! 🎉");
+                println!();
+
+                // Auto-deactivate the stack
+                let mut deactivate_manager = StackManager::new(&repo_root)?;
+                match deactivate_manager.set_active_stack(None) {
+                    Ok(_) => {
+                        Output::sub_item("Stack deactivated");
+                    }
+                    Err(e) => {
+                        Output::warning(format!("Could not deactivate stack: {}", e));
+                    }
+                }
+
+                // Prompt to clean up merged branches
+                if !dry_run {
+                    let should_cleanup = Confirm::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Clean up merged branches?")
+                        .default(true)
+                        .interact()
+                        .unwrap_or(false);
+
+                    if should_cleanup {
+                        let cleanup_git_repo = GitRepository::open(&repo_root)?;
+                        let mut cleanup_manager = CleanupManager::new(
+                            StackManager::new(&repo_root)?,
+                            cleanup_git_repo,
+                            CleanupOptions {
+                                dry_run: false,
+                                force: true,
+                                include_stale: false,
+                                cleanup_remote: false,
+                                stale_threshold_days: 30,
+                                cleanup_non_stack: false,
+                            },
+                        );
+
+                        // Find candidates and filter to only this stack
+                        match cleanup_manager.find_cleanup_candidates() {
+                            Ok(candidates) => {
+                                let stack_candidates: Vec<_> = candidates
+                                    .into_iter()
+                                    .filter(|c| c.stack_id == Some(stack_id))
+                                    .collect();
+
+                                if !stack_candidates.is_empty() {
+                                    match cleanup_manager.perform_cleanup(&stack_candidates) {
+                                        Ok(cleanup_result) => {
+                                            if !cleanup_result.cleaned_branches.is_empty() {
+                                                for branch in &cleanup_result.cleaned_branches {
+                                                    Output::sub_item(format!("🗑️  Deleted: {}", branch));
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            Output::warning(format!("Branch cleanup failed: {}", e));
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                Output::warning(format!("Could not find cleanup candidates: {}", e));
+                            }
+                        }
+                    }
+
+                    // Prompt to delete the stack metadata
+                    let should_delete_stack = Confirm::with_theme(&ColorfulTheme::default())
+                        .with_prompt(format!("Delete stack '{}'?", final_stack.name))
+                        .default(true)
+                        .interact()
+                        .unwrap_or(false);
+
+                    if should_delete_stack {
+                        let mut delete_manager = StackManager::new(&repo_root)?;
+                        match delete_manager.delete_stack(&stack_id) {
+                            Ok(_) => {
+                                Output::sub_item(format!("Stack '{}' deleted", final_stack.name));
+                            }
+                            Err(e) => {
+                                Output::warning(format!("Could not delete stack: {}", e));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     } else {
         println!("❌ No PRs were successfully landed");
     }
