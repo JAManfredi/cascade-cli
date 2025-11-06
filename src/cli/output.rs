@@ -85,7 +85,23 @@ impl Output {
 
     /// Print progress indicator (muted green)
     pub fn progress<T: Display>(message: T) {
-        println!("{} {}", Theme::info_style().apply_to("→"), message);
+        print!("{} {}", Theme::info_style().apply_to("→"), message);
+        use std::io::{self, Write};
+        io::stdout().flush().unwrap();
+    }
+
+    /// Print success checkmark inline (for use after progress)
+    pub fn success_inline() {
+        println!(" {}", Theme::success_style().apply_to("✓"));
+    }
+
+    /// Print error cross inline (for use after progress)
+    pub fn error_inline<T: Display>(message: T) {
+        if message.to_string().is_empty() {
+            println!(" {}", style("✗").fg(Theme::ERROR));
+        } else {
+            println!(" {} {}", style("✗").fg(Theme::ERROR), message);
+        }
     }
 
     /// Print a divider line

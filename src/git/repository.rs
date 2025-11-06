@@ -385,7 +385,10 @@ impl GitRepository {
 
         if let Some(backup_info) = safety_result {
             self.create_backup_branch(branch_name, &backup_info.remote_commit_id)?;
-            Output::sub_item(format!("Created backup branch: {}", backup_info.backup_branch_name));
+            Output::sub_item(format!(
+                "Created backup branch: {}",
+                backup_info.backup_branch_name
+            ));
         }
 
         // Ensure index is closed before CLI command to prevent lock conflicts
@@ -2066,7 +2069,10 @@ impl GitRepository {
             if let Some(backup_info) = safety_result {
                 // Create backup branch before force push
                 self.create_backup_branch(target_branch, &backup_info.remote_commit_id)?;
-                Output::sub_item(format!("Created backup branch: {}", backup_info.backup_branch_name));
+                Output::sub_item(format!(
+                    "Created backup branch: {}",
+                    backup_info.backup_branch_name
+                ));
             }
         }
 

@@ -3749,7 +3749,7 @@ async fn land_stack(
     let status = integration.check_enhanced_stack_status(&stack_id).await?;
 
     if status.enhanced_statuses.is_empty() {
-        println!("❌ No pull requests found to land");
+        Output::error("No pull requests found to land");
         return Ok(());
     }
 
@@ -3782,42 +3782,43 @@ async fn land_stack(
 
     if ready_prs.is_empty() {
         if let Some(entry_num) = entry {
-            println!("❌ Entry {entry_num} is not ready to land or doesn't exist");
+            Output::error(format!(
+                "Entry {entry_num} is not ready to land or doesn't exist"
+            ));
         } else {
-            println!("❌ No pull requests are ready to land");
+            Output::error("No pull requests are ready to land");
         }
 
         // Show what's blocking them
-        println!("\n🚫 Blocking Issues:");
+        println!();
+        Output::section("Blocking Issues");
         for pr_status in &status.enhanced_statuses {
             if pr_status.pr.state == crate::bitbucket::pull_request::PullRequestState::Open {
                 let blocking = pr_status.get_blocking_reasons();
                 if !blocking.is_empty() {
-                    println!("   PR #{}: {}", pr_status.pr.id, blocking.join(", "));
+                    Output::sub_item(format!("PR #{}: {}", pr_status.pr.id, blocking.join(", ")));
                 }
             }
         }
 
         if !force {
-            println!("\n💡 Use --force to land PRs with blocking issues (dangerous!)");
+            println!();
+            Output::tip("Use --force to land PRs with blocking issues (dangerous!)");
         }
         return Ok(());
     }
 
     if dry_run {
         if let Some(entry_num) = entry {
-            println!("🏃 Dry Run - Entry {entry_num} that would be landed:");
+            Output::section(format!("Dry Run - Entry {entry_num} that would be landed"));
         } else {
-            println!("🏃 Dry Run - PRs that would be landed:");
+            Output::section("Dry Run - PRs that would be landed");
         }
         for pr_status in &ready_prs {
-            println!("   ✅ PR #{}: {}", pr_status.pr.id, pr_status.pr.title);
+            Output::sub_item(format!("PR #{}: {}", pr_status.pr.id, pr_status.pr.title));
             if !pr_status.is_ready_to_land() && force {
                 let blocking = pr_status.get_blocking_reasons();
-                println!(
-                    "      ⚠️  Would force land despite: {}",
-                    blocking.join(", ")
-                );
+                Output::warning(format!("Would force land despite: {}", blocking.join(", ")));
             }
         }
         return Ok(());
@@ -3826,11 +3827,11 @@ async fn land_stack(
     // Default behavior: land all ready PRs (safest approach)
     // Only land specific entry if explicitly requested
     if entry.is_some() && ready_prs.len() > 1 {
-        println!(
-            "🎯 {} PRs are ready to land, but landing only entry #{}",
+        Output::info(format!(
+            "{} PRs are ready to land, but landing only entry #{}",
             ready_prs.len(),
             entry.unwrap()
-        );
+        ));
     }
 
     // Setup auto-merge conditions
@@ -3844,11 +3845,12 @@ async fn land_stack(
     };
 
     // Land the PRs
-    println!(
-        "🚀 Landing {} PR{}...",
+    println!();
+    Output::section(format!(
+        "Landing {} PR{}",
         ready_prs.len(),
         if ready_prs.len() == 1 { "" } else { "s" }
-    );
+    ));
 
     let pr_manager = crate::bitbucket::pull_request::PullRequestManager::new(
         crate::bitbucket::BitbucketClient::new(&settings.bitbucket)?,
@@ -3862,7 +3864,7 @@ async fn land_stack(
     for pr_status in ready_prs {
         let pr_id = pr_status.pr.id;
 
-        print!("🚀 Landing PR #{}: {}", pr_id, pr_status.pr.title);
+        Output::progress(format!("Landing PR #{}: {}", pr_id, pr_status.pr.title));
 
         let land_result = if auto {
             // Use auto-merge with conditions checking
@@ -3884,25 +3886,25 @@ async fn land_stack(
 
         match land_result {
             Ok(crate::bitbucket::pull_request::AutoMergeResult::Merged { .. }) => {
-                println!(" ✅");
+                Output::success_inline();
                 landed_count += 1;
 
-                // 🔄 AUTO-RETARGETING: After each merge, retarget remaining PRs
+                // AUTO-RETARGETING: After each merge, retarget remaining PRs
                 if landed_count < total_ready_prs {
-                    println!(" Retargeting remaining PRs to latest base...");
+                    Output::sub_item("Retargeting remaining PRs to latest base");
 
-                    // 1️⃣ CRITICAL: Update base branch to get latest merged state
+                    // Update base branch to get latest merged state
                     let base_branch = active_stack.base_branch.clone();
                     let git_repo = crate::git::GitRepository::open(&repo_root)?;
 
-                    println!("   📥 Updating base branch: {base_branch}");
+                    Output::sub_item(format!("Updating base branch: {base_branch}"));
                     match git_repo.pull(&base_branch) {
-                        Ok(_) => println!("   ✅ Base branch updated successfully"),
+                        Ok(_) => Output::sub_item("Base branch updated"),
                         Err(e) => {
-                            println!("   ⚠️  Warning: Failed to update base branch: {e}");
-                            println!(
-                                "   💡 You may want to manually run: git pull origin {base_branch}"
-                            );
+                            Output::warning(format!("Failed to update base branch: {e}"));
+                            Output::tip(format!(
+                                "You may want to manually run: git pull origin {base_branch}"
+                            ));
                         }
                     }
 
@@ -3959,32 +3961,37 @@ async fn land_stack(
                                 {
                                     Ok(updated_prs) => {
                                         if !updated_prs.is_empty() {
-                                            println!(
-                                                "   ✅ Updated {} PRs with new targets",
+                                            Output::sub_item(format!(
+                                                "Updated {} PRs with new targets",
                                                 updated_prs.len()
-                                            );
+                                            ));
                                         }
                                     }
                                     Err(e) => {
-                                        println!("   ⚠️  Failed to update remaining PRs: {e}");
-                                        println!(
-                                            "   💡 You may need to run: ca stack rebase --onto {base_branch}"
-                                        );
+                                        Output::warning(format!(
+                                            "Failed to update remaining PRs: {e}"
+                                        ));
+                                        Output::tip(format!("You may need to run: ca stack rebase --onto {base_branch}"));
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            // 🚨 CONFLICTS DETECTED - Give clear next steps
-                            println!("   ❌ Auto-retargeting conflicts detected!");
-                            println!("   📝 To resolve conflicts and continue landing:");
-                            println!("      1. Resolve conflicts in the affected files");
-                            println!("      2. Stage resolved files: git add <files>");
-                            println!("      3. Continue the process: ca stack continue-land");
-                            println!("      4. Or abort the operation: ca stack abort-land");
+                            // CONFLICTS DETECTED - Give clear next steps
                             println!();
-                            println!("   💡 Check current status: ca stack land-status");
-                            println!("   ⚠️  Error details: {e}");
+                            Output::error("Auto-retargeting conflicts detected!");
+                            println!();
+                            Output::section("To resolve conflicts and continue landing");
+                            Output::numbered_item(1, "Resolve conflicts in the affected files");
+                            Output::numbered_item(2, "Stage resolved files: git add <files>");
+                            Output::numbered_item(
+                                3,
+                                "Continue the process: ca stack continue-land",
+                            );
+                            Output::numbered_item(4, "Or abort the operation: ca stack abort-land");
+                            println!();
+                            Output::tip("Check current status: ca stack land-status");
+                            Output::sub_item(format!("Error details: {e}"));
 
                             // Stop the land operation here - user needs to resolve conflicts
                             break;
@@ -3993,22 +4000,22 @@ async fn land_stack(
                 }
             }
             Ok(crate::bitbucket::pull_request::AutoMergeResult::NotReady { blocking_reasons }) => {
-                println!(" ❌ Not ready: {}", blocking_reasons.join(", "));
+                Output::error_inline(format!("Not ready: {}", blocking_reasons.join(", ")));
                 failed_count += 1;
                 if !force {
                     break;
                 }
             }
             Ok(crate::bitbucket::pull_request::AutoMergeResult::Failed { error }) => {
-                println!(" ❌ Failed: {error}");
+                Output::error_inline(format!("Failed: {error}"));
                 failed_count += 1;
                 if !force {
                     break;
                 }
             }
             Err(e) => {
-                println!(" ❌");
-                eprintln!("Failed to land PR #{pr_id}: {e}");
+                Output::error_inline("");
+                Output::error(format!("Failed to land PR #{pr_id}: {e}"));
                 failed_count += 1;
 
                 if !force {
@@ -4019,26 +4026,24 @@ async fn land_stack(
     }
 
     // Show summary
-    println!("\n🎯 Landing Summary:");
-    println!("   ✅ Successfully landed: {landed_count}");
+    println!();
+    Output::section("Landing Summary");
+    Output::sub_item(format!("Successfully landed: {landed_count}"));
     if failed_count > 0 {
-        println!("   ❌ Failed to land: {failed_count}");
+        Output::sub_item(format!("Failed to land: {failed_count}"));
     }
 
     if landed_count > 0 {
-        Output::success(" Landing operation completed!");
+        Output::success("Landing operation completed!");
 
         // Check if all entries in the stack are now merged
         let final_stack_manager = StackManager::new(&repo_root)?;
         if let Some(final_stack) = final_stack_manager.get_stack(&stack_id) {
-            let all_merged = final_stack
-                .entries
-                .iter()
-                .all(|entry| entry.is_merged);
+            let all_merged = final_stack.entries.iter().all(|entry| entry.is_merged);
 
             if all_merged && !final_stack.entries.is_empty() {
                 println!();
-                Output::success("All PRs in stack merged! 🎉");
+                Output::success("All PRs in stack merged!");
                 println!();
 
                 // Auto-deactivate the stack
@@ -4088,18 +4093,27 @@ async fn land_stack(
                                         Ok(cleanup_result) => {
                                             if !cleanup_result.cleaned_branches.is_empty() {
                                                 for branch in &cleanup_result.cleaned_branches {
-                                                    Output::sub_item(format!("🗑️  Deleted: {}", branch));
+                                                    Output::sub_item(format!(
+                                                        "🗑️  Deleted: {}",
+                                                        branch
+                                                    ));
                                                 }
                                             }
                                         }
                                         Err(e) => {
-                                            Output::warning(format!("Branch cleanup failed: {}", e));
+                                            Output::warning(format!(
+                                                "Branch cleanup failed: {}",
+                                                e
+                                            ));
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                Output::warning(format!("Could not find cleanup candidates: {}", e));
+                                Output::warning(format!(
+                                    "Could not find cleanup candidates: {}",
+                                    e
+                                ));
                             }
                         }
                     }
@@ -4126,7 +4140,7 @@ async fn land_stack(
             }
         }
     } else {
-        println!("❌ No PRs were successfully landed");
+        Output::error("No PRs were successfully landed");
     }
 
     Ok(())
