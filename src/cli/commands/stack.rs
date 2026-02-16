@@ -337,6 +337,9 @@ pub enum StackAction {
         /// Keep the branch (don't delete it)
         #[arg(long)]
         keep_branch: bool,
+        /// Keep the PR open on Bitbucket (don't decline it)
+        #[arg(long)]
+        keep_pr: bool,
         /// Skip all confirmation prompts
         #[arg(long, short)]
         force: bool,
@@ -471,9 +474,10 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::Drop {
             entry,
             keep_branch,
+            keep_pr,
             force,
             yes,
-        } => drop_entries(entry, keep_branch, force, yes).await,
+        } => drop_entries(entry, keep_branch, keep_pr, force, yes).await,
     }
 }
 
@@ -516,8 +520,14 @@ pub async fn pop(keep_branch: bool) -> Result<()> {
     pop_from_stack(keep_branch).await
 }
 
-pub async fn drop(entry: String, keep_branch: bool, force: bool, yes: bool) -> Result<()> {
-    drop_entries(entry, keep_branch, force, yes).await
+pub async fn drop(
+    entry: String,
+    keep_branch: bool,
+    keep_pr: bool,
+    force: bool,
+    yes: bool,
+) -> Result<()> {
+    drop_entries(entry, keep_branch, keep_pr, force, yes).await
 }
 
 pub async fn land(
@@ -4973,7 +4983,13 @@ fn parse_entry_spec(spec: &str, max_entries: usize) -> Result<Vec<usize>> {
     Ok(indices)
 }
 
-async fn drop_entries(entry_spec: String, keep_branch: bool, force: bool, yes: bool) -> Result<()> {
+async fn drop_entries(
+    entry_spec: String,
+    keep_branch: bool,
+    keep_pr: bool,
+    force: bool,
+    yes: bool,
+) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -5098,16 +5114,16 @@ async fn drop_entries(entry_spec: String, keep_branch: bool, force: bool, yes: b
             }
         }
 
-        // Offer to decline PR if entry was submitted
-        if is_submitted {
+        // Decline PR if entry was submitted (unless --keep-pr)
+        if is_submitted && !keep_pr {
             if let Some(pr_id_str) = pr_id {
                 if let Ok(pr_id_num) = pr_id_str.parse::<u64>() {
                     let should_decline = if force {
-                        false
+                        true
                     } else {
                         Confirm::with_theme(&ColorfulTheme::default())
                             .with_prompt(format!("Decline PR #{pr_id_num} on Bitbucket?"))
-                            .default(false)
+                            .default(true)
                             .interact()
                             .unwrap_or(false)
                     };

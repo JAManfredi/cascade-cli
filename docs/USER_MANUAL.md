@@ -564,15 +564,17 @@ ca drop <ENTRY> [OPTIONS]
 
 # Options:
 --keep-branch           # Keep the associated branch(es)
---force, -f             # Skip all confirmation prompts
---yes, -y               # Skip confirmation prompts
+--keep-pr               # Keep the PR open on Bitbucket (don't decline it)
+--force, -f             # Skip all prompts (declines PRs, deletes branches)
+--yes, -y               # Skip entry confirmation prompt
 ```
 
 **Behavior:**
 - Removes entries and reparents any children to the removed entry's parent
 - Refuses to drop merged entries (use `ca stacks cleanup` instead)
 - Deletes associated branches unless `--keep-branch` is specified
-- For submitted entries with PRs, offers to decline the PR on Bitbucket
+- Declines associated Bitbucket PRs unless `--keep-pr` is specified
+- `--force` does everything without prompting; combine with `--keep-pr` or `--keep-branch` to protect specific resources
 
 **Examples:**
 ```bash
@@ -588,8 +590,14 @@ ca drop 1,3,5
 # Remove entry but keep its branch
 ca drop 3 --keep-branch
 
-# Skip all prompts (won't auto-decline PRs)
+# Remove entry but leave PR open
+ca drop 3 --keep-pr
+
+# Skip all prompts (declines PRs and deletes branches)
 ca drop 3 --force
+
+# Skip prompts but keep PRs open
+ca drop 3 --force --keep-pr
 ```
 
 #### **`ca submit`** - Create Pull Requests

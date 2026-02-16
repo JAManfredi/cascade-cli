@@ -659,7 +659,9 @@ ca drop 3                                    # Remove entry #3 from stack
 ca drop 1-5                                  # Remove entries 1 through 5
 ca drop 1,3,5                                # Remove specific entries
 ca drop 3 --keep-branch                      # Remove entry but keep its branch
-ca drop 3 --force                            # Skip all prompts (won't auto-decline PRs)
+ca drop 3 --keep-pr                          # Remove entry but leave PR open
+ca drop 3 --force                            # Skip all prompts (declines PRs, deletes branches)
+ca drop 3 --force --keep-pr                  # Skip prompts but keep PRs open
 ```
 
 ### **Pull Request Workflow**

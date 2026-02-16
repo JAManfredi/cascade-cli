@@ -186,6 +186,9 @@ pub enum Commands {
         /// Keep the branch (don't delete it)
         #[arg(long)]
         keep_branch: bool,
+        /// Keep the PR open on Bitbucket (don't decline it)
+        #[arg(long)]
+        keep_pr: bool,
         /// Skip all confirmation prompts
         #[arg(long, short)]
         force: bool,
@@ -628,9 +631,10 @@ impl Cli {
             Commands::Drop {
                 entry,
                 keep_branch,
+                keep_pr,
                 force,
                 yes,
-            } => commands::stack::drop(entry, keep_branch, force, yes).await,
+            } => commands::stack::drop(entry, keep_branch, keep_pr, force, yes).await,
 
             Commands::Land {
                 entry,
