@@ -516,6 +516,7 @@ ca submit                               # Submit PRs for current stack
 # Current Stack Operations (Shortcuts)
 ca stack                                # Show current stack details
 ca push                                 # Push commits to stack
+ca drop <pos>                           # Remove entries by position
 ca land                                 # Merge approved PRs
 ca autoland                             # Auto-merge all ready PRs
 ca sync                                 # Sync with remote repository
@@ -646,9 +647,19 @@ ca push --commits hash1,hash2,hash3          # Push specific commits
 ca push --squash 4                           # Squash last 4 commits into 1 clean commit
 ca push --squash-since HEAD~5                # Squash all commits since reference
 
+# Confirmation control
+ca push --yes                                # Skip confirmation prompts
+ca push -y                                   # Short form
+ca push --dry-run                            # Preview commits without pushing
+
 # Remove from stack
 ca pop                                       # Remove top entry from stack
 ca pop --keep-branch                         # Keep the branch when popping
+ca drop 3                                    # Remove entry #3 from stack
+ca drop 1-5                                  # Remove entries 1 through 5
+ca drop 1,3,5                                # Remove specific entries
+ca drop 3 --keep-branch                      # Remove entry but keep its branch
+ca drop 3 --force                            # Skip all prompts (won't auto-decline PRs)
 ```
 
 ### **Pull Request Workflow**

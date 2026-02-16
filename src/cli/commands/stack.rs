@@ -121,6 +121,9 @@ pub enum StackAction {
         /// Show what would be pushed without actually pushing
         #[arg(long)]
         dry_run: bool,
+        /// Skip confirmation prompts
+        #[arg(long, short)]
+        yes: bool,
     },
 
     /// Pop the top commit from the stack
@@ -326,6 +329,21 @@ pub enum StackAction {
 
     /// Repair data consistency issues in stack metadata
     Repair,
+
+    /// Drop (remove) stack entries by position
+    Drop {
+        /// Entry position or range (e.g., "3", "1-5", "1,3,5")
+        entry: String,
+        /// Keep the branch (don't delete it)
+        #[arg(long)]
+        keep_branch: bool,
+        /// Skip all confirmation prompts
+        #[arg(long, short)]
+        force: bool,
+        /// Skip confirmation prompts
+        #[arg(long, short)]
+        yes: bool,
+    },
 }
 
 pub async fn run(action: StackAction) -> Result<()> {
@@ -354,6 +372,7 @@ pub async fn run(action: StackAction) -> Result<()> {
             auto_branch,
             allow_base_branch,
             dry_run,
+            yes,
         } => {
             push_to_stack(
                 branch,
@@ -366,6 +385,7 @@ pub async fn run(action: StackAction) -> Result<()> {
                 auto_branch,
                 allow_base_branch,
                 dry_run,
+                yes,
             )
             .await
         }
@@ -448,6 +468,12 @@ pub async fn run(action: StackAction) -> Result<()> {
             .await
         }
         StackAction::Repair => repair_stack_data().await,
+        StackAction::Drop {
+            entry,
+            keep_branch,
+            force,
+            yes,
+        } => drop_entries(entry, keep_branch, force, yes).await,
     }
 }
 
@@ -468,6 +494,7 @@ pub async fn push(
     auto_branch: bool,
     allow_base_branch: bool,
     dry_run: bool,
+    yes: bool,
 ) -> Result<()> {
     push_to_stack(
         branch,
@@ -480,12 +507,17 @@ pub async fn push(
         auto_branch,
         allow_base_branch,
         dry_run,
+        yes,
     )
     .await
 }
 
 pub async fn pop(keep_branch: bool) -> Result<()> {
     pop_from_stack(keep_branch).await
+}
+
+pub async fn drop(entry: String, keep_branch: bool, force: bool, yes: bool) -> Result<()> {
+    drop_entries(entry, keep_branch, force, yes).await
 }
 
 pub async fn land(
@@ -1375,6 +1407,7 @@ async fn push_to_stack(
     auto_branch: bool,
     allow_base_branch: bool,
     dry_run: bool,
+    yes: bool,
 ) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
@@ -1589,6 +1622,50 @@ async fn push_to_stack(
         Output::success(" Squashed {commits_count} commits since {since_ref} into one");
     }
 
+    // 🛡️ STALE BASE DETECTION
+    // Only check when user didn't specify explicit commits
+    if commits.is_none() && since.is_none() && commit.is_none() {
+        let active_stack_for_stale = manager.get_active_stack().ok_or_else(|| {
+            CascadeError::config("No active stack. Create a stack first with 'ca stacks create'")
+        })?;
+        let stale_base = &active_stack_for_stale.base_branch;
+        let stale_current = repo.get_current_branch()?;
+
+        if stale_current != *stale_base {
+            match repo.get_commits_between(&stale_current, stale_base) {
+                Ok(base_ahead_commits) if !base_ahead_commits.is_empty() => {
+                    let count = base_ahead_commits.len();
+                    Output::warning(format!(
+                        "Base branch '{}' has {} new commit(s) since your branch diverged",
+                        stale_base, count
+                    ));
+                    Output::sub_item("Commits from other developers may be included in your push.");
+                    Output::tip("Run 'ca sync' or 'ca stacks rebase' to rebase first.");
+
+                    if !dry_run && !yes {
+                        let should_rebase = Confirm::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Rebase before pushing?")
+                            .default(true)
+                            .interact()
+                            .map_err(|e| {
+                                CascadeError::config(format!(
+                                    "Failed to get user confirmation: {e}"
+                                ))
+                            })?;
+
+                        if should_rebase {
+                            Output::info(
+                                "Run 'ca sync' to rebase your stack on the updated base branch.",
+                            );
+                            return Ok(());
+                        }
+                    }
+                }
+                _ => {} // Branch resolution failed or no stale commits — silently skip
+            }
+        }
+    }
+
     // Determine which commits to push
     let commits_to_push = if let Some(commits_str) = commits {
         // Parse comma-separated commit hashes
@@ -1683,13 +1760,86 @@ async fn push_to_stack(
         return Ok(());
     }
 
-    // 🛡️ SAFEGUARDS: Analyze commits before pushing
-    analyze_commits_for_safeguards(&commits_to_push, &repo, dry_run).await?;
+    // 🛡️ COMMIT CONFIRMATION: Show commits with authors before pushing
+    let (user_name, user_email) = repo.get_user_info();
+    let mut has_foreign_commits = false;
+
+    Output::section(format!("Commits to push ({})", commits_to_push.len()));
+
+    for (i, commit_hash) in commits_to_push.iter().enumerate() {
+        let commit_obj = repo.get_commit(commit_hash)?;
+        let author = commit_obj.author();
+        let author_name = author.name().unwrap_or("unknown").to_string();
+        let author_email = author.email().unwrap_or("").to_string();
+        let summary = commit_obj.summary().unwrap_or("(no message)");
+        let short_hash = &commit_hash[..std::cmp::min(commit_hash.len(), 8)];
+
+        let is_foreign = !matches!(
+            (&user_name, &user_email),
+            (Some(ref un), _) if *un == author_name
+        ) && !matches!(
+            (&user_name, &user_email),
+            (_, Some(ref ue)) if *ue == author_email
+        );
+
+        if is_foreign {
+            has_foreign_commits = true;
+            Output::numbered_item(
+                i + 1,
+                format!("{short_hash} {summary} [{author_name}] ← other author"),
+            );
+        } else {
+            Output::numbered_item(i + 1, format!("{short_hash} {summary} [{author_name}]"));
+        }
+    }
+
+    if has_foreign_commits {
+        let foreign_count = commits_to_push
+            .iter()
+            .filter(|hash| {
+                if let Ok(c) = repo.get_commit(hash) {
+                    let a = c.author();
+                    let an = a.name().unwrap_or("").to_string();
+                    let ae = a.email().unwrap_or("").to_string();
+                    !matches!(&user_name, Some(ref un) if *un == an)
+                        && !matches!(&user_email, Some(ref ue) if *ue == ae)
+                } else {
+                    false
+                }
+            })
+            .count();
+        Output::warning(format!(
+            "{} commit(s) are from other authors — these may not be your changes.",
+            foreign_count
+        ));
+    }
 
     // Early return for dry run mode
     if dry_run {
+        Output::tip("Run without --dry-run to actually push these commits.");
         return Ok(());
     }
+
+    // Confirmation prompt (unless --yes)
+    if !yes {
+        let default_confirm = !has_foreign_commits;
+        let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "Push {} commit(s) to stack?",
+                commits_to_push.len()
+            ))
+            .default(default_confirm)
+            .interact()
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !should_continue {
+            Output::info("Push cancelled.");
+            return Ok(());
+        }
+    }
+
+    // 🛡️ SAFEGUARDS: Analyze commits for merge commits and age checks
+    analyze_commits_for_safeguards(&commits_to_push, &repo, dry_run).await?;
 
     // Push each commit to the stack
     let mut pushed_count = 0;
@@ -4744,6 +4894,260 @@ fn confirm_large_push(count: usize) -> Result<bool> {
     Ok(should_continue)
 }
 
+/// Parse an entry spec string like "3", "1-5", or "1,3,5" into sorted, deduplicated 1-based indices
+fn parse_entry_spec(spec: &str, max_entries: usize) -> Result<Vec<usize>> {
+    let mut indices: Vec<usize> = Vec::new();
+
+    if spec.contains('-') && !spec.contains(',') {
+        // Range like "1-5"
+        let parts: Vec<&str> = spec.split('-').collect();
+        if parts.len() != 2 {
+            return Err(CascadeError::config(
+                "Invalid range format. Use 'start-end' (e.g., '1-5')",
+            ));
+        }
+
+        let start: usize = parts[0]
+            .trim()
+            .parse()
+            .map_err(|_| CascadeError::config("Invalid start number in range"))?;
+        let end: usize = parts[1]
+            .trim()
+            .parse()
+            .map_err(|_| CascadeError::config("Invalid end number in range"))?;
+
+        if start == 0 || end == 0 {
+            return Err(CascadeError::config("Entry numbers are 1-based"));
+        }
+        if start > max_entries || end > max_entries {
+            return Err(CascadeError::config(format!(
+                "Entry number out of bounds. Stack has {max_entries} entries"
+            )));
+        }
+
+        let (lo, hi) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        for i in lo..=hi {
+            indices.push(i);
+        }
+    } else if spec.contains(',') {
+        // Comma-separated like "1,3,5"
+        for part in spec.split(',') {
+            let num: usize = part.trim().parse().map_err(|_| {
+                CascadeError::config(format!("Invalid entry number: {}", part.trim()))
+            })?;
+            if num == 0 {
+                return Err(CascadeError::config("Entry numbers are 1-based"));
+            }
+            if num > max_entries {
+                return Err(CascadeError::config(format!(
+                    "Entry {num} out of bounds. Stack has {max_entries} entries"
+                )));
+            }
+            indices.push(num);
+        }
+    } else {
+        // Single number like "3"
+        let num: usize = spec
+            .trim()
+            .parse()
+            .map_err(|_| CascadeError::config(format!("Invalid entry number: {spec}")))?;
+        if num == 0 {
+            return Err(CascadeError::config("Entry numbers are 1-based"));
+        }
+        if num > max_entries {
+            return Err(CascadeError::config(format!(
+                "Entry {num} out of bounds. Stack has {max_entries} entries"
+            )));
+        }
+        indices.push(num);
+    }
+
+    indices.sort();
+    indices.dedup();
+    Ok(indices)
+}
+
+async fn drop_entries(entry_spec: String, keep_branch: bool, force: bool, yes: bool) -> Result<()> {
+    let current_dir = env::current_dir()
+        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
+
+    let repo_root = find_repository_root(&current_dir)
+        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
+
+    let mut manager = StackManager::new(&repo_root)?;
+    let repo = GitRepository::open(&repo_root)?;
+
+    let active_stack = manager.get_active_stack().ok_or_else(|| {
+        CascadeError::config("No active stack. Create a stack first with 'ca stacks create'")
+    })?;
+    let stack_id = active_stack.id;
+    let entry_count = active_stack.entries.len();
+
+    if entry_count == 0 {
+        Output::info("Stack is empty, nothing to drop.");
+        return Ok(());
+    }
+
+    let indices = parse_entry_spec(&entry_spec, entry_count)?;
+
+    // Validate: refuse entries that are merged
+    for &idx in &indices {
+        let entry = &active_stack.entries[idx - 1];
+        if entry.is_merged {
+            return Err(CascadeError::config(format!(
+                "Entry {} ('{}') is already merged. Use 'ca stacks cleanup' to remove merged entries.",
+                idx,
+                entry.short_message(40)
+            )));
+        }
+    }
+
+    // Display entries to drop
+    let has_submitted = indices
+        .iter()
+        .any(|&idx| active_stack.entries[idx - 1].is_submitted);
+
+    Output::section(format!("Entries to drop ({})", indices.len()));
+    for &idx in &indices {
+        let entry = &active_stack.entries[idx - 1];
+        let pr_status = if entry.is_submitted {
+            format!(" [PR #{}]", entry.pull_request_id.as_deref().unwrap_or("?"))
+        } else {
+            String::new()
+        };
+        Output::numbered_item(
+            idx,
+            format!(
+                "{} {} (branch: {}){}",
+                entry.short_hash(),
+                entry.short_message(40),
+                entry.branch,
+                pr_status
+            ),
+        );
+    }
+
+    // Confirmation
+    if !force && !yes {
+        if has_submitted {
+            Output::warning("Some entries have associated pull requests.");
+        }
+
+        let default_confirm = !has_submitted;
+        let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!("Drop {} entry/entries from stack?", indices.len()))
+            .default(default_confirm)
+            .interact()
+            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !should_continue {
+            Output::info("Drop cancelled.");
+            return Ok(());
+        }
+    }
+
+    // Collect entry info before removal (we need branch names and PR info)
+    let entries_info: Vec<(String, Option<String>, bool)> = indices
+        .iter()
+        .map(|&idx| {
+            let entry = &active_stack.entries[idx - 1];
+            (
+                entry.branch.clone(),
+                entry.pull_request_id.clone(),
+                entry.is_submitted,
+            )
+        })
+        .collect();
+
+    let current_branch = repo.get_current_branch()?;
+
+    // Lazily construct Bitbucket client only if needed
+    let mut pr_manager = None;
+
+    // Remove entries in reverse index order to preserve indices
+    for (i, &idx) in indices.iter().enumerate().rev() {
+        let zero_idx = idx - 1;
+        match manager.remove_stack_entry_at(&stack_id, zero_idx)? {
+            Some(removed) => {
+                Output::success(format!(
+                    "Dropped entry {}: {} {}",
+                    idx,
+                    removed.short_hash(),
+                    removed.short_message(40)
+                ));
+            }
+            None => {
+                Output::warning(format!("Could not remove entry {idx}"));
+                continue;
+            }
+        }
+
+        let (ref branch_name, ref pr_id, is_submitted) = entries_info[i];
+
+        // Delete branch unless --keep-branch or it's the current branch
+        if !keep_branch && *branch_name != current_branch {
+            match repo.delete_branch(branch_name) {
+                Ok(_) => Output::sub_item(format!("Deleted branch: {branch_name}")),
+                Err(e) => Output::warning(format!("Could not delete branch {branch_name}: {e}")),
+            }
+        }
+
+        // Offer to decline PR if entry was submitted
+        if is_submitted {
+            if let Some(pr_id_str) = pr_id {
+                if let Ok(pr_id_num) = pr_id_str.parse::<u64>() {
+                    let should_decline = if force {
+                        false
+                    } else {
+                        Confirm::with_theme(&ColorfulTheme::default())
+                            .with_prompt(format!("Decline PR #{pr_id_num} on Bitbucket?"))
+                            .default(false)
+                            .interact()
+                            .unwrap_or(false)
+                    };
+
+                    if should_decline {
+                        // Lazily create PR manager
+                        if pr_manager.is_none() {
+                            let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
+                            let config_path = config_dir.join("config.json");
+                            let settings = crate::config::Settings::load_from_file(&config_path)?;
+                            let client =
+                                crate::bitbucket::BitbucketClient::new(&settings.bitbucket)?;
+                            pr_manager = Some(crate::bitbucket::PullRequestManager::new(client));
+                        }
+
+                        if let Some(ref mgr) = pr_manager {
+                            match mgr
+                                .decline_pull_request(pr_id_num, "Dropped from stack")
+                                .await
+                            {
+                                Ok(_) => Output::sub_item(format!(
+                                    "Declined PR #{pr_id_num} on Bitbucket"
+                                )),
+                                Err(e) => Output::warning(format!(
+                                    "Failed to decline PR #{pr_id_num}: {e}"
+                                )),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Output::success(format!(
+        "Dropped {} entry/entries from stack",
+        indices.len()
+    ));
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5242,6 +5646,7 @@ mod tests {
                     false, // auto_branch
                     false, // allow_base_branch
                     false, // dry_run
+                    true,  // yes (skip prompts in test)
                 )
                 .await;
 
@@ -5290,6 +5695,7 @@ mod tests {
             auto_branch: false,
             allow_base_branch: false,
             dry_run: false,
+            yes: false,
         };
 
         assert!(matches!(
@@ -5304,7 +5710,8 @@ mod tests {
                 squash_since: None,
                 auto_branch: false,
                 allow_base_branch: false,
-                dry_run: false
+                dry_run: false,
+                yes: false
             }
         ));
     }
@@ -5440,7 +5847,8 @@ mod tests {
                 squash_since: None,
                 auto_branch: false,
                 allow_base_branch: false,
-                dry_run: false
+                dry_run: false,
+                yes: false
             },
             StackAction::Push { .. }
         ));

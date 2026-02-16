@@ -43,7 +43,7 @@ async fn test_complete_stack_workflow() {
 
     // Test stack push
     let output = Command::new(&binary_path)
-        .args(["push"])
+        .args(["push", "--yes"])
         .current_dir(&repo_path)
         .env("RUST_LOG", "info")
         .output()

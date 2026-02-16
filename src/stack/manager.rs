@@ -655,6 +655,38 @@ impl StackManager {
         Ok(Some(entry))
     }
 
+    /// Remove a stack entry by 0-based index, reparenting children, and update metadata
+    pub fn remove_stack_entry_at(
+        &mut self,
+        stack_id: &Uuid,
+        index: usize,
+    ) -> Result<Option<StackEntry>> {
+        let stack = match self.stacks.get_mut(stack_id) {
+            Some(stack) => stack,
+            None => return Err(CascadeError::config(format!("Stack {stack_id} not found"))),
+        };
+
+        let entry = match stack.remove_entry_at(index) {
+            Some(entry) => entry,
+            None => return Ok(None),
+        };
+
+        // Update repository metadata (commit + branch bookkeeping)
+        self.metadata.remove_commit(&entry.commit_hash);
+        if let Some(stack_meta) = self.metadata.get_stack_mut(stack_id) {
+            stack_meta.remove_commit(&entry.commit_hash);
+            stack_meta.remove_branch(&entry.branch);
+
+            let submitted = stack.entries.iter().filter(|e| e.is_submitted).count();
+            let merged = stack.entries.iter().filter(|e| e.is_merged).count();
+            stack_meta.update_stats(stack.entries.len(), submitted, merged);
+        }
+
+        self.save_to_disk()?;
+
+        Ok(Some(entry))
+    }
+
     /// Update merged state for a stack entry
     pub fn set_entry_merged(
         &mut self,

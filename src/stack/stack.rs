@@ -156,6 +156,40 @@ impl Stack {
         }
     }
 
+    /// Remove an entry by 0-based index, reparenting children to the removed entry's parent
+    pub fn remove_entry_at(&mut self, index: usize) -> Option<StackEntry> {
+        if index >= self.entries.len() {
+            return None;
+        }
+
+        let entry = self.entries.remove(index);
+        let entry_id = entry.id;
+        self.entry_map.remove(&entry_id);
+
+        // Reparent children to the removed entry's parent
+        for &child_id in &entry.children {
+            if let Some(child) = self.entry_map.get_mut(&child_id) {
+                child.parent_id = entry.parent_id;
+            }
+        }
+
+        // Update parent: remove this entry from children, adopt grandchildren
+        if let Some(parent_id) = entry.parent_id {
+            if let Some(parent) = self.entry_map.get_mut(&parent_id) {
+                parent.children.retain(|&id| id != entry_id);
+                for &child_id in &entry.children {
+                    if !parent.children.contains(&child_id) {
+                        parent.children.push(child_id);
+                    }
+                }
+            }
+        }
+
+        self.sync_entries_from_map();
+        self.updated_at = Utc::now();
+        Some(entry)
+    }
+
     /// Get an entry by ID
     pub fn get_entry(&self, id: &Uuid) -> Option<&StackEntry> {
         self.entry_map.get(id)

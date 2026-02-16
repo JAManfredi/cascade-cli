@@ -340,7 +340,7 @@ async fn test_cli_network_error_integration() {
 
     // Try push operation (would require network)
     let push_result = Command::new(&binary_path)
-        .args(["push"])
+        .args(["push", "--yes"])
         .current_dir(&repo_path)
         .output()
         .expect("Command should run");

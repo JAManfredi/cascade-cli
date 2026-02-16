@@ -124,7 +124,8 @@ fn create_conflicting_stack(
         .output()
         .map_err(|e| format!("Failed to commit: {e}"))?;
 
-    let (success, _, stderr) = run_ca_command(&["push", "--allow-base-branch"], repo_path)?;
+    let (success, _, stderr) =
+        run_ca_command(&["push", "--allow-base-branch", "--yes"], repo_path)?;
     if !success {
         return Err(format!("Failed to push commit: {stderr}"));
     }

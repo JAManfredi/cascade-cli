@@ -120,7 +120,8 @@ fn create_test_stack(repo_path: &Path, stack_name: &str) -> Result<(), String> {
         .output()
         .map_err(|e| format!("Failed to commit: {e}"))?;
 
-    let (success, _, stderr) = run_ca_command(&["push", "--allow-base-branch"], repo_path)?;
+    let (success, _, stderr) =
+        run_ca_command(&["push", "--allow-base-branch", "--yes"], repo_path)?;
     if !success {
         return Err(format!("Failed to push first commit: {stderr}"));
     }
@@ -138,7 +139,8 @@ fn create_test_stack(repo_path: &Path, stack_name: &str) -> Result<(), String> {
         .output()
         .map_err(|e| format!("Failed to commit: {e}"))?;
 
-    let (success, _, stderr) = run_ca_command(&["push", "--allow-base-branch"], repo_path)?;
+    let (success, _, stderr) =
+        run_ca_command(&["push", "--allow-base-branch", "--yes"], repo_path)?;
     if !success {
         return Err(format!("Failed to push second commit: {stderr}"));
     }
@@ -344,7 +346,13 @@ fn test_sync_with_conflicts() {
         .unwrap();
 
     run_ca_command(
-        &["push", "--allow-base-branch", "-m", "Add conflict file"],
+        &[
+            "push",
+            "--allow-base-branch",
+            "--yes",
+            "-m",
+            "Add conflict file",
+        ],
         repo_path,
     )
     .unwrap();

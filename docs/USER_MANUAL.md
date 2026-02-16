@@ -458,7 +458,13 @@ ca push [OPTIONS]
 --commits <HASHES>      # Push specific commits (comma-separated)
 --squash <N>            # 🎉 Squash last N commits into 1 clean commit
 --squash-since <REF>    # 🎉 Squash all commits since reference
+--yes, -y               # Skip confirmation prompts
+--dry-run               # Preview commits without pushing
 ```
+
+**Stale Base Detection:** When the base branch has moved forward since your branch diverged, `ca push` warns you and suggests rebasing first. Use `--yes` to skip this check.
+
+**Commit Confirmation:** Before pushing, `ca push` shows a numbered list of commits with authors. Commits from other authors are highlighted. The default confirmation is `yes` for same-author commits and `no` for mixed-author commits. Use `--yes` to skip confirmation.
 
 **Default Behavior:** When no specific targeting options are provided, `ca push` pushes **all unpushed commits** since the last stack push.
 
@@ -545,6 +551,45 @@ ca pop --keep-branch
 
 # Force removal
 ca pop --force
+```
+
+#### **`ca drop`** - Remove Entries by Position
+Remove one or more stack entries by position. Unlike `ca pop` which only removes the top entry, `ca drop` can remove any entry and supports ranges.
+
+```bash
+ca drop <ENTRY> [OPTIONS]
+
+# Arguments:
+<ENTRY>                 # Position or range (e.g., "3", "1-5", "1,3,5")
+
+# Options:
+--keep-branch           # Keep the associated branch(es)
+--force, -f             # Skip all confirmation prompts
+--yes, -y               # Skip confirmation prompts
+```
+
+**Behavior:**
+- Removes entries and reparents any children to the removed entry's parent
+- Refuses to drop merged entries (use `ca stacks cleanup` instead)
+- Deletes associated branches unless `--keep-branch` is specified
+- For submitted entries with PRs, offers to decline the PR on Bitbucket
+
+**Examples:**
+```bash
+# Remove a single entry
+ca drop 3
+
+# Remove a range of entries
+ca drop 1-5
+
+# Remove specific entries
+ca drop 1,3,5
+
+# Remove entry but keep its branch
+ca drop 3 --keep-branch
+
+# Skip all prompts (won't auto-decline PRs)
+ca drop 3 --force
 ```
 
 #### **`ca submit`** - Create Pull Requests

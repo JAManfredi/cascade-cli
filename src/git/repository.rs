@@ -1056,6 +1056,17 @@ impl GitRepository {
         Ok(())
     }
 
+    /// Read the configured git user name and email from git config
+    pub fn get_user_info(&self) -> (Option<String>, Option<String>) {
+        let config = match self.repo.config() {
+            Ok(c) => c,
+            Err(_) => return (None, None),
+        };
+        let name = config.get_string("user.name").ok();
+        let email = config.get_string("user.email").ok();
+        (name, email)
+    }
+
     /// Get a signature for commits with comprehensive fallback and validation
     fn get_signature(&self) -> Result<Signature<'_>> {
         // Try to get signature from Git config first

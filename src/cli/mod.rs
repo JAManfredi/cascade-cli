@@ -167,6 +167,9 @@ pub enum Commands {
         /// Show what would be pushed without actually pushing
         #[arg(long)]
         dry_run: bool,
+        /// Skip confirmation prompts
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 
     /// Pop the top commit from the stack (shortcut for 'stack pop')
@@ -174,6 +177,21 @@ pub enum Commands {
         /// Keep the branch (don't delete it)
         #[arg(long)]
         keep_branch: bool,
+    },
+
+    /// Drop (remove) stack entries by position (shortcut for 'stacks drop')
+    Drop {
+        /// Entry position or range (e.g., "3", "1-5", "1,3,5")
+        entry: String,
+        /// Keep the branch (don't delete it)
+        #[arg(long)]
+        keep_branch: bool,
+        /// Skip all confirmation prompts
+        #[arg(long, short)]
+        force: bool,
+        /// Skip confirmation prompts
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 
     /// Land (merge) approved stack entries (shortcut for 'stack land')
@@ -587,6 +605,7 @@ impl Cli {
                 auto_branch,
                 allow_base_branch,
                 dry_run,
+                yes,
             } => {
                 commands::stack::push(
                     branch,
@@ -599,11 +618,19 @@ impl Cli {
                     auto_branch,
                     allow_base_branch,
                     dry_run,
+                    yes,
                 )
                 .await
             }
 
             Commands::Pop { keep_branch } => commands::stack::pop(keep_branch).await,
+
+            Commands::Drop {
+                entry,
+                keep_branch,
+                force,
+                yes,
+            } => commands::stack::drop(entry, keep_branch, force, yes).await,
 
             Commands::Land {
                 entry,
