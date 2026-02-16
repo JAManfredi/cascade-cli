@@ -332,8 +332,7 @@ async fn test_config_validation() {
     let config_result = Settings::load_from_file(&config_path);
 
     // Should either fail to load or handle invalid settings gracefully
-    if config_result.is_ok() {
-        let config = config_result.unwrap();
+    if let Ok(config) = config_result {
         // If it loads, should have validation that catches invalid URL
         let client_result = cascade_cli::bitbucket::BitbucketClient::new(&config.bitbucket);
         assert!(client_result.is_err(), "Should reject invalid URL");

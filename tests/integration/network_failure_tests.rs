@@ -69,21 +69,24 @@ async fn test_api_rate_limiting_behavior() {
     let elapsed = start_time.elapsed();
 
     // Should either succeed after retry or fail with rate limit error
-    if result.is_ok() {
-        // If it succeeded, it should have taken some time for retry
-        assert!(
-            elapsed >= Duration::from_millis(100),
-            "Should have taken time to retry"
-        );
-    } else {
-        // If it failed, should contain rate limit information
-        let error_msg = result.unwrap_err().to_string();
-        assert!(
-            error_msg.contains("429")
-                || error_msg.contains("rate limit")
-                || error_msg.contains("Too many"),
-            "Should contain rate limit error: {error_msg}"
-        );
+    match result {
+        Ok(_) => {
+            // If it succeeded, it should have taken some time for retry
+            assert!(
+                elapsed >= Duration::from_millis(100),
+                "Should have taken time to retry"
+            );
+        }
+        Err(e) => {
+            // If it failed, should contain rate limit information
+            let error_msg = e.to_string();
+            assert!(
+                error_msg.contains("429")
+                    || error_msg.contains("rate limit")
+                    || error_msg.contains("Too many"),
+                "Should contain rate limit error: {error_msg}"
+            );
+        }
     }
 }
 
@@ -127,13 +130,13 @@ async fn test_network_timeout_handling() {
     match result {
         Ok(connection_result) => {
             // Connection completed within timeout
-            if connection_result.is_err() {
-                println!(
-                    "Connection failed within timeout (expected): {:?}",
-                    connection_result.unwrap_err()
-                );
-            } else {
-                println!("Connection succeeded within timeout");
+            match connection_result {
+                Err(e) => {
+                    println!("Connection failed within timeout (expected): {e:?}");
+                }
+                Ok(_) => {
+                    println!("Connection succeeded within timeout");
+                }
             }
         }
         Err(_) => {
