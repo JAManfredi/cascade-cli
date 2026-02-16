@@ -3976,12 +3976,14 @@ async fn land_stack(
 
     // Default behavior: land all ready PRs (safest approach)
     // Only land specific entry if explicitly requested
-    if entry.is_some() && ready_prs.len() > 1 {
-        Output::info(format!(
-            "{} PRs are ready to land, but landing only entry #{}",
-            ready_prs.len(),
-            entry.unwrap()
-        ));
+    if let Some(entry_num) = entry {
+        if ready_prs.len() > 1 {
+            Output::info(format!(
+                "{} PRs are ready to land, but landing only entry #{}",
+                ready_prs.len(),
+                entry_num
+            ));
+        }
     }
 
     // Setup auto-merge conditions
