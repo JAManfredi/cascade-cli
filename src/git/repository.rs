@@ -478,22 +478,35 @@ impl GitRepository {
             CascadeError::branch(format!("Could not get tree for branch '{name}': {e}"))
         })?;
 
-        // Checkout the tree with proper options
-        // Force overwrite to ensure working directory matches branch exactly
+        // Update HEAD first — this validates that the branch can be checked out
+        // (e.g., not already checked out in another worktree). Doing this before
+        // checkout_tree prevents leaving the working directory in an inconsistent
+        // state if set_head fails.
+        let old_head = self.repo.head().ok();
+        self.repo
+            .set_head(&format!("refs/heads/{name}"))
+            .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{name}': {e}")))?;
+
+        // Now checkout the tree to update the working directory
         let mut checkout_builder = git2::build::CheckoutBuilder::new();
         checkout_builder.force(); // Overwrite modified files
         checkout_builder.remove_untracked(false); // Keep untracked files
 
-        self.repo
+        if let Err(e) = self
+            .repo
             .checkout_tree(tree.as_object(), Some(&mut checkout_builder))
-            .map_err(|e| {
-                CascadeError::branch(format!("Could not checkout branch '{name}': {e}"))
-            })?;
-
-        // Update HEAD
-        self.repo
-            .set_head(&format!("refs/heads/{name}"))
-            .map_err(|e| CascadeError::branch(format!("Could not update HEAD to '{name}': {e}")))?;
+        {
+            // Restore HEAD if checkout_tree fails so we don't leave HEAD
+            // pointing at a branch whose tree isn't checked out
+            if let Some(old) = old_head {
+                if let Some(old_name) = old.name() {
+                    let _ = self.repo.set_head(old_name);
+                }
+            }
+            return Err(CascadeError::branch(format!(
+                "Could not checkout branch '{name}': {e}"
+            )));
+        }
 
         if show_output {
             Output::success(format!("Switched to branch '{name}'"));
