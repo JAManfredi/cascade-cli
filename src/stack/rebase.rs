@@ -862,15 +862,24 @@ impl RebaseManager {
                                     if !commits.is_empty() {
                                         // Check if these commits match the stack entry messages
                                         // If so, they're likely old pre-rebase versions, not new work
-                                        let stack_messages: Vec<String> = stack
+                                        // Compare first lines (summaries) only, since commit.summary()
+                                        // returns just the first line while entry.message stores the full body
+                                        let stack_summaries: Vec<String> = stack
                                             .entries
                                             .iter()
-                                            .map(|e| e.message.trim().to_string())
+                                            .map(|e| {
+                                                e.message
+                                                    .lines()
+                                                    .next()
+                                                    .unwrap_or("")
+                                                    .trim()
+                                                    .to_string()
+                                            })
                                             .collect();
 
                                         let all_match_stack = commits.iter().all(|commit| {
                                             if let Some(msg) = commit.summary() {
-                                                stack_messages
+                                                stack_summaries
                                                     .iter()
                                                     .any(|stack_msg| stack_msg == msg.trim())
                                             } else {

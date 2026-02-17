@@ -20,7 +20,7 @@ pub fn get_config_dir() -> Result<PathBuf> {
 }
 
 /// Get the Cascade configuration directory for a specific repository.
-/// In a worktree, falls back to the main repo's `.cascade/` directory
+/// In a worktree, always uses the main repo's `.cascade/` directory
 /// so that config, stacks, and credentials are shared across worktrees.
 pub fn get_repo_config_dir(repo_path: &Path) -> Result<PathBuf> {
     // Validate that repo_path is a real directory
@@ -28,32 +28,27 @@ pub fn get_repo_config_dir(repo_path: &Path) -> Result<PathBuf> {
         CascadeError::config(format!("Invalid repository path '{repo_path:?}': {e}"))
     })?;
 
-    let config_dir = canonical_repo.join(".cascade");
-
-    // If .cascade exists here, use it directly
-    if config_dir.exists() {
-        return crate::utils::path_validation::validate_config_path(&config_dir, &canonical_repo);
-    }
-
-    // Fall back to the main repo root for worktrees
+    // Check if we're in a worktree by comparing commondir to the repo path.
+    // commondir() points to the shared .git dir; canonicalize to strip any
+    // trailing slash, then take parent() to get the main repo root.
     if let Ok(repo) = git2::Repository::discover(repo_path) {
-        if let Some(main_workdir) = repo.commondir().parent() {
-            let main_canonical = main_workdir
-                .canonicalize()
-                .unwrap_or(main_workdir.to_path_buf());
+        let commondir = repo.commondir().to_path_buf();
+        let commondir_clean = commondir.canonicalize().unwrap_or(commondir);
+        if let Some(main_root) = commondir_clean.parent() {
+            let main_canonical = main_root.canonicalize().unwrap_or(main_root.to_path_buf());
             if main_canonical != canonical_repo {
+                // We're in a worktree — always use the main repo's .cascade/
                 let main_config_dir = main_canonical.join(".cascade");
-                if main_config_dir.exists() {
-                    return crate::utils::path_validation::validate_config_path(
-                        &main_config_dir,
-                        &main_canonical,
-                    );
-                }
+                return crate::utils::path_validation::validate_config_path(
+                    &main_config_dir,
+                    &main_canonical,
+                );
             }
         }
     }
 
-    // Default: return the workdir-relative path (for init or when no config exists yet)
+    // Not a worktree — use the repo's own .cascade/
+    let config_dir = canonical_repo.join(".cascade");
     crate::utils::path_validation::validate_config_path(&config_dir, &canonical_repo)
 }
 
