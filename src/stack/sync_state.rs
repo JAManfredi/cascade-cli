@@ -1,6 +1,6 @@
 use crate::errors::{CascadeError, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// State for an in-progress sync operation
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -26,9 +26,13 @@ pub struct SyncState {
 }
 
 impl SyncState {
+    fn state_path(repo_root: &Path) -> Result<PathBuf> {
+        Ok(crate::git::resolve_git_dir(repo_root)?.join("CASCADE_SYNC_STATE"))
+    }
+
     /// Save sync state to disk
     pub fn save(&self, repo_root: &Path) -> Result<()> {
-        let state_path = repo_root.join(".git").join("CASCADE_SYNC_STATE");
+        let state_path = Self::state_path(repo_root)?;
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| CascadeError::config(format!("Failed to serialize sync state: {e}")))?;
 
@@ -41,7 +45,7 @@ impl SyncState {
 
     /// Load sync state from disk
     pub fn load(repo_root: &Path) -> Result<Self> {
-        let state_path = repo_root.join(".git").join("CASCADE_SYNC_STATE");
+        let state_path = Self::state_path(repo_root)?;
 
         if !state_path.exists() {
             return Err(CascadeError::config(
@@ -61,7 +65,7 @@ impl SyncState {
 
     /// Delete sync state file
     pub fn delete(repo_root: &Path) -> Result<()> {
-        let state_path = repo_root.join(".git").join("CASCADE_SYNC_STATE");
+        let state_path = Self::state_path(repo_root)?;
 
         if state_path.exists() {
             std::fs::remove_file(&state_path)
@@ -74,6 +78,8 @@ impl SyncState {
 
     /// Check if sync state exists
     pub fn exists(repo_root: &Path) -> bool {
-        repo_root.join(".git").join("CASCADE_SYNC_STATE").exists()
+        crate::git::resolve_git_dir(repo_root)
+            .map(|d| d.join("CASCADE_SYNC_STATE").exists())
+            .unwrap_or(false)
     }
 }

@@ -1099,7 +1099,7 @@ impl RebaseManager {
         debug!("has_conflicts() = {}", has_conflicts);
 
         // Check if cherry-pick is in progress
-        let cherry_pick_head = self.git_repo.path().join(".git").join("CHERRY_PICK_HEAD");
+        let cherry_pick_head = self.git_repo.git_dir().join("CHERRY_PICK_HEAD");
         let cherry_pick_in_progress = cherry_pick_head.exists();
 
         if !has_conflicts {
@@ -1655,7 +1655,7 @@ impl RebaseManager {
     /// Check if rebase is in progress
     pub fn is_rebase_in_progress(&self) -> bool {
         // Check for git rebase state files
-        let git_dir = self.git_repo.path().join(".git");
+        let git_dir = self.git_repo.git_dir();
         git_dir.join("REBASE_HEAD").exists()
             || git_dir.join("rebase-merge").exists()
             || git_dir.join("rebase-apply").exists()
@@ -1665,7 +1665,7 @@ impl RebaseManager {
     pub fn abort_rebase(&self) -> Result<()> {
         tracing::debug!("Aborting rebase operation");
 
-        let git_dir = self.git_repo.path().join(".git");
+        let git_dir = self.git_repo.git_dir();
 
         // Clean up rebase state files
         if git_dir.join("REBASE_HEAD").exists() {
@@ -1716,7 +1716,7 @@ impl RebaseManager {
 
     /// Check if there's an in-progress cherry-pick operation
     fn has_in_progress_cherry_pick(&self) -> Result<bool> {
-        let git_dir = self.git_repo.path().join(".git");
+        let git_dir = self.git_repo.git_dir();
         Ok(git_dir.join("CHERRY_PICK_HEAD").exists())
     }
 
@@ -1724,7 +1724,7 @@ impl RebaseManager {
     fn handle_in_progress_cherry_pick(&mut self, stack: &Stack) -> Result<RebaseResult> {
         use crate::cli::output::Output;
 
-        let git_dir = self.git_repo.path().join(".git");
+        let git_dir = self.git_repo.git_dir();
 
         Output::section("Resuming in-progress sync");
         println!();

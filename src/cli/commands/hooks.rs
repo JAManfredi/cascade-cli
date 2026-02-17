@@ -298,11 +298,17 @@ impl HooksManager {
             .output()
             .map_err(|e| CascadeError::config(format!("Failed to check git config: {e}")))?;
 
+        let default_hooks_dir = || -> PathBuf {
+            let repo = git2::Repository::discover(repo_path).ok();
+            repo.map(|r| r.commondir().join("hooks"))
+                .unwrap_or_else(|| repo_path.join(".git").join("hooks"))
+        };
+
         let hooks_path = if output.status.success() {
             let configured_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if configured_path.is_empty() {
                 // Empty value means default
-                repo_path.join(".git").join("hooks")
+                default_hooks_dir()
             } else if configured_path.starts_with('/') {
                 // Absolute path
                 PathBuf::from(configured_path)
@@ -312,7 +318,7 @@ impl HooksManager {
             }
         } else {
             // No core.hooksPath configured, use default
-            repo_path.join(".git").join("hooks")
+            default_hooks_dir()
         };
 
         Ok(hooks_path)
@@ -454,7 +460,11 @@ impl HooksManager {
         // These might have been left behind from earlier versions
         // IMPORTANT: Only remove hooks that have our EXACT wrapper pattern to avoid
         // deleting user's custom hooks that might mention "Cascade"
-        let git_hooks_dir = self.repo_path.join(".git").join("hooks");
+        let git_hooks_dir = {
+            let repo = git2::Repository::discover(&self.repo_path).ok();
+            repo.map(|r| r.commondir().join("hooks"))
+                .unwrap_or_else(|| self.repo_path.join(".git").join("hooks"))
+        };
         if git_hooks_dir.exists() {
             for hook_type in &[
                 HookType::PostCommit,
@@ -584,11 +594,12 @@ impl HooksManager {
                 Output::success(format!("{}: {} ✓", hook.filename(), hook.description()));
             } else {
                 // Check default location
-                let default_hook_path = self
-                    .repo_path
-                    .join(".git")
-                    .join("hooks")
-                    .join(hook.filename());
+                let default_hook_path = {
+                    let repo = git2::Repository::discover(&self.repo_path).ok();
+                    repo.map(|r| r.commondir().join("hooks"))
+                        .unwrap_or_else(|| self.repo_path.join(".git").join("hooks"))
+                }
+                .join(hook.filename());
                 if default_hook_path.exists() {
                     Output::warning(format!(
                         "{}: {} (In .git/hooks, not managed by Cascade)",
@@ -860,9 +871,9 @@ impl HooksManager {
                  rem Prevents force pushes and validates stack state\n\n\
                  rem Allow force pushes from Cascade internal commands (ca sync, ca submit, etc.)\n\
                  rem Check for marker file (Git hooks don't inherit env vars)\n\
-                 for /f \"tokens=*\" %%i in ('git rev-parse --show-toplevel 2^>nul') do set REPO_ROOT=%%i\n\
-                 if \"%REPO_ROOT%\"==\"\" set REPO_ROOT=.\n\
-                 if exist \"%REPO_ROOT%\\.git\\.cascade-internal-push\" (\n\
+                 for /f \"tokens=*\" %%i in ('git rev-parse --git-dir 2^>nul') do set GIT_DIR=%%i\n\
+                 if \"%GIT_DIR%\"==\"\" set GIT_DIR=.git\n\
+                 if exist \"%GIT_DIR%\\.cascade-internal-push\" (\n\
                      exit /b 0\n\
                  )\n\n\
                  rem Check for force push from user\n\
@@ -906,8 +917,8 @@ impl HooksManager {
                  set -e\n\n\
                  # Allow force pushes from Cascade internal commands (ca sync, ca submit, etc.)\n\
                  # Check for marker file (Git hooks don't inherit env vars)\n\
-                 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo \".\")\n\
-                 if [ -f \"$REPO_ROOT/.git/.cascade-internal-push\" ]; then\n\
+                 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || echo \".git\")\n\
+                 if [ -f \"$GIT_DIR/.cascade-internal-push\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
                  # Check for force push from user\n\
@@ -1030,9 +1041,11 @@ exit 0
                  rem Skip hook if called from ca entry amend ^(avoid infinite loop^)\n\
                  if \\\"%CASCADE_SKIP_HOOKS%\\\"==\\\"1\\\" exit /b 0\n\n\
                  rem Skip hook during cherry-pick/rebase/merge operations\n\
-                 if exist \\\"%REPO_ROOT%\\.git\\CHERRY_PICK_HEAD\\\" exit /b 0\n\
-                 if exist \\\"%REPO_ROOT%\\.git\\REBASE_HEAD\\\" exit /b 0\n\
-                 if exist \\\"%REPO_ROOT%\\.git\\MERGE_HEAD\\\" exit /b 0\n\n\
+                 for /f \\\"tokens=*\\\" %%i in ('git rev-parse --git-dir 2^>nul') do set GIT_DIR=%%i\n\
+                 if \\\"%GIT_DIR%\\\"==\\\"\\\" set GIT_DIR=.git\n\
+                 if exist \\\"%GIT_DIR%\\CHERRY_PICK_HEAD\\\" exit /b 0\n\
+                 if exist \\\"%GIT_DIR%\\REBASE_HEAD\\\" exit /b 0\n\
+                 if exist \\\"%GIT_DIR%\\MERGE_HEAD\\\" exit /b 0\n\n\
                  rem Get edit status\n\
                  for /f \\\"tokens=*\\\" %%i in ('\\\"{0}\\\" entry status --quiet 2^>nul') do set EDIT_STATUS=%%i\n\
                  if \\\"%EDIT_STATUS%\\\"==\\\"\\\" set EDIT_STATUS=inactive\n\n\
@@ -1111,7 +1124,8 @@ exit 0
                 "fi".to_string(),
                 "".to_string(),
                 "# Skip hook during cherry-pick/rebase/merge operations".to_string(),
-                r#"if [ -f "$REPO_ROOT/.git/CHERRY_PICK_HEAD" ] || [ -f "$REPO_ROOT/.git/REBASE_HEAD" ] || [ -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then"#.to_string(),
+                r#"GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || echo ".git")"#.to_string(),
+                r#"if [ -f "$GIT_DIR/CHERRY_PICK_HEAD" ] || [ -f "$GIT_DIR/REBASE_HEAD" ] || [ -f "$GIT_DIR/MERGE_HEAD" ]; then"#.to_string(),
                 "    exit 0".to_string(),
                 "fi".to_string(),
                 "".to_string(),

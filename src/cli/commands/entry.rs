@@ -41,12 +41,12 @@ struct RestackState {
 }
 
 impl RestackState {
-    fn state_file_path(repo_root: &Path) -> PathBuf {
-        repo_root.join(".git").join("CASCADE_RESTACK_STATE")
+    fn state_file_path(repo_root: &Path) -> Result<PathBuf> {
+        Ok(crate::git::resolve_git_dir(repo_root)?.join("CASCADE_RESTACK_STATE"))
     }
 
     fn save(&self, repo_root: &Path) -> Result<()> {
-        let path = Self::state_file_path(repo_root);
+        let path = Self::state_file_path(repo_root)?;
         let json = serde_json::to_string_pretty(self).map_err(|e| {
             CascadeError::config(format!("Failed to serialize restack state: {}", e))
         })?;
@@ -57,7 +57,7 @@ impl RestackState {
     }
 
     fn load(repo_root: &Path) -> Result<Option<Self>> {
-        let path = Self::state_file_path(repo_root);
+        let path = Self::state_file_path(repo_root)?;
         if !path.exists() {
             return Ok(None);
         }
@@ -71,7 +71,7 @@ impl RestackState {
     }
 
     fn delete(repo_root: &Path) -> Result<()> {
-        let path = Self::state_file_path(repo_root);
+        let path = Self::state_file_path(repo_root)?;
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| {
                 CascadeError::config(format!("Failed to delete restack state: {}", e))
@@ -1266,7 +1266,7 @@ async fn continue_restack() -> Result<()> {
     let git_repo = GitRepository::open(&repo_root)?;
 
     // Check if there's a cherry-pick in progress
-    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    let cherry_pick_head = git_repo.git_dir().join("CHERRY_PICK_HEAD");
     if !cherry_pick_head.exists() {
         return Err(CascadeError::validation(
             "No cherry-pick in progress. Nothing to continue.".to_string(),
@@ -1574,7 +1574,7 @@ async fn abort_restack() -> Result<()> {
     let repo_root = find_repository_root(&current_dir)?;
 
     // Check if there's a cherry-pick in progress
-    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    let cherry_pick_head = crate::git::resolve_git_dir(&repo_root)?.join("CHERRY_PICK_HEAD");
     if !cherry_pick_head.exists() {
         return Err(CascadeError::validation(
             "No cherry-pick in progress. Nothing to abort.".to_string(),

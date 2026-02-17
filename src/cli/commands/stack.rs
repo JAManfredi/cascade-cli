@@ -2497,7 +2497,7 @@ pub async fn continue_sync() -> Result<()> {
     println!();
 
     // Check if there's an in-progress cherry-pick
-    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    let cherry_pick_head = crate::git::resolve_git_dir(&repo_root)?.join("CHERRY_PICK_HEAD");
     if !cherry_pick_head.exists() {
         return Err(CascadeError::config(
             "No in-progress cherry-pick found. Nothing to continue.\n\n\
@@ -2734,7 +2734,7 @@ pub async fn abort_sync() -> Result<()> {
     println!();
 
     // Check if there's an in-progress cherry-pick
-    let cherry_pick_head = repo_root.join(".git").join("CHERRY_PICK_HEAD");
+    let cherry_pick_head = crate::git::resolve_git_dir(&repo_root)?.join("CHERRY_PICK_HEAD");
     if !cherry_pick_head.exists() {
         return Err(CascadeError::config(
             "No in-progress cherry-pick found. Nothing to abort.\n\n\
@@ -3439,7 +3439,7 @@ async fn rebase_status() -> Result<()> {
     println!("Rebase Status");
 
     // Check if rebase is in progress by checking git state directly
-    let git_dir = current_dir.join(".git");
+    let git_dir = git_repo.git_dir();
     let rebase_in_progress = git_dir.join("REBASE_HEAD").exists()
         || git_dir.join("rebase-merge").exists()
         || git_dir.join("rebase-apply").exists();
@@ -4340,7 +4340,7 @@ async fn continue_land() -> Result<()> {
 
     // Check if there's a rebase in progress
     let git_repo = crate::git::GitRepository::open(&repo_root)?;
-    let git_dir = repo_root.join(".git");
+    let git_dir = git_repo.git_dir();
     let has_cherry_pick = git_dir.join("CHERRY_PICK_HEAD").exists();
     let has_rebase = git_dir.join("REBASE_HEAD").exists()
         || git_dir.join("rebase-merge").exists()
@@ -4529,7 +4529,7 @@ async fn land_status() -> Result<()> {
     println!("Land Status");
 
     // Check if land operation is in progress by checking git state directly
-    let git_dir = repo_root.join(".git");
+    let git_dir = git_repo.git_dir();
     let land_in_progress = git_dir.join("REBASE_HEAD").exists()
         || git_dir.join("rebase-merge").exists()
         || git_dir.join("rebase-apply").exists();

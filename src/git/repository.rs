@@ -396,7 +396,7 @@ impl GitRepository {
 
         // Create marker file to signal pre-push hook to allow this internal push
         // (Git hooks don't inherit env vars, so we use a file marker instead)
-        let marker_path = self.path.join(".git").join(".cascade-internal-push");
+        let marker_path = self.git_dir().join(".cascade-internal-push");
         std::fs::write(&marker_path, "1")
             .map_err(|e| CascadeError::branch(format!("Failed to create push marker: {}", e)))?;
 
@@ -899,6 +899,18 @@ impl GitRepository {
     /// Get repository path
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Per-worktree git directory.
+    /// Normal repos: /repo/.git/  |  Worktrees: /main/.git/worktrees/<name>/
+    pub fn git_dir(&self) -> &Path {
+        self.repo.path()
+    }
+
+    /// Shared common git directory (hooks, objects, refs).
+    /// Normal repos: same as git_dir()  |  Worktrees: /main/.git/
+    pub fn common_dir(&self) -> &Path {
+        self.repo.commondir()
     }
 
     /// Check if a commit exists

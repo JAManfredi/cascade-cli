@@ -287,7 +287,7 @@ pub mod git_lock {
     /// Detect and remove stale Git index lock if safe to do so
     /// Returns true if a stale lock was removed
     pub fn clean_stale_index_lock(repo_path: &Path) -> Result<bool> {
-        let lock_path = repo_path.join(".git").join("index.lock");
+        let lock_path = crate::git::resolve_git_dir(repo_path)?.join("index.lock");
 
         if !lock_path.exists() {
             return Ok(false);
