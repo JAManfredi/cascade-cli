@@ -274,6 +274,12 @@ impl RebaseManager {
             }
         }
 
+        // Pre-flight: wait for any transient IDE git locks to clear before rebase
+        crate::utils::git_lock::wait_for_index_lock(
+            self.git_repo.path(),
+            std::time::Duration::from_secs(5),
+        )?;
+
         // Reset working directory to clean state before rebase
         if let Err(e) = self.git_repo.reset_to_head() {
             // Attempt to restore the original branch before bailing
@@ -435,7 +441,9 @@ impl RebaseManager {
                 return Err(e);
             }
 
-            if let Err(e) = self.git_repo.checkout_branch_silent(&temp_branch) {
+            if let Err(e) = crate::utils::git_lock::retry_on_lock(4, || {
+                self.git_repo.checkout_branch_silent(&temp_branch)
+            }) {
                 // Restore original branch before returning error
                 if let Some(ref orig) = original_branch_for_cleanup {
                     let _ = self.git_repo.checkout_branch_unsafe(orig);
@@ -448,7 +456,9 @@ impl RebaseManager {
             sync_state.save(&repo_root)?;
 
             // Cherry-pick the commit onto the temp branch (NOT the protected base!)
-            match self.cherry_pick_commit(&entry.commit_hash) {
+            match crate::utils::git_lock::retry_on_lock(4, || {
+                self.cherry_pick_commit(&entry.commit_hash)
+            }) {
                 Ok(new_commit_hash) => {
                     result.new_commits.push(new_commit_hash.clone());
 

@@ -102,6 +102,17 @@ impl CascadeError {
     pub fn bitbucket<S: Into<String>>(msg: S) -> Self {
         CascadeError::Conflict(msg.into())
     }
+
+    /// Check if this error originated from git index lock contention.
+    pub fn is_lock_error(&self) -> bool {
+        match self {
+            CascadeError::Git(e) => crate::utils::git_lock::is_lock_error(e),
+            CascadeError::Branch(msg) | CascadeError::Config(msg) | CascadeError::Rebase(msg) => {
+                msg.contains("index is locked") || msg.contains("index.lock")
+            }
+            _ => false,
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, CascadeError>;

@@ -336,37 +336,118 @@ pub mod git_lock {
             || error.message().contains("index.lock")
     }
 
-    /// Execute a git2 operation with automatic stale lock cleanup and retry
-    /// If the operation fails with a lock error, checks for stale locks and retries once
+    /// Execute a git2 operation with exponential-backoff retry on index lock contention.
+    /// Retries up to 4 times with delays of 50ms, 100ms, 200ms before falling back
+    /// to stale lock cleanup as a last resort.
     pub fn with_lock_retry<F, R>(repo_path: &Path, operation: F) -> Result<R>
     where
         F: Fn() -> std::result::Result<R, git2::Error>,
     {
-        match operation() {
-            Ok(result) => Ok(result),
-            Err(e) if is_lock_error(&e) => {
-                // Got a lock error - check if we can clean up a stale lock
-                tracing::debug!("Git operation failed with lock error: {}", e);
+        const MAX_ATTEMPTS: u32 = 4;
+        const BASE_DELAY_MS: u64 = 50;
 
-                match clean_stale_index_lock(repo_path) {
-                    Ok(true) => {
-                        // Stale lock was removed, retry the operation
-                        tracing::info!("Retrying operation after removing stale lock");
-                        operation().map_err(CascadeError::Git)
-                    }
-                    Ok(false) => {
-                        // Lock exists but is not stale (Git processes are running)
-                        Err(CascadeError::Git(e))
-                    }
-                    Err(cleanup_err) => {
-                        // Failed to clean up lock, return original error
-                        tracing::warn!("Failed to clean up stale lock: {}", cleanup_err);
-                        Err(CascadeError::Git(e))
+        let mut last_error = None;
+
+        for attempt in 0..MAX_ATTEMPTS {
+            match operation() {
+                Ok(result) => return Ok(result),
+                Err(e) if is_lock_error(&e) => {
+                    last_error = Some(e);
+                    if attempt < MAX_ATTEMPTS - 1 {
+                        let delay_ms = BASE_DELAY_MS * 2_u64.pow(attempt);
+                        tracing::debug!(
+                            "Index lock contention (attempt {}/{}), retrying in {}ms",
+                            attempt + 1,
+                            MAX_ATTEMPTS,
+                            delay_ms,
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
                     }
                 }
+                Err(e) => return Err(CascadeError::Git(e)),
             }
-            Err(e) => Err(CascadeError::Git(e)),
         }
+
+        // Last resort: try stale lock cleanup
+        if let Ok(true) = clean_stale_index_lock(repo_path) {
+            tracing::info!("Removed stale lock after retries exhausted, final attempt");
+            return operation().map_err(CascadeError::Git);
+        }
+
+        Err(CascadeError::Git(last_error.unwrap()))
+    }
+
+    /// Wait for the git index lock to be released before starting a destructive operation.
+    /// Polls the filesystem for the lock file to disappear. IDE locks are transient
+    /// (milliseconds for a status check), so a short timeout catches the common case.
+    /// Falls back to stale lock cleanup if the lock persists past the timeout.
+    pub fn wait_for_index_lock(repo_path: &Path, timeout: std::time::Duration) -> Result<()> {
+        let lock_path = crate::git::resolve_git_dir(repo_path)?.join("index.lock");
+
+        if !lock_path.exists() {
+            return Ok(());
+        }
+
+        tracing::debug!("Index lock detected, waiting for it to clear...");
+
+        let start = std::time::Instant::now();
+        let poll_interval = std::time::Duration::from_millis(50);
+
+        while start.elapsed() < timeout {
+            std::thread::sleep(poll_interval);
+            if !lock_path.exists() {
+                tracing::debug!("Index lock cleared after {:?}", start.elapsed());
+                return Ok(());
+            }
+        }
+
+        // Lock persisted past timeout — try stale lock cleanup as last resort
+        if let Ok(true) = clean_stale_index_lock(repo_path) {
+            tracing::info!("Removed stale index lock after timeout");
+            return Ok(());
+        }
+
+        Err(CascadeError::branch(format!(
+            "Git index is locked ({}).\n\n\
+             Another program is using Git in this repository.\n\n\
+             Common causes:\n\
+             \u{2022} An IDE with Git integration has this repo open\n\
+             \u{2022} Another terminal is running a git command\n\
+             \u{2022} A previous git operation crashed and left a stale lock\n\n\
+             To fix:\n\
+             1. Close any IDEs or Git-aware tools using this repo, then retry\n\
+             2. If no Git processes are running: rm -f {}\n\
+             3. Check for running git processes: pgrep -l git",
+            lock_path.display(),
+            lock_path.display(),
+        )))
+    }
+
+    /// Retry an operation that returns CascadeError on index lock contention.
+    /// Uses exponential backoff with the same timing as with_lock_retry.
+    pub fn retry_on_lock<F, R>(max_attempts: u32, operation: F) -> Result<R>
+    where
+        F: Fn() -> Result<R>,
+    {
+        let mut last_error = None;
+        for attempt in 0..max_attempts {
+            match operation() {
+                Ok(result) => return Ok(result),
+                Err(e) if e.is_lock_error() && attempt < max_attempts - 1 => {
+                    let delay = 50 * 2u64.pow(attempt);
+                    tracing::debug!(
+                        "Operation hit index lock (attempt {}/{}), retry in {}ms",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                    last_error = Some(e);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last_error.unwrap())
     }
 }
 
