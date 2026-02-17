@@ -19,7 +19,9 @@ pub fn get_config_dir() -> Result<PathBuf> {
     crate::utils::path_validation::validate_config_path(&config_dir, &home_dir)
 }
 
-/// Get the Cascade configuration directory for a specific repository
+/// Get the Cascade configuration directory for a specific repository.
+/// In a worktree, falls back to the main repo's `.cascade/` directory
+/// so that config, stacks, and credentials are shared across worktrees.
 pub fn get_repo_config_dir(repo_path: &Path) -> Result<PathBuf> {
     // Validate that repo_path is a real directory
     let canonical_repo = repo_path.canonicalize().map_err(|e| {
@@ -28,7 +30,30 @@ pub fn get_repo_config_dir(repo_path: &Path) -> Result<PathBuf> {
 
     let config_dir = canonical_repo.join(".cascade");
 
-    // Validate that config dir would be within the repo directory
+    // If .cascade exists here, use it directly
+    if config_dir.exists() {
+        return crate::utils::path_validation::validate_config_path(&config_dir, &canonical_repo);
+    }
+
+    // Fall back to the main repo root for worktrees
+    if let Ok(repo) = git2::Repository::discover(repo_path) {
+        if let Some(main_workdir) = repo.commondir().parent() {
+            let main_canonical = main_workdir
+                .canonicalize()
+                .unwrap_or(main_workdir.to_path_buf());
+            if main_canonical != canonical_repo {
+                let main_config_dir = main_canonical.join(".cascade");
+                if main_config_dir.exists() {
+                    return crate::utils::path_validation::validate_config_path(
+                        &main_config_dir,
+                        &main_canonical,
+                    );
+                }
+            }
+        }
+    }
+
+    // Default: return the workdir-relative path (for init or when no config exists yet)
     crate::utils::path_validation::validate_config_path(&config_dir, &canonical_repo)
 }
 
