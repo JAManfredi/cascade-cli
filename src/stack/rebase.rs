@@ -1642,30 +1642,16 @@ impl RebaseManager {
         }
     }
 
-    /// Pull latest changes from remote
+    /// Update base branch ref from remote (worktree-safe, no checkout needed)
     fn pull_latest_changes(&self, branch: &str) -> Result<()> {
-        tracing::debug!("Pulling latest changes for branch {}", branch);
-
-        // First try to fetch (this might fail if no remote exists)
-        match self.git_repo.fetch() {
+        match self.git_repo.update_local_branch_from_remote(branch) {
             Ok(_) => {
-                debug!("Fetch successful");
-                // Now try to pull the specific branch
-                match self.git_repo.pull(branch) {
-                    Ok(_) => {
-                        tracing::debug!("Pull completed successfully for {}", branch);
-                        Ok(())
-                    }
-                    Err(e) => {
-                        tracing::debug!("Pull failed for {}: {}", branch, e);
-                        // Don't fail the entire rebase for pull issues
-                        Ok(())
-                    }
-                }
+                tracing::debug!("Updated base branch '{}' from remote", branch);
+                Ok(())
             }
             Err(e) => {
-                tracing::debug!("Fetch failed: {}", e);
-                // Don't fail if there's no remote configured
+                tracing::debug!("Could not update base branch '{}': {}", branch, e);
+                // Don't fail the entire rebase for remote update issues
                 Ok(())
             }
         }

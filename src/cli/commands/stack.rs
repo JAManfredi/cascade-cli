@@ -2858,58 +2858,19 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
 
     // Sync starts silently - user will see the rebase output
 
-    // Step 1: Pull latest changes from base branch (silent unless error)
-    match git_repo.checkout_branch_silent(&base_branch) {
-        Ok(_) => {
-            match git_repo.pull(&base_branch) {
-                Ok(_) => {
-                    // Silent success - only show on verbose or error
-                }
-                Err(e) => {
-                    if force {
-                        Output::warning(format!("Pull failed: {e} (continuing due to --force)"));
-                    } else {
-                        Output::error(format!("Failed to pull latest changes: {e}"));
-                        Output::tip("Use --force to skip pull and continue with rebase");
-                        if let Some(ref branch) = original_branch {
-                            if branch != &base_branch {
-                                if let Err(restore_err) = git_repo.checkout_branch_silent(branch) {
-                                    Output::warning(format!(
-                                        "Could not restore original branch '{}': {}",
-                                        branch, restore_err
-                                    ));
-                                }
-                            }
-                        }
-                        return Err(CascadeError::branch(format!(
-                            "Failed to pull latest changes from '{base_branch}': {e}. Use --force to continue anyway."
-                        )));
-                    }
-                }
-            }
-        }
+    // Step 1: Update base branch ref from remote (worktree-safe, no checkout needed)
+    match git_repo.update_local_branch_from_remote(&base_branch) {
+        Ok(_) => {}
         Err(e) => {
             if force {
                 Output::warning(format!(
-                    "Failed to checkout '{base_branch}': {e} (continuing due to --force)"
+                    "Failed to update base branch: {e} (continuing due to --force)"
                 ));
             } else {
-                Output::error(format!(
-                    "Failed to checkout base branch '{base_branch}': {e}"
-                ));
-                Output::tip("Use --force to bypass checkout issues and continue anyway");
-                if let Some(ref branch) = original_branch {
-                    if branch != &base_branch {
-                        if let Err(restore_err) = git_repo.checkout_branch_silent(branch) {
-                            Output::warning(format!(
-                                "Could not restore original branch '{}': {}",
-                                branch, restore_err
-                            ));
-                        }
-                    }
-                }
+                Output::error(format!("Failed to update base branch '{base_branch}': {e}"));
+                Output::tip("Use --force to skip update and continue with local state");
                 return Err(CascadeError::branch(format!(
-                    "Failed to checkout base branch '{base_branch}': {e}. Use --force to continue anyway."
+                    "Failed to update '{base_branch}' from remote: {e}. Use --force to continue anyway."
                 )));
             }
         }

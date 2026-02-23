@@ -1706,6 +1706,56 @@ impl GitRepository {
         ))))
     }
 
+    /// Fetch and fast-forward a local branch ref to match origin, without checkout.
+    /// Works safely in worktrees where the branch may be checked out elsewhere.
+    pub fn update_local_branch_from_remote(&self, branch: &str) -> Result<()> {
+        tracing::debug!(
+            "Updating local branch '{}' from remote (worktree-safe)",
+            branch
+        );
+
+        self.fetch()?;
+
+        let remote_ref = format!("refs/remotes/origin/{branch}");
+        let remote_oid = self.repo.refname_to_id(&remote_ref).map_err(|e| {
+            CascadeError::branch(format!("Remote branch 'origin/{branch}' not found: {e}"))
+        })?;
+
+        let local_ref = format!("refs/heads/{branch}");
+        let local_oid = self.repo.refname_to_id(&local_ref).ok();
+
+        if let Some(local_oid) = local_oid {
+            if local_oid == remote_oid {
+                tracing::debug!("{branch} already up to date");
+                return Ok(());
+            }
+
+            let merge_base = self
+                .repo
+                .merge_base(local_oid, remote_oid)
+                .map_err(CascadeError::Git)?;
+
+            if merge_base != local_oid {
+                return Err(CascadeError::branch(format!(
+                    "Branch '{branch}' has diverged from 'origin/{branch}'. \
+                     Local has commits not in remote. Try: git reset --hard origin/{branch}"
+                )));
+            }
+        }
+
+        self.repo
+            .reference(
+                &local_ref,
+                remote_oid,
+                true,
+                "sync: fast-forward from origin",
+            )
+            .map_err(|e| CascadeError::branch(format!("Failed to update '{branch}': {e}")))?;
+
+        tracing::debug!("Fast-forwarded {branch} to {remote_oid}");
+        Ok(())
+    }
+
     /// Pull changes from remote (fetch + merge)
     pub fn pull(&self, branch: &str) -> Result<()> {
         tracing::debug!("Pulling branch: {}", branch);
