@@ -4129,21 +4129,20 @@ async fn land_stack(
                         Err(e) => {
                             // CONFLICTS DETECTED - Give clear next steps
                             println!();
-                            Output::error("Auto-retargeting conflicts detected!");
+                            Output::error("Rebase conflict while retargeting remaining PRs");
                             println!();
-                            Output::section("To resolve conflicts and continue landing");
+                            Output::section("To resolve and continue");
                             Output::numbered_item(1, "Resolve conflicts in the affected files");
                             Output::numbered_item(2, "Stage resolved files: git add <files>");
-                            Output::numbered_item(
-                                3,
-                                "Continue the process: ca stack continue-land",
-                            );
-                            Output::numbered_item(4, "Or abort the operation: ca stack abort-land");
+                            Output::numbered_item(3, "Finish the rebase: ca sync continue");
+                            Output::numbered_item(4, "Or abort the rebase: ca sync abort");
                             println!();
-                            Output::tip("Check current status: ca stack land-status");
+                            Output::tip(
+                                "Once the rebase is complete, re-run 'ca land' to continue merging remaining PRs",
+                            );
                             Output::sub_item(format!("Error details: {e}"));
 
-                            // Stop the land operation here - user needs to resolve conflicts
+                            // Stop the land operation here - user needs to resolve the rebase
                             break;
                         }
                     }
@@ -4320,6 +4319,10 @@ async fn auto_land_stack(
 async fn continue_land() -> Result<()> {
     use crate::cli::output::Output;
 
+    Output::warning("'ca stack continue-land' is deprecated");
+    Output::tip("Use 'ca sync continue' to finish the rebase, then 'ca land' to continue merging");
+    println!();
+
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -4399,10 +4402,12 @@ async fn continue_land() -> Result<()> {
             Output::tip("To resolve and continue:");
             Output::bullet("Resolve conflicts in your editor");
             Output::bullet("Stage resolved files: git add <files>");
-            Output::bullet("Continue landing: ca land continue");
+            Output::bullet("Finish the rebase: ca sync continue");
             println!();
-            Output::tip("Or abort the land operation:");
-            Output::bullet("Abort landing: ca land abort");
+            Output::tip("Or abort the rebase:");
+            Output::bullet("ca sync abort");
+            println!();
+            Output::tip("Once the rebase is complete, re-run 'ca land' to continue merging");
 
             // Leave state intact for user to continue
             return Ok(());
@@ -4473,6 +4478,10 @@ async fn continue_land() -> Result<()> {
 }
 
 async fn abort_land() -> Result<()> {
+    Output::warning("'ca stack abort-land' is deprecated");
+    Output::tip("Use 'ca sync abort' to abort the rebase");
+    println!();
+
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -4489,14 +4498,14 @@ async fn abort_land() -> Result<()> {
         return Ok(());
     }
 
-    println!("⚠️  Aborting land operation...");
+    println!("⚠️  Aborting rebase...");
     match rebase_manager.abort_rebase() {
         Ok(_) => {
-            Output::success(" Land operation aborted successfully");
-            println!("   Repository restored to pre-land state");
+            Output::success("Rebase aborted successfully");
+            Output::tip("Run 'ca sync' to re-sync the stack, or 'ca land' when ready to merge");
         }
         Err(e) => {
-            warn!("❌ Failed to abort land operation: {}", e);
+            warn!("❌ Failed to abort rebase: {}", e);
             println!("⚠️  You may need to manually clean up the repository state");
         }
     }
@@ -4528,8 +4537,9 @@ async fn land_status() -> Result<()> {
             "   
 📝 Actions available:"
         );
-        println!("     - 'ca stack continue-land' to continue");
-        println!("     - 'ca stack abort-land' to abort");
+        println!("     - 'ca sync continue' to finish the rebase");
+        println!("     - 'ca sync abort' to abort the rebase");
+        println!("     - 'ca land' to continue merging (after rebase is complete)");
         println!("     - 'git status' to see conflicted files");
 
         // Check for conflicts
@@ -4555,7 +4565,8 @@ async fn land_status() -> Result<()> {
                     );
                     println!("     1. Edit the conflicted files");
                     println!("     2. Stage resolved files: git add <file>");
-                    println!("     3. Continue: ca stack continue-land");
+                    println!("     3. Finish the rebase: ca sync continue");
+                    println!("     4. Then re-run: ca land");
                 }
             }
             Err(e) => {
