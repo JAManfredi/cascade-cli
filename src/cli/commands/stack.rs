@@ -3023,43 +3023,47 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                         match rebase_result {
                             Ok(result) => {
                                 if !result.branch_mapping.is_empty() {
-                                    // Update PRs if enabled
+                                    // Update PRs if Bitbucket is configured
                                     if let Some(ref _bitbucket_config) = cascade_config.bitbucket {
-                                        // Reload stack manager to get latest metadata after rebase
                                         let integration_stack_manager =
                                             StackManager::new(&repo_root)?;
-                                        let mut integration =
-                                            crate::bitbucket::BitbucketIntegration::new(
-                                                integration_stack_manager,
-                                                cascade_config,
-                                            )?;
+                                        match crate::bitbucket::BitbucketIntegration::new(
+                                            integration_stack_manager,
+                                            cascade_config,
+                                        ) {
+                                            Ok(mut integration) => {
+                                                let pr_result = integration
+                                                    .update_prs_after_rebase(
+                                                        &stack_id,
+                                                        &result.branch_mapping,
+                                                    )
+                                                    .await;
 
-                                        // Update PRs (static output)
-                                        let pr_result = integration
-                                            .update_prs_after_rebase(
-                                                &stack_id,
-                                                &result.branch_mapping,
-                                            )
-                                            .await;
-
-                                        match pr_result {
-                                            Ok(updated_prs) => {
-                                                if !updated_prs.is_empty() {
-                                                    Output::success(format!(
-                                                        "Updated {} pull request{}",
-                                                        updated_prs.len(),
-                                                        if updated_prs.len() == 1 {
-                                                            ""
-                                                        } else {
-                                                            "s"
+                                                match pr_result {
+                                                    Ok(updated_prs) => {
+                                                        if !updated_prs.is_empty() {
+                                                            Output::success(format!(
+                                                                "Updated {} pull request{}",
+                                                                updated_prs.len(),
+                                                                if updated_prs.len() == 1 {
+                                                                    ""
+                                                                } else {
+                                                                    "s"
+                                                                }
+                                                            ));
                                                         }
-                                                    ));
+                                                    }
+                                                    Err(e) => {
+                                                        Output::warning(format!(
+                                                            "Failed to update pull requests: {e}"
+                                                        ));
+                                                    }
                                                 }
                                             }
                                             Err(e) => {
-                                                Output::warning(format!(
-                                                    "Failed to update pull requests: {e}"
-                                                ));
+                                                tracing::debug!(
+                                                    "Skipping PR updates (Bitbucket not configured): {e}"
+                                                );
                                             }
                                         }
                                     }
