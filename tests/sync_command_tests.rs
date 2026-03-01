@@ -457,13 +457,19 @@ fn test_sync_multiple_stacks() {
 
     // Sync first stack
     run_ca_command(&["switch", "stack-1"], repo_path).unwrap();
-    let (success1, _, _) = run_ca_command(&["sync", "--force"], repo_path).unwrap();
-    assert!(success1, "Sync of stack-1 should succeed");
+    let (success1, stdout1, stderr1) = run_ca_command(&["sync", "--force"], repo_path).unwrap();
+    assert!(
+        success1,
+        "Sync of stack-1 should succeed\nstdout: {stdout1}\nstderr: {stderr1}"
+    );
 
     // Sync second stack
     run_ca_command(&["switch", "stack-2"], repo_path).unwrap();
-    let (success2, _, _) = run_ca_command(&["sync", "--force"], repo_path).unwrap();
-    assert!(success2, "Sync of stack-2 should succeed");
+    let (success2, stdout2, stderr2) = run_ca_command(&["sync", "--force"], repo_path).unwrap();
+    assert!(
+        success2,
+        "Sync of stack-2 should succeed\nstdout: {stdout2}\nstderr: {stderr2}"
+    );
 
     // Both stacks should remain independent
     let output = Command::new("git")
