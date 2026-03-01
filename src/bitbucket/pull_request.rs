@@ -740,6 +740,31 @@ struct DiffResponse {
 }
 
 impl PullRequestStatus {
+    /// Filter out advisory (non-blocking) vetoes and recalculate mergeability.
+    /// Patterns are matched case-insensitively as substrings of veto messages.
+    /// When the only vetoes are advisory, the PR is treated as mergeable.
+    pub fn apply_advisory_filters(&mut self, advisory_patterns: &[String]) {
+        if advisory_patterns.is_empty() {
+            return;
+        }
+        if let Some(details) = &mut self.mergeable_details {
+            if details.can_merge {
+                return; // Already mergeable, nothing to filter
+            }
+            details.blocking_reasons.retain(|reason| {
+                let reason_lower = reason.to_lowercase();
+                !advisory_patterns
+                    .iter()
+                    .any(|pattern| reason_lower.contains(&pattern.to_lowercase()))
+            });
+            // If no blocking reasons remain (all were advisory), treat as mergeable
+            if details.blocking_reasons.is_empty() && !details.conflicted {
+                details.can_merge = true;
+                self.mergeable = Some(true);
+            }
+        }
+    }
+
     /// Get a summary status for display
     pub fn get_display_status(&self) -> String {
         if self.pr.state != PullRequestState::Open {

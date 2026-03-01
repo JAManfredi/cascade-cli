@@ -821,20 +821,38 @@ impl RebaseManager {
             }
 
             // Build result summary
+            // Count entries with PRs (includes skipped entries that weren't pushed)
+            let entries_with_prs = stack
+                .entries
+                .iter()
+                .filter(|e| !e.is_merged && e.pull_request_id.is_some())
+                .count();
             let entries_word = if entry_count == 1 { "entry" } else { "entries" };
             let pr_word = if successful_pushes == 1 { "PR" } else { "PRs" };
 
+            let not_submitted_count = entry_count - entries_with_prs;
             result.summary = if successful_pushes > 0 {
-                let not_submitted_count = entry_count - successful_pushes;
+                // Branches were pushed — report push count
+                let mut parts = format!(
+                    "{} {} rebased ({} {} updated",
+                    entry_count, entries_word, successful_pushes, pr_word
+                );
+                if not_submitted_count > 0 {
+                    parts.push_str(&format!(", {} not yet submitted", not_submitted_count));
+                }
+                parts.push(')');
+                parts
+            } else if entries_with_prs > 0 {
+                // Nothing needed pushing but PRs exist
                 if not_submitted_count > 0 {
                     format!(
-                        "{} {} rebased ({} {} updated, {} not yet submitted)",
-                        entry_count, entries_word, successful_pushes, pr_word, not_submitted_count
+                        "{} {} rebased ({} with PRs, {} not yet submitted)",
+                        entry_count, entries_word, entries_with_prs, not_submitted_count
                     )
                 } else {
                     format!(
-                        "{} {} rebased ({} {} updated)",
-                        entry_count, entries_word, successful_pushes, pr_word
+                        "{} {} rebased ({} with PRs)",
+                        entry_count, entries_word, entries_with_prs
                     )
                 }
             } else {
@@ -856,118 +874,158 @@ impl RebaseManager {
                     if let Some(last_entry) = stack.entries.last() {
                         let top_branch = &last_entry.branch;
 
-                        // SAFETY CHECK: Detect if working branch has commits beyond the last stack entry
-                        // If it does, we need to preserve them - don't force-update the working branch
-                        if let (Ok(working_head), Ok(top_commit)) = (
-                            self.git_repo.get_branch_head(working_branch_name),
-                            self.git_repo.get_branch_head(top_branch),
-                        ) {
-                            // Check if working branch is ahead of top stack entry
-                            if working_head != top_commit {
-                                // Get commits between top of stack and working branch head
-                                if let Ok(commits) = self
-                                    .git_repo
-                                    .get_commits_between(&top_commit, &working_head)
-                                {
-                                    if !commits.is_empty() {
-                                        // Check if these commits match the stack entry messages
-                                        // If so, they're likely old pre-rebase versions, not new work
-                                        // Compare first lines (summaries) only, since commit.summary()
-                                        // returns just the first line while entry.message stores the full body
-                                        let stack_summaries: Vec<String> = stack
-                                            .entries
-                                            .iter()
-                                            .map(|e| {
-                                                e.message
-                                                    .lines()
-                                                    .next()
-                                                    .unwrap_or("")
-                                                    .trim()
-                                                    .to_string()
-                                            })
-                                            .collect();
+                        // SAFETY CHECK: Only update working branch if we can confirm
+                        // it has no commits beyond the stack. Default to NOT updating
+                        // (fail safe) if we can't determine the state.
+                        let working_head = self.git_repo.get_branch_head(working_branch_name);
+                        let top_commit = self.git_repo.get_branch_head(top_branch);
 
-                                        let all_match_stack = commits.iter().all(|commit| {
-                                            if let Some(msg) = commit.summary() {
-                                                stack_summaries
-                                                    .iter()
-                                                    .any(|stack_msg| stack_msg == msg.trim())
-                                            } else {
-                                                false
-                                            }
-                                        });
-
-                                        if all_match_stack {
-                                            // These are the old pre-rebase versions of stack entries
-                                            // Safe to update working branch to new rebased top
-                                            // Note: commits.len() may be less than stack.entries.len() if only
-                                            // some entries were rebased (e.g., after amending one entry)
+                        match (working_head, top_commit) {
+                            (Ok(working_head), Ok(top_commit)) => {
+                                if working_head == top_commit {
+                                    // Already in sync, nothing to do
+                                    debug!(
+                                        "Working branch '{}' already matches top of stack",
+                                        working_branch_name
+                                    );
+                                } else {
+                                    // Determine what's between the rebased top and the working branch
+                                    match self
+                                        .git_repo
+                                        .get_commits_between(&top_commit, &working_head)
+                                    {
+                                        Ok(commits) if commits.is_empty() => {
+                                            // Working branch is behind or at the same point
                                             debug!(
-                                            "Working branch has old pre-rebase commits (matching stack messages) - safe to update"
-                                        );
-                                        } else {
-                                            // These are truly new commits not in the stack!
-                                            Output::error(format!(
-                                            "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
-                                            working_branch_name,
-                                            commits.len()
-                                        ));
-                                            println!();
-                                            Output::sub_item(
-                                                "These commits would be lost if we proceed:",
+                                                "Updating working branch '{}' to match top of stack ({})",
+                                                working_branch_name, &top_commit[..8]
                                             );
-                                            for (i, commit) in commits.iter().take(5).enumerate() {
-                                                let message =
-                                                    commit.summary().unwrap_or("(no message)");
-                                                Output::sub_item(format!(
-                                                    "  {}. {} - {}",
-                                                    i + 1,
-                                                    &commit.id().to_string()[..8],
-                                                    message
+                                            if let Err(e) = self.git_repo.update_branch_to_commit(
+                                                working_branch_name,
+                                                &top_commit,
+                                            ) {
+                                                Output::warning(format!(
+                                                    "Could not update working branch '{}' to top of stack: {}",
+                                                    working_branch_name, e
                                                 ));
                                             }
-                                            if commits.len() > 5 {
-                                                Output::sub_item(format!(
-                                                    "  ... and {} more",
-                                                    commits.len() - 5
+                                        }
+                                        Ok(commits) => {
+                                            // Working branch has commits beyond the top of stack.
+                                            // Check if they're just old pre-rebase copies of stack entries.
+                                            let stack_summaries: Vec<String> = stack
+                                                .entries
+                                                .iter()
+                                                .map(|e| {
+                                                    e.message
+                                                        .lines()
+                                                        .next()
+                                                        .unwrap_or("")
+                                                        .trim()
+                                                        .to_string()
+                                                })
+                                                .collect();
+
+                                            let all_match_stack = commits.iter().all(|commit| {
+                                                if let Some(msg) = commit.summary() {
+                                                    stack_summaries
+                                                        .iter()
+                                                        .any(|stack_msg| stack_msg == msg.trim())
+                                                } else {
+                                                    false
+                                                }
+                                            });
+
+                                            if all_match_stack {
+                                                debug!(
+                                                    "Working branch has old pre-rebase commits (matching stack messages) - safe to update"
+                                                );
+                                                if let Err(e) =
+                                                    self.git_repo.update_branch_to_commit(
+                                                        working_branch_name,
+                                                        &top_commit,
+                                                    )
+                                                {
+                                                    Output::warning(format!(
+                                                        "Could not update working branch '{}' to top of stack: {}",
+                                                        working_branch_name, e
+                                                    ));
+                                                }
+                                            } else {
+                                                // New commits not in the stack — refuse to update
+                                                Output::error(format!(
+                                                    "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
+                                                    working_branch_name, commits.len()
+                                                ));
+                                                println!();
+                                                Output::sub_item(
+                                                    "These commits would be lost if we proceed:",
+                                                );
+                                                for (i, commit) in
+                                                    commits.iter().take(5).enumerate()
+                                                {
+                                                    let message =
+                                                        commit.summary().unwrap_or("(no message)");
+                                                    Output::sub_item(format!(
+                                                        "  {}. {} - {}",
+                                                        i + 1,
+                                                        &commit.id().to_string()[..8],
+                                                        message
+                                                    ));
+                                                }
+                                                if commits.len() > 5 {
+                                                    Output::sub_item(format!(
+                                                        "  ... and {} more",
+                                                        commits.len() - 5
+                                                    ));
+                                                }
+                                                println!();
+                                                Output::tip(
+                                                    "Add these commits to the stack first:",
+                                                );
+                                                Output::bullet("Run: ca stack push");
+                                                Output::bullet("Then run: ca sync");
+                                                println!();
+
+                                                if let Some(ref orig) = original_branch_for_cleanup
+                                                {
+                                                    let _ =
+                                                        self.git_repo.checkout_branch_unsafe(orig);
+                                                }
+
+                                                return Err(CascadeError::validation(
+                                                    format!(
+                                                        "Working branch '{}' has {} untracked commit(s). \
+                                                         Add them to the stack with 'ca stack push' before syncing.",
+                                                        working_branch_name, commits.len()
+                                                    )
                                                 ));
                                             }
-                                            println!();
-                                            Output::tip("Add these commits to the stack first:");
-                                            Output::bullet("Run: ca stack push");
-                                            Output::bullet("Then run: ca sync");
-                                            println!();
-
-                                            // Restore original branch before returning error
-                                            if let Some(ref orig) = original_branch_for_cleanup {
-                                                let _ = self.git_repo.checkout_branch_unsafe(orig);
-                                            }
-
-                                            return Err(CascadeError::validation(
-                                            format!(
-                                                "Working branch '{}' has {} untracked commit(s). Add them to the stack with 'ca stack push' before syncing.",
-                                                working_branch_name, commits.len()
-                                            )
-                                        ));
+                                        }
+                                        Err(e) => {
+                                            // Can't determine commit relationship — don't update
+                                            Output::warning(format!(
+                                                "Could not verify working branch '{}' is safe to update: {}",
+                                                working_branch_name, e
+                                            ));
+                                            Output::tip(
+                                                "Working branch was not updated. \
+                                                 If it's out of date, run: git reset --hard <top-entry-branch>",
+                                            );
                                         }
                                     }
                                 }
                             }
-
-                            // Safe to update - working branch matches top of stack or is behind
-                            debug!(
-                                "Updating working branch '{}' to match top of stack ({})",
-                                working_branch_name,
-                                &top_commit[..8]
-                            );
-
-                            if let Err(e) = self
-                                .git_repo
-                                .update_branch_to_commit(working_branch_name, &top_commit)
-                            {
+                            (Err(e), _) => {
                                 Output::warning(format!(
-                                    "Could not update working branch '{}' to top of stack: {}",
+                                    "Could not read working branch '{}': {}. Skipping update.",
                                     working_branch_name, e
+                                ));
+                            }
+                            (_, Err(e)) => {
+                                Output::warning(format!(
+                                    "Could not read top stack branch '{}': {}. Skipping update.",
+                                    top_branch, e
                                 ));
                             }
                         }
@@ -1014,9 +1072,9 @@ impl RebaseManager {
 
         // CRITICAL: Return error if rebase failed
         // Don't return Ok(result) with result.success = false - that's confusing!
+        // Use a short message here because the detailed error was already printed above.
         if !result.success {
-            let detailed_error = result.error.as_deref().unwrap_or("Rebase failed");
-            return Err(CascadeError::Branch(detailed_error.to_string()));
+            return Err(CascadeError::Branch("Rebase failed".to_string()));
         }
 
         Ok(result)

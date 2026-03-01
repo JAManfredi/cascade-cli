@@ -1129,7 +1129,14 @@ async fn show_stack(verbose: bool, show_mergeable: bool) -> Result<()> {
         spinner.stop();
 
         match status_result {
-            Ok(status) => {
+            Ok(mut status) => {
+                // Apply advisory merge check filters from config
+                let advisory_patterns = &settings.cascade.advisory_merge_checks;
+                if !advisory_patterns.is_empty() {
+                    for enhanced in &mut status.enhanced_statuses {
+                        enhanced.apply_advisory_filters(advisory_patterns);
+                    }
+                }
                 Output::bullet(format!("Total entries: {}", status.total_entries));
                 Output::bullet(format!("Submitted: {}", status.submitted_entries));
                 Output::bullet(format!("Open PRs: {}", status.open_prs));
@@ -2867,11 +2874,23 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                     "Failed to update base branch: {e} (continuing due to --force)"
                 ));
             } else {
-                Output::error(format!("Failed to update base branch '{base_branch}': {e}"));
-                Output::tip("Use --force to skip update and continue with local state");
-                return Err(CascadeError::branch(format!(
-                    "Failed to update '{base_branch}' from remote: {e}. Use --force to continue anyway."
-                )));
+                let err_str = e.to_string();
+                let is_locked = err_str.contains("Locked") || err_str.contains("index is locked");
+                if is_locked {
+                    Output::error(
+                        "Git index is locked by another process (e.g. an IDE or Git GUI)",
+                    );
+                    Output::tip("Close it and re-run 'ca sync'");
+                    return Err(CascadeError::branch(
+                        "Git index locked — close the other process and retry".to_string(),
+                    ));
+                } else {
+                    Output::error(format!("Failed to update base branch '{base_branch}': {e}"));
+                    Output::tip("Use --force to skip update and continue with local state");
+                    return Err(CascadeError::branch(format!(
+                        "Failed to update '{base_branch}' from remote: {e}. Use --force to continue anyway."
+                    )));
+                }
             }
         }
     }
@@ -3867,7 +3886,15 @@ async fn land_stack(
         crate::bitbucket::BitbucketIntegration::new(stack_manager, cascade_config)?;
 
     // Get enhanced status
-    let status = integration.check_enhanced_stack_status(&stack_id).await?;
+    let mut status = integration.check_enhanced_stack_status(&stack_id).await?;
+
+    // Apply advisory merge check filters from config
+    let advisory_patterns = &settings.cascade.advisory_merge_checks;
+    if !advisory_patterns.is_empty() {
+        for enhanced in &mut status.enhanced_statuses {
+            enhanced.apply_advisory_filters(advisory_patterns);
+        }
+    }
 
     if status.enhanced_statuses.is_empty() {
         Output::error("No pull requests found to land");

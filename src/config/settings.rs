@@ -50,6 +50,11 @@ pub struct CascadeSettings {
     pub enable_notifications: bool,
     /// Default PR description template (markdown supported)
     pub pr_description_template: Option<String>,
+    /// Veto message patterns to treat as advisory (non-blocking) during merge checks.
+    /// When the only remaining vetoes match these patterns, the PR is treated as mergeable.
+    /// Example: ["Code Owners"] to treat Code Owners checks as advisory.
+    #[serde(default)]
+    pub advisory_merge_checks: Vec<String>,
     /// Rebase-specific settings
     pub rebase: RebaseSettings,
     /// DEPRECATED: Old sync strategy setting (ignored, kept for backward compatibility)
@@ -108,6 +113,7 @@ impl Default for CascadeSettings {
             max_stack_size: 20,
             enable_notifications: true,
             pr_description_template: None,
+            advisory_merge_checks: Vec::new(),
             rebase: RebaseSettings::default(),
             default_sync_strategy: None, // Deprecated field
         }
@@ -219,6 +225,19 @@ impl Settings {
                     Some(value.to_string())
                 };
             }
+            ("cascade", "advisory_merge_checks") => {
+                if value.is_empty() {
+                    self.cascade.advisory_merge_checks = Vec::new();
+                } else {
+                    // Accept JSON array or comma-separated values
+                    if let Ok(parsed) = serde_json::from_str::<Vec<String>>(value) {
+                        self.cascade.advisory_merge_checks = parsed;
+                    } else {
+                        self.cascade.advisory_merge_checks =
+                            value.split(',').map(|s| s.trim().to_string()).collect();
+                    }
+                }
+            }
             ("rebase", "auto_resolve_conflicts") => {
                 self.cascade.rebase.auto_resolve_conflicts = value
                     .parse()
@@ -286,6 +305,10 @@ impl Settings {
                 .pr_description_template
                 .as_deref()
                 .unwrap_or(""),
+            ("cascade", "advisory_merge_checks") => {
+                return Ok(serde_json::to_string(&self.cascade.advisory_merge_checks)
+                    .unwrap_or_else(|_| "[]".to_string()))
+            }
             ("rebase", "auto_resolve_conflicts") => {
                 return Ok(self.cascade.rebase.auto_resolve_conflicts.to_string())
             }

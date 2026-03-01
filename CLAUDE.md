@@ -269,6 +269,29 @@ ca config get bitbucket.ca_bundle_path
 
 This layered approach allows both convenience (automatic git config inheritance) and flexibility (cascade-specific overrides) for corporate environments.
 
+### Advisory Merge Checks
+
+Bitbucket Server merge checks may be configured as advisory (non-blocking) at the repo level, but the API always reports them as vetoes with `canMerge: false`. This causes `ca stack --mergeable` to show PRs as `[PENDING]` even when they are mergeable in the Bitbucket UI.
+
+Configure advisory patterns to tell cascade which veto types to treat as non-blocking:
+
+```bash
+# Treat Code Owners checks as advisory (common for repos where Code Owners is non-blocking)
+ca config set cascade.advisory_merge_checks '["Code Owners"]'
+
+# View current advisory patterns
+ca config get cascade.advisory_merge_checks
+
+# Clear advisory patterns (treat all vetoes as blocking)
+ca config set cascade.advisory_merge_checks ''
+```
+
+**Behavior:**
+- When the only remaining vetoes match advisory patterns, the PR is treated as mergeable (`[READY]`)
+- Hard-blocking vetoes (e.g. "Requires approvals") are never filtered, even if advisory patterns are set
+- Patterns are matched case-insensitively as substrings of veto messages
+- Default: empty (all vetoes are treated as blocking)
+
 ## Installation Scripts
 
 ### Unix/Linux/macOS (`install.sh`)

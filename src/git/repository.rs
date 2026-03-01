@@ -1714,7 +1714,35 @@ impl GitRepository {
             branch
         );
 
-        self.fetch()?;
+        // Retry fetch with backoff to handle transient index locks (e.g. an IDE or Git GUI)
+        let mut last_error = None;
+        for attempt in 0..3u32 {
+            match self.fetch() {
+                Ok(_) => {
+                    last_error = None;
+                    break;
+                }
+                Err(e) => {
+                    let is_locked = e.to_string().contains("Locked")
+                        || e.to_string().contains("index is locked");
+                    last_error = Some(e);
+                    if is_locked && attempt < 2 {
+                        let delay = std::time::Duration::from_millis(500 * 2_u64.pow(attempt));
+                        tracing::debug!(
+                            "Index locked on fetch attempt {}, retrying in {:?}...",
+                            attempt + 1,
+                            delay
+                        );
+                        std::thread::sleep(delay);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(e) = last_error {
+            return Err(e);
+        }
 
         let remote_ref = format!("refs/remotes/origin/{branch}");
         let remote_oid = self.repo.refname_to_id(&remote_ref).map_err(|e| {
