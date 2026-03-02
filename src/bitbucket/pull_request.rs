@@ -442,9 +442,56 @@ impl PullRequestManager {
             strategy: merge_strategy,
         };
 
-        self.client
+        match self
+            .client
             .post(&format!("pull-requests/{pr_id}/merge"), &merge_request)
             .await
+        {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                // Parse merge veto errors into human-readable messages
+                let error_str = e.to_string();
+                if let Some(json_start) = error_str.find('{') {
+                    if let Ok(body) =
+                        serde_json::from_str::<serde_json::Value>(&error_str[json_start..])
+                    {
+                        if let Some(vetoes) = body
+                            .get("errors")
+                            .and_then(|e| e.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|e| e.get("vetoes"))
+                            .and_then(|v| v.as_array())
+                        {
+                            let reasons: Vec<String> = vetoes
+                                .iter()
+                                .filter_map(|v| {
+                                    v.get("summaryMessage").and_then(|s| s.as_str()).map(|s| {
+                                        // Strip leading numbering (e.g. "1. Waiting..." → "Waiting...")
+                                        s.trim_start_matches(|c: char| {
+                                            c.is_ascii_digit() || c == '.'
+                                        })
+                                        .trim()
+                                        .to_string()
+                                    })
+                                })
+                                .collect();
+
+                            if !reasons.is_empty() {
+                                return Err(CascadeError::bitbucket(format!(
+                                    "Merge blocked:\n{}",
+                                    reasons
+                                        .iter()
+                                        .map(|r| format!("  - {r}"))
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 
     /// Auto-merge a pull request if conditions are met

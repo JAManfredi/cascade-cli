@@ -480,8 +480,16 @@ impl BitbucketIntegration {
         let mut prev_branch = stack.base_branch.clone();
         for entry in &stack.entries {
             if entry.is_merged {
+                debug!(
+                    "Skipping merged entry '{}' (is_merged=true) for target map",
+                    entry.branch
+                );
                 continue;
             }
+            debug!(
+                "Target map: entry '{}' (id={}) → target '{}'",
+                entry.branch, entry.id, prev_branch
+            );
             target_for_entry.insert(entry.id, prev_branch.clone());
             prev_branch = entry.branch.clone();
         }
@@ -631,6 +639,10 @@ impl BitbucketIntegration {
                                     // Re-fetch the PR to get the latest version (force-push may bump it).
                                     if let Some(correct_target) = target_for_entry.get(&entry.id) {
                                         let current_target = &pr_status.pr.to_ref.display_id;
+                                        debug!(
+                                            "PR #{} target check: current='{}', correct='{}'",
+                                            pr_id, current_target, correct_target
+                                        );
                                         if current_target != correct_target {
                                             let retarget_version = self
                                                 .pr_manager
@@ -715,6 +727,59 @@ impl BitbucketIntegration {
                 "Successfully updated {} PRs using smart force push strategy",
                 updated_branches.len()
             );
+        }
+
+        // Separate retarget pass: ensure all open PRs point at the correct target branch.
+        // This runs independently of the force-push loop above so that retargeting
+        // happens even when the rebase already pushed branches to remote.
+        for entry in &stack.entries {
+            if entry.is_merged {
+                continue;
+            }
+            let Some(pr_id_str) = &entry.pull_request_id else {
+                continue;
+            };
+            let Ok(pr_id) = pr_id_str.parse::<u64>() else {
+                continue;
+            };
+            let Some(correct_target) = target_for_entry.get(&entry.id) else {
+                continue;
+            };
+
+            // Fetch current PR state from Bitbucket
+            let pr = match self.pr_manager.get_pull_request(pr_id).await {
+                Ok(pr) => pr,
+                Err(e) => {
+                    debug!("Could not fetch PR #{} for retarget check: {}", pr_id, e);
+                    continue;
+                }
+            };
+
+            if pr.state != crate::bitbucket::pull_request::PullRequestState::Open {
+                continue;
+            }
+
+            let current_target = &pr.to_ref.display_id;
+            if current_target != correct_target {
+                debug!(
+                    "Retarget pass: PR #{} targets '{}', should be '{}'",
+                    pr_id, current_target, correct_target
+                );
+                match self
+                    .pr_manager
+                    .retarget_pull_request(pr_id, correct_target, pr.version)
+                    .await
+                {
+                    Ok(_) => {
+                        Output::success(format!("Retargeted PR #{pr_id} → {correct_target}"));
+                    }
+                    Err(e) => {
+                        Output::warning(format!(
+                            "Failed to retarget PR #{pr_id} to {correct_target}: {e}"
+                        ));
+                    }
+                }
+            }
         }
 
         Ok(updated_branches)
