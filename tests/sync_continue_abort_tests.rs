@@ -77,12 +77,22 @@ fn setup_test_repo() -> Result<(TempDir, String), String> {
         .output()
         .map_err(|e| format!("Failed to commit: {e}"))?;
 
-    // Rename to main
-    Command::new("git")
-        .args(["branch", "-m", "master", "main"])
+    // Ensure branch is named "main" (git init may default to "master" or "main")
+    let branch_output = Command::new("git")
+        .args(["branch", "--show-current"])
         .current_dir(repo_path)
         .output()
-        .map_err(|e| format!("Failed to rename branch: {e}"))?;
+        .map_err(|e| format!("Failed to get branch: {e}"))?;
+    let current = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+    if current != "main" {
+        Command::new("git")
+            .args(["branch", "-m", &current, "main"])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| format!("Failed to rename branch: {e}"))?;
+    }
 
     // Initialize cascade
     let (success, _, _) = run_ca_command(&["init"], repo_path)?;
