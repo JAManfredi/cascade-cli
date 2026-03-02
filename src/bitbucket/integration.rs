@@ -72,7 +72,6 @@ impl BitbucketIntegration {
                                     pr_id,
                                     None, // Don't change title
                                     updated_description,
-                                    pr.version,
                                 )
                                 .await
                             {
@@ -644,27 +643,13 @@ impl BitbucketIntegration {
                                             pr_id, current_target, correct_target
                                         );
                                         if current_target != correct_target {
-                                            let retarget_version = self
-                                                .pr_manager
-                                                .get_pull_request(pr_id)
-                                                .await
-                                                .map(|pr| pr.version)
-                                                .unwrap_or(pr_status.pr.version);
-
                                             debug!(
-                                                "Retargeting PR #{} from '{}' to '{}' (version {})",
-                                                pr_id,
-                                                current_target,
-                                                correct_target,
-                                                retarget_version
+                                                "Retargeting PR #{} from '{}' to '{}'",
+                                                pr_id, current_target, correct_target
                                             );
                                             match self
                                                 .pr_manager
-                                                .retarget_pull_request(
-                                                    pr_id,
-                                                    correct_target,
-                                                    retarget_version,
-                                                )
+                                                .retarget_pull_request(pr_id, correct_target)
                                                 .await
                                             {
                                                 Ok(_) => {
@@ -767,7 +752,7 @@ impl BitbucketIntegration {
                 );
                 match self
                     .pr_manager
-                    .retarget_pull_request(pr_id, correct_target, pr.version)
+                    .retarget_pull_request(pr_id, correct_target)
                     .await
                 {
                     Ok(_) => {
