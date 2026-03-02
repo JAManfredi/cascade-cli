@@ -278,10 +278,19 @@ fn test_sync_with_upstream_changes() {
         .output()
         .unwrap();
     let base_log = String::from_utf8_lossy(&base_commits.stdout).to_string();
+
+    // Diagnostic: show all branches and their tips for debugging CI failures
+    let all_branches = Command::new("git")
+        .args(["branch", "-v", "--no-abbrev"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    let branches_info = String::from_utf8_lossy(&all_branches.stdout).to_string();
+
     assert!(
         base_log.contains("Upstream change"),
-        "Base branch should still contain upstream changes after sync. Log: {}",
-        base_log
+        "Base branch '{}' should still contain upstream changes after sync.\nBase log: {}\nAll branches:\n{}",
+        base_branch, base_log, branches_info
     );
 }
 
