@@ -474,6 +474,18 @@ impl BitbucketIntegration {
 
         let mut updated_branches = Vec::new();
 
+        // Build a map of correct PR targets: each entry targets the previous
+        // unmerged entry's branch, or the base branch if none.
+        let mut target_for_entry: HashMap<Uuid, String> = HashMap::new();
+        let mut prev_branch = stack.base_branch.clone();
+        for entry in &stack.entries {
+            if entry.is_merged {
+                continue;
+            }
+            target_for_entry.insert(entry.id, prev_branch.clone());
+            prev_branch = entry.branch.clone();
+        }
+
         for entry in &stack.entries {
             // Check if this entry has an existing PR and was remapped to a new branch
             if let (Some(pr_id_str), Some(new_branch)) =
@@ -613,6 +625,45 @@ impl BitbucketIntegration {
                                             pr_id,
                                             e
                                         );
+                                    }
+
+                                    // Retarget the PR if its destination branch is wrong.
+                                    // Re-fetch the PR to get the latest version (force-push may bump it).
+                                    if let Some(correct_target) = target_for_entry.get(&entry.id) {
+                                        let current_target = &pr_status.pr.to_ref.display_id;
+                                        if current_target != correct_target {
+                                            let retarget_version = self
+                                                .pr_manager
+                                                .get_pull_request(pr_id)
+                                                .await
+                                                .map(|pr| pr.version)
+                                                .unwrap_or(pr_status.pr.version);
+
+                                            debug!(
+                                                "Retargeting PR #{} from '{}' to '{}' (version {})",
+                                                pr_id, current_target, correct_target, retarget_version
+                                            );
+                                            match self
+                                                .pr_manager
+                                                .retarget_pull_request(
+                                                    pr_id,
+                                                    correct_target,
+                                                    retarget_version,
+                                                )
+                                                .await
+                                            {
+                                                Ok(_) => {
+                                                    Output::success(format!(
+                                                        "Retargeted PR #{pr_id} → {correct_target}"
+                                                    ));
+                                                }
+                                                Err(e) => {
+                                                    Output::warning(format!(
+                                                        "Failed to retarget PR #{pr_id} to {correct_target}: {e}"
+                                                    ));
+                                                }
+                                            }
+                                        }
                                     }
 
                                     updated_branches.push(format!(

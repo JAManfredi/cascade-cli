@@ -68,6 +68,37 @@ impl PullRequestManager {
             .await
     }
 
+    /// Update a pull request's target (destination) branch
+    pub async fn retarget_pull_request(
+        &self,
+        pr_id: u64,
+        new_target_branch: &str,
+        version: u64,
+    ) -> Result<PullRequest> {
+        #[derive(Debug, Serialize)]
+        struct RetargetRef {
+            id: String,
+        }
+
+        #[derive(Debug, Serialize)]
+        struct RetargetRequest {
+            #[serde(rename = "toRef")]
+            to_ref: RetargetRef,
+            version: u64,
+        }
+
+        let request = RetargetRequest {
+            to_ref: RetargetRef {
+                id: format!("refs/heads/{new_target_branch}"),
+            },
+            version,
+        };
+
+        self.client
+            .put(&format!("pull-requests/{pr_id}"), &request)
+            .await
+    }
+
     /// List pull requests with optional filters
     pub async fn list_pull_requests(
         &self,
