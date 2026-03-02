@@ -4196,7 +4196,11 @@ async fn land_stack(
                 }
 
                 let remaining_count = final_stack.entries.iter().filter(|e| !e.is_merged).count();
-                let plural = if remaining_count == 1 { "entry" } else { "entries" };
+                let plural = if remaining_count == 1 {
+                    "entry"
+                } else {
+                    "entries"
+                };
 
                 println!();
                 let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
@@ -4233,10 +4237,7 @@ async fn land_stack(
                             )?;
 
                             match retarget_integration
-                                .update_prs_after_rebase(
-                                    &stack_id,
-                                    &rebase_result.branch_mapping,
-                                )
+                                .update_prs_after_rebase(&stack_id, &rebase_result.branch_mapping)
                                 .await
                             {
                                 Ok(updated_prs) => {
@@ -4249,9 +4250,7 @@ async fn land_stack(
                                     }
                                 }
                                 Err(e) => {
-                                    Output::warning(format!(
-                                        "Failed to update remaining PRs: {e}"
-                                    ));
+                                    Output::warning(format!("Failed to update remaining PRs: {e}"));
                                     Output::tip("You may need to run: ca sync --force");
                                 }
                             }

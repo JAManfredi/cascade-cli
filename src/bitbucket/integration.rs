@@ -641,7 +641,10 @@ impl BitbucketIntegration {
 
                                             debug!(
                                                 "Retargeting PR #{} from '{}' to '{}' (version {})",
-                                                pr_id, current_target, correct_target, retarget_version
+                                                pr_id,
+                                                current_target,
+                                                correct_target,
+                                                retarget_version
                                             );
                                             match self
                                                 .pr_manager
