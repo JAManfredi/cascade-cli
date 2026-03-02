@@ -4176,8 +4176,28 @@ async fn land_stack(
         // Check if all entries in the stack are now merged
         let final_stack_manager = StackManager::new(&repo_root)?;
         if let Some(final_stack) = final_stack_manager.get_stack(&stack_id) {
-            let has_remaining = final_stack.entries.iter().any(|e| !e.is_merged);
+            let remaining_entries: Vec<_> = final_stack
+                .entries
+                .iter()
+                .filter(|e| !e.is_merged)
+                .collect();
+            let has_remaining = !remaining_entries.is_empty();
             let all_merged = !has_remaining && !final_stack.entries.is_empty();
+
+            tracing::debug!(
+                "Post-land check: {} total entries, {} remaining (has_remaining={})",
+                final_stack.entries.len(),
+                remaining_entries.len(),
+                has_remaining,
+            );
+            for entry in &final_stack.entries {
+                tracing::debug!(
+                    "  entry '{}': is_merged={}, pr={:?}",
+                    entry.branch,
+                    entry.is_merged,
+                    entry.pull_request_id,
+                );
+            }
 
             // Pull + rebase + retarget remaining PRs after landing
             if has_remaining {
