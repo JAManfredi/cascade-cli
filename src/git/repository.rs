@@ -1819,8 +1819,16 @@ impl GitRepository {
             .find_commit(remote_oid)
             .map_err(CascadeError::Git)?;
 
-        // Get current HEAD
-        let head_commit = self.get_head_commit()?;
+        // Get local branch tip (not HEAD — we may be on a different branch)
+        let local_refname = format!("refs/heads/{branch}");
+        let local_oid = self
+            .repo
+            .refname_to_id(&local_refname)
+            .map_err(|e| CascadeError::branch(format!("Local branch {branch} not found: {e}")))?;
+        let head_commit = self
+            .repo
+            .find_commit(local_oid)
+            .map_err(CascadeError::Git)?;
 
         // Check if already up to date
         if head_commit.id() == remote_commit.id() {
@@ -1839,22 +1847,31 @@ impl GitRepository {
             tracing::debug!("Fast-forwarding {} to {}", branch, remote_commit.id());
 
             // Update the branch reference to point to remote commit
-            let refname = format!("refs/heads/{}", branch);
             self.repo
-                .reference(&refname, remote_oid, true, "pull: Fast-forward")
+                .reference(&local_refname, remote_oid, true, "pull: Fast-forward")
                 .map_err(CascadeError::Git)?;
 
-            // Update HEAD to point to the new commit
-            self.repo.set_head(&refname).map_err(CascadeError::Git)?;
+            // Only update HEAD and working directory if we're on this branch
+            let on_this_branch = self
+                .repo
+                .head()
+                .ok()
+                .and_then(|h| h.shorthand().map(|s| s.to_string()))
+                .as_deref()
+                == Some(branch);
 
-            // Checkout the new commit (update working directory)
-            self.repo
-                .checkout_head(Some(
-                    git2::build::CheckoutBuilder::new()
-                        .force()
-                        .remove_untracked(false),
-                ))
-                .map_err(CascadeError::Git)?;
+            if on_this_branch {
+                self.repo
+                    .set_head(&local_refname)
+                    .map_err(CascadeError::Git)?;
+                self.repo
+                    .checkout_head(Some(
+                        git2::build::CheckoutBuilder::new()
+                            .force()
+                            .remove_untracked(false),
+                    ))
+                    .map_err(CascadeError::Git)?;
+            }
 
             tracing::debug!("Fast-forwarded to {}", remote_commit.id());
             return Ok(());
