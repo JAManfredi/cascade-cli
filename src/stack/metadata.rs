@@ -340,10 +340,6 @@ impl RepositoryMetadata {
     pub fn remove_stack(&mut self, stack_id: &Uuid) -> Option<StackMetadata> {
         let removed = self.stacks.remove(stack_id);
         if removed.is_some() {
-            // If this was the active stack, clear the active stack
-            if self.active_stack_id == Some(*stack_id) {
-                self.active_stack_id = None;
-            }
             self.updated_at = Utc::now();
         }
         removed

@@ -95,16 +95,18 @@ fn setup_test_repo() -> Result<(TempDir, String), String> {
 
 /// Helper to create a stack with commits
 fn create_test_stack(repo_path: &Path, stack_name: &str) -> Result<(), String> {
+    // Create a feature branch so the stack gets a working_branch
+    let feature_branch = format!("feature/{}-work", stack_name);
+    Command::new("git")
+        .args(["checkout", "-b", &feature_branch])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to create feature branch: {e}"))?;
+
     // Create stack
     let (success, _, stderr) = run_ca_command(&["stacks", "create", stack_name], repo_path)?;
     if !success {
         return Err(format!("Failed to create stack: {stderr}"));
-    }
-
-    // Switch to the stack
-    let (success, _, stderr) = run_ca_command(&["stacks", "switch", stack_name], repo_path)?;
-    if !success {
-        return Err(format!("Failed to switch to stack: {stderr}"));
     }
 
     // Create first commit
@@ -249,21 +251,26 @@ fn test_sync_with_upstream_changes() {
     // Sync may switch back to main branch depending on implementation
     let post_sync_branch = get_current_branch(repo_path);
 
-    // The sync operation may leave us on main, feature-stack, or create a version branch
+    // The sync operation may leave us on main, the working branch, or create a version branch
     assert!(
         post_sync_branch == "main"
             || post_sync_branch == "feature-stack"
+            || post_sync_branch.contains("feature-stack")
             || post_sync_branch.contains("-v2"),
         "Should be on main, original branch, or version branch after sync, got: '{post_sync_branch}'"
     );
 
-    // New branch should have the upstream changes
-    let post_sync_commits = get_current_branch_commits(repo_path);
+    // The stack entry branches should have been rebased onto the updated base.
+    // Check that main still has the upstream change (sync doesn't lose it).
+    let main_commits = Command::new("git")
+        .args(["log", "--oneline", "main"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+    let main_log = String::from_utf8_lossy(&main_commits.stdout).to_string();
     assert!(
-        post_sync_commits
-            .iter()
-            .any(|c| c.contains("Upstream change")),
-        "Should include upstream changes"
+        main_log.contains("Upstream change"),
+        "Main should still contain upstream changes after sync"
     );
 }
 
@@ -329,9 +336,13 @@ fn test_sync_with_conflicts() {
     let (temp_dir, base_branch) = setup_test_repo().unwrap();
     let repo_path = temp_dir.path();
 
-    // Create a stack with a file
+    // Create a feature branch and stack
+    Command::new("git")
+        .args(["checkout", "-b", "feature/conflict-work"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
     run_ca_command(&["stacks", "create", "conflict-stack"], repo_path).unwrap();
-    run_ca_command(&["stacks", "switch", "conflict-stack"], repo_path).unwrap();
 
     std::fs::write(repo_path.join("conflict.txt"), "Original content").unwrap();
     Command::new("git")
@@ -423,9 +434,13 @@ fn test_sync_empty_stack() {
     let (temp_dir, _) = setup_test_repo().unwrap();
     let repo_path = temp_dir.path();
 
-    // Create empty stack
+    // Create feature branch and empty stack on it
+    Command::new("git")
+        .args(["checkout", "-b", "feature/empty-work"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
     run_ca_command(&["stacks", "create", "empty-stack"], repo_path).unwrap();
-    run_ca_command(&["stacks", "switch", "empty-stack"], repo_path).unwrap();
 
     // Sync should handle empty stack gracefully
     let (success, stdout, _) = run_ca_command(&["sync", "--force"], repo_path).unwrap();

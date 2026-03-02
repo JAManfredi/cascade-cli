@@ -215,8 +215,10 @@ impl TuiApp {
 
     fn activate_selected_stack(&mut self) -> Result<()> {
         if let Some(stack) = self.stacks.get(self.selected_stack) {
-            self.stack_manager.set_active_stack(Some(stack.id))?;
-            self.error_message = Some(format!("Activated stack: {}", stack.name));
+            let stack_id = stack.id;
+            let stack_name = stack.name.clone();
+            self.stack_manager.checkout_stack_branch(&stack_id)?;
+            self.error_message = Some(format!("Activated stack: {}", stack_name));
         }
         Ok(())
     }

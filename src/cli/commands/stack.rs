@@ -839,7 +839,7 @@ async fn switch_stack(name: String) -> Result<()> {
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let mut manager = StackManager::new(&repo_root)?;
+    let manager = StackManager::new(&repo_root)?;
     let repo = GitRepository::open(&repo_root)?;
 
     // Get stack information before switching
@@ -898,57 +898,15 @@ async fn switch_stack(name: String) -> Result<()> {
         Output::sub_item(format!("Base branch: {}", stack.base_branch));
     }
 
-    // Activate the stack (this will record the correct current branch)
-    manager.set_active_stack_by_name(&name)?;
     Output::success(format!("Switched to stack '{name}'"));
 
     Ok(())
 }
 
-async fn deactivate_stack(force: bool) -> Result<()> {
-    let current_dir = env::current_dir()
-        .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
-
-    let repo_root = find_repository_root(&current_dir)
-        .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
-
-    let mut manager = StackManager::new(&repo_root)?;
-
-    let active_stack = manager.get_active_stack();
-
-    if active_stack.is_none() {
-        Output::info("No active stack to deactivate");
-        return Ok(());
-    }
-
-    let stack_name = active_stack.unwrap().name.clone();
-
-    if !force {
-        Output::warning(format!(
-            "This will deactivate stack '{stack_name}' and return to normal Git workflow"
-        ));
-        Output::sub_item(format!(
-            "You can reactivate it later with 'ca stacks switch {stack_name}'"
-        ));
-        // Interactive confirmation to deactivate stack
-        let should_deactivate = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Continue with deactivation?")
-            .default(false)
-            .interact()
-            .map_err(|e| CascadeError::config(format!("Failed to get user confirmation: {e}")))?;
-
-        if !should_deactivate {
-            Output::info("Cancelled deactivation");
-            return Ok(());
-        }
-    }
-
-    // Deactivate the stack
-    manager.set_active_stack(None)?;
-
-    Output::success(format!("Deactivated stack '{stack_name}'"));
-    Output::sub_item("Stack management is now OFF - you can use normal Git workflow");
-    Output::sub_item(format!("To reactivate: ca stacks switch {stack_name}"));
+async fn deactivate_stack(_force: bool) -> Result<()> {
+    Output::warning("'ca deactivate' is no longer needed.");
+    Output::sub_item("Active stack is now resolved from your current branch.");
+    Output::sub_item("To leave a stack, just switch to your base branch: git checkout main");
 
     Ok(())
 }
@@ -1434,11 +1392,6 @@ async fn push_to_stack(
 
     let mut manager = StackManager::new(&repo_root)?;
     let repo = GitRepository::open(&repo_root)?;
-
-    // Check for branch changes and prompt user if needed
-    if !manager.check_for_branch_change()? {
-        return Ok(()); // User chose to cancel or deactivate stack
-    }
 
     // Get the active stack to check base branch
     let active_stack = manager.get_active_stack().ok_or_else(|| {
@@ -1992,12 +1945,7 @@ async fn submit_entry(
     let repo_root = find_repository_root(&current_dir)
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
-    let mut stack_manager = StackManager::new(&repo_root)?;
-
-    // Check for branch changes and prompt user if needed
-    if !stack_manager.check_for_branch_change()? {
-        return Ok(()); // User chose to cancel or deactivate stack
-    }
+    let stack_manager = StackManager::new(&repo_root)?;
 
     // Load configuration first
     let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
@@ -4199,14 +4147,17 @@ async fn land_stack(
                 Output::success("All PRs in stack merged!");
                 println!();
 
-                // Auto-deactivate the stack
-                let mut deactivate_manager = StackManager::new(&repo_root)?;
-                match deactivate_manager.set_active_stack(None) {
+                // Switch back to base branch so no stack is active
+                let base_branch = active_stack.base_branch.clone();
+                let deactivate_repo = GitRepository::open(&repo_root)?;
+                match deactivate_repo.checkout_branch(&base_branch) {
                     Ok(_) => {
-                        Output::sub_item("Stack deactivated");
+                        Output::sub_item(format!("Checked out base branch: {base_branch}"));
                     }
                     Err(e) => {
-                        Output::warning(format!("Could not deactivate stack: {}", e));
+                        Output::warning(format!(
+                            "Could not checkout base branch '{base_branch}': {e}"
+                        ));
                     }
                 }
 
@@ -5889,20 +5840,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_deactivate_command_structure() {
-        // Test that deactivate command structure exists and can be constructed
+        // Test that deactivate command structure exists (deprecated, shows guidance)
         let deactivate_action = StackAction::Deactivate { force: false };
-
-        // Verify it matches the expected pattern
         assert!(matches!(
             deactivate_action,
             StackAction::Deactivate { force: false }
-        ));
-
-        // Test with force flag
-        let force_deactivate = StackAction::Deactivate { force: true };
-        assert!(matches!(
-            force_deactivate,
-            StackAction::Deactivate { force: true }
         ));
     }
 }

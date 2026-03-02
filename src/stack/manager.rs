@@ -5,7 +5,7 @@ use crate::config::{get_repo_config_dir, Settings};
 use crate::errors::{CascadeError, Result};
 use crate::git::GitRepository;
 use chrono::Utc;
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -154,8 +154,7 @@ impl StackManager {
         self.stacks.insert(stack_id, stack);
         self.metadata.add_stack(stack_metadata);
 
-        // Always set newly created stack as active
-        self.set_active_stack(Some(stack_id))?;
+        self.save_to_disk()?;
 
         Ok(stack_id)
     }
@@ -199,75 +198,63 @@ impl StackManager {
         }
     }
 
-    /// Get the currently active stack
-    pub fn get_active_stack(&self) -> Option<&Stack> {
-        self.metadata
-            .active_stack_id
-            .and_then(|id| self.stacks.get(&id))
-    }
-
-    /// Get the currently active stack mutably
-    pub fn get_active_stack_mut(&mut self) -> Option<&mut Stack> {
-        if let Some(id) = self.metadata.active_stack_id {
-            self.stacks.get_mut(&id)
-        } else {
-            None
-        }
-    }
-
-    /// Set the active stack
-    pub fn set_active_stack(&mut self, stack_id: Option<Uuid>) -> Result<()> {
-        // Verify stack exists if provided
-        if let Some(id) = stack_id {
-            if !self.stacks.contains_key(&id) {
-                return Err(CascadeError::config(format!(
-                    "Stack with ID {id} not found"
-                )));
+    /// Find the stack ID that owns a given branch.
+    /// Checks working_branch first, then entry branches.
+    fn find_stack_id_for_branch(&self, branch: &str) -> Option<Uuid> {
+        for stack in self.stacks.values() {
+            if stack.working_branch.as_deref() == Some(branch) {
+                return Some(stack.id);
             }
         }
-
-        // Clear edit mode when switching stacks or deactivating
-        // Edit mode is tied to a specific stack context
-        if self.is_in_edit_mode() {
-            if let Some(edit_info) = self.get_edit_mode_info() {
-                // If switching to a different stack, clear edit mode
-                if edit_info.target_stack_id != stack_id {
-                    tracing::debug!(
-                        "Clearing edit mode when switching from stack {:?} to {:?}",
-                        edit_info.target_stack_id,
-                        stack_id
-                    );
-                    self.exit_edit_mode()?;
+        for stack in self.stacks.values() {
+            for entry in &stack.entries {
+                if entry.branch == branch {
+                    return Some(stack.id);
                 }
             }
         }
-
-        // Update active flag on stacks
-        for stack in self.stacks.values_mut() {
-            stack.set_active(Some(stack.id) == stack_id);
-        }
-
-        // Track the current branch when activating a stack
-        if let Some(id) = stack_id {
-            let current_branch = self.repo.get_current_branch().ok();
-            if let Some(stack_meta) = self.metadata.get_stack_mut(&id) {
-                stack_meta.set_current_branch(current_branch);
-            }
-        }
-
-        self.metadata.set_active_stack(stack_id);
-        self.save_to_disk()?;
-
-        Ok(())
+        None
     }
 
-    /// Set active stack by name
-    pub fn set_active_stack_by_name(&mut self, name: &str) -> Result<()> {
-        if let Some(metadata) = self.metadata.find_stack_by_name(name) {
-            self.set_active_stack(Some(metadata.stack_id))
-        } else {
-            Err(CascadeError::config(format!("Stack '{name}' not found")))
-        }
+    /// Get the ID of the currently active stack (resolved from current branch).
+    fn get_active_stack_id(&self) -> Option<Uuid> {
+        let current_branch = self.repo.get_current_branch().ok()?;
+        self.find_stack_id_for_branch(&current_branch)
+    }
+
+    /// Get the currently active stack (resolved from current branch)
+    pub fn get_active_stack(&self) -> Option<&Stack> {
+        let stack_id = self.get_active_stack_id()?;
+        self.stacks.get(&stack_id)
+    }
+
+    /// Get the currently active stack mutably (resolved from current branch)
+    pub fn get_active_stack_mut(&mut self) -> Option<&mut Stack> {
+        let stack_id = self.get_active_stack_id()?;
+        self.stacks.get_mut(&stack_id)
+    }
+
+    /// Checkout the branch associated with a stack, making it the active stack.
+    pub fn checkout_stack_branch(&self, stack_id: &Uuid) -> Result<()> {
+        let stack = self
+            .stacks
+            .get(stack_id)
+            .ok_or_else(|| CascadeError::config(format!("Stack with ID {stack_id} not found")))?;
+
+        let target_branch = stack
+            .working_branch
+            .as_deref()
+            .or_else(|| stack.entries.last().map(|e| e.branch.as_str()))
+            .ok_or_else(|| {
+                CascadeError::config(format!(
+                    "Stack '{}' has no working branch or entries",
+                    stack.name
+                ))
+            })?
+            .to_string();
+
+        self.repo.checkout_branch(&target_branch)?;
+        Ok(())
     }
 
     /// Delete a stack
@@ -293,12 +280,6 @@ impl StackManager {
             self.metadata.remove_commit(&commit_hash);
         }
 
-        // If this was the active stack, find a new one
-        if self.metadata.active_stack_id == Some(*stack_id) {
-            let new_active = self.metadata.stacks.keys().next().copied();
-            self.set_active_stack(new_active)?;
-        }
-
         self.save_to_disk()?;
 
         Ok(stack)
@@ -312,10 +293,9 @@ impl StackManager {
         message: String,
         source_branch: String,
     ) -> Result<Uuid> {
-        let stack_id = self
-            .metadata
-            .active_stack_id
-            .ok_or_else(|| CascadeError::config("No active stack"))?;
+        let stack_id = self.get_active_stack_id().ok_or_else(|| {
+            CascadeError::config("No active stack (current branch doesn't belong to any stack)")
+        })?;
 
         // 🆕 RECONCILE METADATA: Sync entry commit hashes with current branch HEADs before validation
         // This prevents false "branch modification" errors from stale metadata (e.g., after ca sync)
@@ -524,10 +504,9 @@ impl StackManager {
 
     /// Pop the top commit from the active stack
     pub fn pop_from_stack(&mut self) -> Result<StackEntry> {
-        let stack_id = self
-            .metadata
-            .active_stack_id
-            .ok_or_else(|| CascadeError::config("No active stack"))?;
+        let stack_id = self.get_active_stack_id().ok_or_else(|| {
+            CascadeError::config("No active stack (current branch doesn't belong to any stack)")
+        })?;
 
         let stack = self
             .stacks
@@ -926,6 +905,7 @@ impl StackManager {
 
     /// List all stacks with their status
     pub fn list_stacks(&self) -> Vec<(Uuid, &str, &StackStatus, usize, Option<&str>)> {
+        let active_id = self.get_active_stack_id();
         self.stacks
             .values()
             .map(|stack| {
@@ -934,7 +914,7 @@ impl StackManager {
                     stack.name.as_str(),
                     &stack.status,
                     stack.entries.len(),
-                    if stack.is_active {
+                    if active_id == Some(stack.id) {
                         Some("active")
                     } else {
                         None
@@ -946,7 +926,11 @@ impl StackManager {
 
     /// Get all stacks as Stack objects for TUI
     pub fn get_all_stacks_objects(&self) -> Result<Vec<Stack>> {
+        let active_id = self.get_active_stack_id();
         let mut stacks: Vec<Stack> = self.stacks.values().cloned().collect();
+        for stack in &mut stacks {
+            stack.is_active = active_id == Some(stack.id);
+        }
         stacks.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(stacks)
     }
@@ -1032,136 +1016,6 @@ impl StackManager {
         }
 
         Ok(())
-    }
-
-    /// Check if the user has changed branches since the stack was activated
-    /// Returns true if branch change detected and user wants to proceed
-    pub fn check_for_branch_change(&mut self) -> Result<bool> {
-        // Extract stack information first to avoid borrow conflicts
-        let (stack_id, stack_name, stored_branch) = {
-            if let Some(active_stack) = self.get_active_stack() {
-                let stack_id = active_stack.id;
-                let stack_name = active_stack.name.clone();
-                let stored_branch = if let Some(stack_meta) = self.metadata.get_stack(&stack_id) {
-                    stack_meta.current_branch.clone()
-                } else {
-                    None
-                };
-                (Some(stack_id), stack_name, stored_branch)
-            } else {
-                (None, String::new(), None)
-            }
-        };
-
-        // If no active stack, nothing to check
-        let Some(stack_id) = stack_id else {
-            return Ok(true);
-        };
-
-        let current_branch = self.repo.get_current_branch().ok();
-
-        // Check if branch has changed
-        if stored_branch.as_ref() != current_branch.as_ref() {
-            Output::warning("Branch change detected!");
-            Output::sub_item(format!(
-                "Stack '{}' was active on: {}",
-                stack_name,
-                stored_branch.as_deref().unwrap_or("unknown")
-            ));
-            Output::sub_item(format!(
-                "Current branch: {}",
-                current_branch.as_deref().unwrap_or("unknown")
-            ));
-            Output::spacing();
-
-            let options = vec![
-                format!("Keep stack '{stack_name}' active (continue with stack workflow)"),
-                "Deactivate stack (use normal Git workflow)".to_string(),
-                "Switch to a different stack".to_string(),
-                "Cancel and stay on current workflow".to_string(),
-            ];
-
-            let choice = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("What would you like to do?")
-                .default(0)
-                .items(&options)
-                .interact()
-                .map_err(|e| CascadeError::config(format!("Failed to get user choice: {e}")))?;
-
-            match choice {
-                0 => {
-                    // Update the tracked branch and continue
-                    if let Some(stack_meta) = self.metadata.get_stack_mut(&stack_id) {
-                        stack_meta.set_current_branch(current_branch);
-                    }
-                    self.save_to_disk()?;
-                    Output::success(format!(
-                        "Continuing with stack '{stack_name}' on current branch"
-                    ));
-                    return Ok(true);
-                }
-                1 => {
-                    // Deactivate the stack
-                    self.set_active_stack(None)?;
-                    Output::success(format!(
-                        "Deactivated stack '{stack_name}' - using normal Git workflow"
-                    ));
-                    return Ok(false);
-                }
-                2 => {
-                    // Show available stacks
-                    let stacks = self.get_all_stacks();
-                    if stacks.len() <= 1 {
-                        Output::warning("No other stacks available. Deactivating current stack.");
-                        self.set_active_stack(None)?;
-                        return Ok(false);
-                    }
-
-                    Output::spacing();
-                    Output::info("Available stacks:");
-                    for (i, stack) in stacks.iter().enumerate() {
-                        if stack.id != stack_id {
-                            Output::numbered_item(i + 1, &stack.name);
-                        }
-                    }
-                    let stack_name_input: String = Input::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Enter stack name")
-                        .validate_with(|input: &String| -> std::result::Result<(), &str> {
-                            if input.trim().is_empty() {
-                                Err("Stack name cannot be empty")
-                            } else {
-                                Ok(())
-                            }
-                        })
-                        .interact_text()
-                        .map_err(|e| {
-                            CascadeError::config(format!("Failed to get user input: {e}"))
-                        })?;
-                    let stack_name_input = stack_name_input.trim();
-
-                    if let Err(e) = self.set_active_stack_by_name(stack_name_input) {
-                        Output::warning(format!("{e}"));
-                        Output::sub_item("Deactivating stack instead.");
-                        self.set_active_stack(None)?;
-                        return Ok(false);
-                    } else {
-                        Output::success(format!("Switched to stack '{stack_name_input}'"));
-                        return Ok(true);
-                    }
-                }
-                3 => {
-                    Output::info("Cancelled - no changes made");
-                    return Ok(false);
-                }
-                _ => {
-                    Output::info("Invalid choice - no changes made");
-                    return Ok(false);
-                }
-            }
-        }
-
-        // No branch change detected
-        Ok(true)
     }
 
     /// Handle Git integrity issues with multiple user-friendly options
@@ -1646,6 +1500,14 @@ mod tests {
     #[test]
     fn test_create_and_manage_stack() {
         let (_temp_dir, repo_path) = create_test_repo();
+
+        // Create a feature branch so the stack gets a working_branch
+        Command::new("git")
+            .args(["checkout", "-b", "feature/test-work"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let mut manager = StackManager::new(&repo_path).unwrap();
 
         // Create a stack using the default branch
@@ -1663,9 +1525,10 @@ mod tests {
         assert_eq!(stack.name, "test-stack");
         // Should use the default branch (which gets set from the Git repo)
         assert!(!stack.base_branch.is_empty());
-        assert!(stack.is_active);
+        // Working branch should be set since we're on a feature branch
+        assert_eq!(stack.working_branch.as_deref(), Some("feature/test-work"));
 
-        // Verify it's the active stack
+        // Verify it's the active stack (resolved from current branch)
         let active = manager.get_active_stack().unwrap();
         assert_eq!(active.id, stack_id);
 
@@ -1677,6 +1540,12 @@ mod tests {
     #[test]
     fn test_stack_persistence() {
         let (_temp_dir, repo_path) = create_test_repo();
+
+        Command::new("git")
+            .args(["checkout", "-b", "feature/persist-work"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
 
         let stack_id = {
             let mut manager = StackManager::new(&repo_path).unwrap();
@@ -1697,23 +1566,43 @@ mod tests {
         let (_temp_dir, repo_path) = create_test_repo();
         let mut manager = StackManager::new(&repo_path).unwrap();
 
+        // Create branch for stack-1 and create the stack on it
+        Command::new("git")
+            .args(["checkout", "-b", "feature/stack-1"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let stack1_id = manager
             .create_stack("stack-1".to_string(), None, None)
             .unwrap();
+
+        // Create branch for stack-2 and create the stack on it
+        Command::new("git")
+            .args(["checkout", "-b", "feature/stack-2"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let stack2_id = manager
             .create_stack("stack-2".to_string(), None, None)
             .unwrap();
 
         assert_eq!(manager.stacks.len(), 2);
 
-        // Second stack should be active (newly created stacks become active)
-        assert!(!manager.get_stack(&stack1_id).unwrap().is_active);
-        assert!(manager.get_stack(&stack2_id).unwrap().is_active);
+        // Currently on feature/stack-2, so stack-2 should be active
+        assert_eq!(manager.get_active_stack_id(), Some(stack2_id));
 
-        // Change active stack
-        manager.set_active_stack(Some(stack2_id)).unwrap();
-        assert!(!manager.get_stack(&stack1_id).unwrap().is_active);
-        assert!(manager.get_stack(&stack2_id).unwrap().is_active);
+        // Checkout stack-1's branch to make it active
+        Command::new("git")
+            .args(["checkout", "feature/stack-1"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        // Reload manager to pick up branch change
+        let manager = StackManager::new(&repo_path).unwrap();
+        assert_eq!(manager.get_active_stack_id(), Some(stack1_id));
     }
 
     #[test]
@@ -1748,6 +1637,14 @@ mod tests {
     #[test]
     fn test_duplicate_commit_message_detection() {
         let (_temp_dir, repo_path) = create_test_repo();
+
+        // Create a feature branch so the stack gets a working_branch
+        Command::new("git")
+            .args(["checkout", "-b", "feature/test-dup"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let mut manager = StackManager::new(&repo_path).unwrap();
 
         // Create a stack
@@ -1857,6 +1754,13 @@ mod tests {
     #[test]
     fn test_duplicate_message_with_different_case() {
         let (_temp_dir, repo_path) = create_test_repo();
+
+        Command::new("git")
+            .args(["checkout", "-b", "feature/test-case"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let mut manager = StackManager::new(&repo_path).unwrap();
 
         manager
@@ -1933,6 +1837,14 @@ mod tests {
     #[test]
     fn test_duplicate_message_across_different_stacks() {
         let (_temp_dir, repo_path) = create_test_repo();
+
+        // Create first stack on its own branch
+        Command::new("git")
+            .args(["checkout", "-b", "feature/stack1-work"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let mut manager = StackManager::new(&repo_path).unwrap();
 
         // Create first stack and push commit
@@ -1971,13 +1883,19 @@ mod tests {
             )
             .unwrap();
 
-        // Create second stack
+        // Create second stack on a different branch so it's distinguishable
+        Command::new("git")
+            .args(["checkout", "-b", "feature/stack2-work"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let stack2_id = manager
             .create_stack("stack2".to_string(), None, None)
             .unwrap();
 
-        // Set second stack as active
-        manager.set_active_stack(Some(stack2_id)).unwrap();
+        // Reload manager to pick up the new branch context
+        let mut manager = StackManager::new(&repo_path).unwrap();
 
         // Create commit for second stack
         std::fs::write(repo_path.join("file2.txt"), "content2").unwrap();
@@ -2026,6 +1944,13 @@ mod tests {
     #[test]
     fn test_duplicate_after_pop() {
         let (_temp_dir, repo_path) = create_test_repo();
+
+        Command::new("git")
+            .args(["checkout", "-b", "feature/test-pop"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
         let mut manager = StackManager::new(&repo_path).unwrap();
 
         manager

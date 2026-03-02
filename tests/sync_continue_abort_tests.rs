@@ -99,16 +99,18 @@ fn create_conflicting_stack(
     stack_name: &str,
     base_branch: &str,
 ) -> Result<(), String> {
+    // Create a feature branch so the stack gets a working_branch
+    let feature_branch = format!("feature/{}-work", stack_name);
+    Command::new("git")
+        .args(["checkout", "-b", &feature_branch])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to create feature branch: {e}"))?;
+
     // Create stack
     let (success, _, stderr) = run_ca_command(&["stacks", "create", stack_name], repo_path)?;
     if !success {
         return Err(format!("Failed to create stack: {stderr}"));
-    }
-
-    // Switch to the stack
-    let (success, _, stderr) = run_ca_command(&["stacks", "switch", stack_name], repo_path)?;
-    if !success {
-        return Err(format!("Failed to switch to stack: {stderr}"));
     }
 
     // Create a commit with conflict.txt
