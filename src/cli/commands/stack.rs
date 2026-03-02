@@ -2918,6 +2918,30 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
         updated_stack_manager.save_to_disk()?;
     }
 
+    // Step 2b: Detect merged PRs from Bitbucket before rebase
+    // This ensures the rebase skips entries that were merged remotely (e.g. via ca land)
+    {
+        let config_dir = crate::config::get_repo_config_dir(&repo_root)?;
+        let config_path = config_dir.join("config.json");
+        if let Ok(settings) = crate::config::Settings::load_from_file(&config_path) {
+            let cascade_config = crate::config::CascadeConfig {
+                bitbucket: Some(settings.bitbucket.clone()),
+                git: settings.git.clone(),
+                auth: crate::config::AuthConfig::default(),
+                cascade: settings.cascade.clone(),
+            };
+            if let Ok(mut integration) = crate::bitbucket::BitbucketIntegration::new(
+                StackManager::new(&repo_root)?,
+                cascade_config,
+            ) {
+                // This queries Bitbucket and marks merged entries via set_entry_merged()
+                let _ = integration.check_enhanced_stack_status(&stack_id).await;
+                // Reload manager to pick up the merged flags
+                updated_stack_manager = StackManager::new(&repo_root)?;
+            }
+        }
+    }
+
     match updated_stack_manager.sync_stack(&stack_id) {
         Ok(_) => {
             // Check the updated status
@@ -3990,6 +4014,18 @@ async fn land_stack(
             Ok(crate::bitbucket::pull_request::AutoMergeResult::Merged { .. }) => {
                 Output::success_inline();
                 landed_count += 1;
+
+                // Mark the landed entry as merged so the retarget rebase skips it
+                let merged_branch = &pr_status.pr.from_ref.display_id;
+                if let Some(landed_entry) = active_stack
+                    .entries
+                    .iter()
+                    .find(|e| e.branch == *merged_branch)
+                {
+                    let landed_entry_id = landed_entry.id;
+                    let mut mark_manager = StackManager::new(&repo_root)?;
+                    let _ = mark_manager.set_entry_merged(&stack_id, &landed_entry_id, true);
+                }
 
                 // AUTO-RETARGETING: After each merge, retarget remaining PRs
                 if landed_count < total_ready_prs {
