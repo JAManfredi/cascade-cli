@@ -286,6 +286,11 @@ mod tests {
     use git2::{Repository, Signature};
     use std::env;
     use tempfile::TempDir;
+    use tokio::sync::Mutex;
+
+    // These tests mutate process-global cwd via set_current_dir, so they must
+    // not run in parallel with each other.
+    static CWD_MUTEX: Mutex<()> = Mutex::const_new(());
 
     async fn create_test_repo() -> (TempDir, std::path::PathBuf) {
         let temp_dir = TempDir::new().unwrap();
@@ -330,6 +335,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_doctor_uninitialized() {
+        let _lock = CWD_MUTEX.lock().await;
+
         let (_temp_dir, repo_path) = create_test_repo().await;
 
         let original_dir = env::current_dir().unwrap();
@@ -337,51 +344,34 @@ mod tests {
 
         let result = run().await;
 
-        // Restore directory (best effort - may fail if temp dir already cleaned up)
         let _ = env::set_current_dir(&original_dir);
 
         if let Err(e) = &result {
             eprintln!("Doctor command failed: {e}");
         }
         assert!(result.is_ok());
-
-        // _temp_dir dropped here automatically
     }
 
     #[tokio::test]
     async fn test_doctor_initialized() {
-        // Keep temp_dir alive for the entire test to prevent premature cleanup
-        let (temp_dir, repo_path) = create_test_repo().await;
+        let _lock = CWD_MUTEX.lock().await;
+
+        let (_temp_dir, repo_path) = create_test_repo().await;
 
         // Initialize Cascade
         initialize_repo(&repo_path, Some("https://test.bitbucket.com".to_string())).unwrap();
 
-        // Save original directory for restoration
         let original_dir = env::current_dir().expect("Failed to get current directory");
-
-        // Change to repo directory - if this fails, the test environment is broken
         env::set_current_dir(&repo_path).expect("Failed to change to test repository directory");
 
-        // Run doctor command
         let result = run().await;
 
-        // Best-effort directory restoration
-        // May fail on Linux/CI if temp directory cleanup is in progress
-        let restore_result = env::set_current_dir(&original_dir);
-        if restore_result.is_err() {
-            eprintln!(
-                "Warning: Could not restore original directory (temp dir may be cleaning up)"
-            );
-        }
+        let _ = env::set_current_dir(&original_dir);
 
-        // Assert the result while temp_dir is still in scope
         assert!(
             result.is_ok(),
             "Doctor command should succeed in initialized repo: {:?}",
             result.err()
         );
-
-        // Explicitly drop temp_dir at the end to ensure it stays alive
-        drop(temp_dir);
     }
 }
