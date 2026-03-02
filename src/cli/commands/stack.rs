@@ -4176,9 +4176,106 @@ async fn land_stack(
         // Check if all entries in the stack are now merged
         let final_stack_manager = StackManager::new(&repo_root)?;
         if let Some(final_stack) = final_stack_manager.get_stack(&stack_id) {
-            let all_merged = final_stack.entries.iter().all(|entry| entry.is_merged);
+            let has_remaining = final_stack.entries.iter().any(|e| !e.is_merged);
+            let all_merged = !has_remaining && !final_stack.entries.is_empty();
 
-            if all_merged && !final_stack.entries.is_empty() {
+            // Pull + rebase + retarget remaining PRs after landing
+            if has_remaining {
+                let base_branch = active_stack.base_branch.clone();
+                let git_repo = crate::git::GitRepository::open(&repo_root)?;
+
+                Output::sub_item(format!("Updating base branch: {base_branch}"));
+                match git_repo.pull(&base_branch) {
+                    Ok(_) => Output::sub_item("Base branch updated"),
+                    Err(e) => {
+                        Output::warning(format!("Failed to update base branch: {e}"));
+                        Output::tip(format!(
+                            "You may want to manually run: git pull origin {base_branch}"
+                        ));
+                    }
+                }
+
+                let remaining_count = final_stack.entries.iter().filter(|e| !e.is_merged).count();
+                let plural = if remaining_count == 1 { "entry" } else { "entries" };
+
+                println!();
+                let rebase_spinner = crate::utils::spinner::Spinner::new(format!(
+                    "Retargeting {remaining_count} {plural}"
+                ));
+
+                let mut rebase_manager = crate::stack::RebaseManager::new(
+                    StackManager::new(&repo_root)?,
+                    git_repo,
+                    crate::stack::RebaseOptions {
+                        strategy: crate::stack::RebaseStrategy::ForcePush,
+                        target_base: Some(base_branch.clone()),
+                        ..Default::default()
+                    },
+                );
+
+                let rebase_result = rebase_manager.rebase_stack(&stack_id);
+
+                rebase_spinner.stop();
+                println!();
+
+                match rebase_result {
+                    Ok(rebase_result) => {
+                        if !rebase_result.branch_mapping.is_empty() {
+                            let retarget_config = crate::config::CascadeConfig {
+                                bitbucket: Some(settings.bitbucket.clone()),
+                                git: settings.git.clone(),
+                                auth: crate::config::AuthConfig::default(),
+                                cascade: settings.cascade.clone(),
+                            };
+                            let mut retarget_integration = BitbucketIntegration::new(
+                                StackManager::new(&repo_root)?,
+                                retarget_config,
+                            )?;
+
+                            match retarget_integration
+                                .update_prs_after_rebase(
+                                    &stack_id,
+                                    &rebase_result.branch_mapping,
+                                )
+                                .await
+                            {
+                                Ok(updated_prs) => {
+                                    if !updated_prs.is_empty() {
+                                        Output::sub_item(format!(
+                                            "Updated {} PR{} with new targets",
+                                            updated_prs.len(),
+                                            if updated_prs.len() == 1 { "" } else { "s" }
+                                        ));
+                                    }
+                                }
+                                Err(e) => {
+                                    Output::warning(format!(
+                                        "Failed to update remaining PRs: {e}"
+                                    ));
+                                    Output::tip("You may need to run: ca sync --force");
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!();
+                        Output::error("Rebase conflict while retargeting remaining PRs");
+                        println!();
+                        Output::section("To resolve and continue");
+                        Output::numbered_item(1, "Resolve conflicts in the affected files");
+                        Output::numbered_item(2, "Stage resolved files: git add <files>");
+                        Output::numbered_item(3, "Finish the rebase: ca sync continue");
+                        Output::numbered_item(4, "Or abort the rebase: ca sync abort");
+                        println!();
+                        Output::tip(
+                            "Once resolved, re-run 'ca land' to continue merging remaining PRs",
+                        );
+                        Output::sub_item(format!("Error details: {e}"));
+                    }
+                }
+            }
+
+            if all_merged {
                 println!();
                 Output::success("All PRs in stack merged!");
                 println!();
