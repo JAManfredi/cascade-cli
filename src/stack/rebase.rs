@@ -863,6 +863,14 @@ impl RebaseManager {
             };
         } // End of successful rebase block
 
+        // Persist updated entry commit hashes BEFORE the working branch check.
+        // The rebase already force-pushed branches with new hashes; if we defer
+        // saving and the working branch check fails, metadata falls out of sync
+        // with the actual git state.
+        if result.success {
+            self.stack_manager.save_to_disk()?;
+        }
+
         if result.success {
             // Update working branch to point to the top of the rebased stack
             // This ensures subsequent `ca push` doesn't re-add old commits

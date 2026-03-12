@@ -2848,61 +2848,23 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
     let mut updated_stack_manager = StackManager::new(&repo_root)?;
     let stack_id = active_stack.id;
 
-    // Update entry commit hashes to match current branch HEADs
-    // This prevents false "branch modification" errors from stale metadata
+    // Update entry commit hashes to match current branch HEADs.
+    // In the sync context, the rebase is about to reconcile everything anyway,
+    // so always trust the branch HEAD. This handles stale metadata from a
+    // previously failed sync (where branches were force-pushed but metadata
+    // wasn't saved) and post-amend divergence.
     if let Some(stack) = updated_stack_manager.get_stack_mut(&stack_id) {
         let mut updates = Vec::new();
         for entry in &stack.entries {
             if let Ok(current_commit) = git_repo.get_branch_head(&entry.branch) {
                 if entry.commit_hash != current_commit {
-                    let is_safe_descendant = match git_repo.commit_exists(&entry.commit_hash) {
-                        Ok(true) => {
-                            match git_repo.is_descendant_of(&current_commit, &entry.commit_hash) {
-                                Ok(result) => result,
-                                Err(e) => {
-                                    warn!(
-                                    "Cannot verify ancestry for '{}': {} - treating as unsafe to prevent potential data loss",
-                                    entry.branch, e
-                                );
-                                    false
-                                }
-                            }
-                        }
-                        Ok(false) => {
-                            debug!(
-                                "Recorded commit {} for '{}' no longer exists in repository",
-                                &entry.commit_hash[..8],
-                                entry.branch
-                            );
-                            false
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Cannot verify commit existence for '{}': {} - treating as unsafe to prevent potential data loss",
-                                entry.branch, e
-                            );
-                            false
-                        }
-                    };
-
-                    if is_safe_descendant {
-                        debug!(
-                            "Reconciling entry '{}': updating hash from {} to {} (current branch HEAD)",
-                            entry.branch,
-                            &entry.commit_hash[..8],
-                            &current_commit[..8]
-                        );
-                        updates.push((entry.id, current_commit));
-                    } else {
-                        warn!(
-                            "Skipped automatic reconciliation for entry '{}' because local HEAD ({}) does not descend from recorded commit ({})",
-                            entry.branch,
-                            &current_commit[..8],
-                            &entry.commit_hash[..8]
-                        );
-                        // This commonly happens after 'ca entry amend' without --restack
-                        // The amended commit replaces the old one (not a descendant)
-                    }
+                    debug!(
+                        "Reconciling entry '{}': updating hash from {} to {} (current branch HEAD)",
+                        entry.branch,
+                        &entry.commit_hash[..8],
+                        &current_commit[..8]
+                    );
+                    updates.push((entry.id, current_commit));
                 }
             }
         }
