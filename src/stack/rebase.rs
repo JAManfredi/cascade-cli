@@ -912,7 +912,8 @@ impl RebaseManager {
                                         }
                                         Ok(commits) => {
                                             // Working branch has commits beyond the top of stack.
-                                            // Check if they're just old pre-rebase copies of stack entries.
+                                            // Separate old pre-rebase copies (match stack entry messages)
+                                            // from genuinely new commits.
                                             let stack_summaries: Vec<String> = stack
                                                 .entries
                                                 .iter()
@@ -926,17 +927,20 @@ impl RebaseManager {
                                                 })
                                                 .collect();
 
-                                            let all_match_stack = commits.iter().all(|commit| {
-                                                if let Some(msg) = commit.summary() {
-                                                    stack_summaries
-                                                        .iter()
-                                                        .any(|stack_msg| stack_msg == msg.trim())
-                                                } else {
-                                                    false
-                                                }
-                                            });
+                                            let new_commits: Vec<_> = commits
+                                                .iter()
+                                                .filter(|commit| {
+                                                    if let Some(msg) = commit.summary() {
+                                                        !stack_summaries.iter().any(|stack_msg| {
+                                                            stack_msg == msg.trim()
+                                                        })
+                                                    } else {
+                                                        true // No message — treat as new
+                                                    }
+                                                })
+                                                .collect();
 
-                                            if all_match_stack {
+                                            if new_commits.is_empty() {
                                                 debug!(
                                                     "Working branch has old pre-rebase commits (matching stack messages) - safe to update"
                                                 );
@@ -955,35 +959,35 @@ impl RebaseManager {
                                                 // New commits not in the stack — refuse to update
                                                 Output::error(format!(
                                                     "Cannot sync: Working branch '{}' has {} commit(s) not in the stack",
-                                                    working_branch_name, commits.len()
+                                                    working_branch_name, new_commits.len()
                                                 ));
                                                 println!();
                                                 Output::sub_item(
                                                     "These commits would be lost if we proceed:",
                                                 );
                                                 for (i, commit) in
-                                                    commits.iter().take(5).enumerate()
+                                                    new_commits.iter().take(5).enumerate()
                                                 {
                                                     let message =
                                                         commit.summary().unwrap_or("(no message)");
                                                     Output::sub_item(format!(
-                                                        "  {}. {} - {}",
+                                                        "  {}. {} - {}:",
                                                         i + 1,
                                                         &commit.id().to_string()[..8],
                                                         message
                                                     ));
                                                 }
-                                                if commits.len() > 5 {
+                                                if new_commits.len() > 5 {
                                                     Output::sub_item(format!(
                                                         "  ... and {} more",
-                                                        commits.len() - 5
+                                                        new_commits.len() - 5
                                                     ));
                                                 }
                                                 println!();
                                                 Output::tip(
                                                     "Add these commits to the stack first:",
                                                 );
-                                                Output::bullet("Run: ca stack push");
+                                                Output::bullet("Run: ca push");
                                                 Output::bullet("Then run: ca sync");
                                                 println!();
 
@@ -996,8 +1000,8 @@ impl RebaseManager {
                                                 return Err(CascadeError::validation(
                                                     format!(
                                                         "Working branch '{}' has {} untracked commit(s). \
-                                                         Add them to the stack with 'ca stack push' before syncing.",
-                                                        working_branch_name, commits.len()
+                                                         Add them to the stack with 'ca push' before syncing.",
+                                                        working_branch_name, new_commits.len()
                                                     )
                                                 ));
                                             }
