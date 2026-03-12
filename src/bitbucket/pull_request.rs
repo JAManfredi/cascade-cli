@@ -47,17 +47,9 @@ impl PullRequestManager {
         title: Option<String>,
         description: Option<String>,
     ) -> Result<PullRequest> {
-        // Fetch current PR to preserve reviewers (Bitbucket PUT replaces the entire object)
+        // Fetch current PR for its version (required by Bitbucket optimistic locking).
+        // Omit `reviewers` from the PUT body so Bitbucket preserves the existing list.
         let current_pr = self.get_pull_request(pr_id).await?;
-        let reviewers: Vec<ReviewerRef> = current_pr
-            .reviewers
-            .iter()
-            .map(|p| ReviewerRef {
-                user: UserRef {
-                    name: p.user.name.clone(),
-                },
-            })
-            .collect();
 
         #[derive(Debug, Serialize)]
         struct UpdatePullRequestRequest {
@@ -66,14 +58,12 @@ impl PullRequestManager {
             #[serde(skip_serializing_if = "Option::is_none")]
             description: Option<String>,
             version: u64,
-            reviewers: Vec<ReviewerRef>,
         }
 
         let request = UpdatePullRequestRequest {
             title,
             description,
             version: current_pr.version,
-            reviewers,
         };
 
         self.client
@@ -87,17 +77,9 @@ impl PullRequestManager {
         pr_id: u64,
         new_target_branch: &str,
     ) -> Result<PullRequest> {
-        // Fetch current PR to preserve reviewers (Bitbucket PUT replaces the entire object)
+        // Fetch current PR for its version (required by Bitbucket optimistic locking).
+        // Omit `reviewers` from the PUT body so Bitbucket preserves the existing list.
         let current_pr = self.get_pull_request(pr_id).await?;
-        let reviewers: Vec<ReviewerRef> = current_pr
-            .reviewers
-            .iter()
-            .map(|p| ReviewerRef {
-                user: UserRef {
-                    name: p.user.name.clone(),
-                },
-            })
-            .collect();
 
         #[derive(Debug, Serialize)]
         struct BranchRef {
@@ -109,7 +91,6 @@ impl PullRequestManager {
             #[serde(rename = "toRef")]
             to_ref: BranchRef,
             version: u64,
-            reviewers: Vec<ReviewerRef>,
         }
 
         let request = RetargetRequest {
@@ -117,7 +98,6 @@ impl PullRequestManager {
                 id: format!("refs/heads/{new_target_branch}"),
             },
             version: current_pr.version,
-            reviewers,
         };
 
         self.client
@@ -679,18 +659,6 @@ pub struct Participant {
     pub role: ParticipantRole,
     pub approved: bool,
     pub status: ParticipantStatus,
-}
-
-/// Minimal reviewer reference for PUT requests (preserves existing reviewers)
-#[derive(Debug, Serialize)]
-struct ReviewerRef {
-    user: UserRef,
-}
-
-/// Minimal user reference for PUT requests
-#[derive(Debug, Serialize)]
-struct UserRef {
-    name: String,
 }
 
 /// User information
