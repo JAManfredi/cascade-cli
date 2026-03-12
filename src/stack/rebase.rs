@@ -920,28 +920,46 @@ impl RebaseManager {
                                         }
                                         Ok(commits) => {
                                             // Working branch has commits beyond the top of stack.
-                                            // Filter out old pre-rebase copies of stack entries
-                                            // by matching against pre-rebase commit hashes.
-                                            // (The `stack` clone still has the original hashes
-                                            // from before `update_stack_entry` wrote new ones.)
+                                            // Filter out old copies of stack entries by hash first,
+                                            // then by commit message as fallback (handles cases where
+                                            // multiple rebase cycles have changed all hashes).
                                             let stack_hashes: std::collections::HashSet<String> =
                                                 stack
                                                     .entries
                                                     .iter()
                                                     .map(|e| e.commit_hash.clone())
                                                     .collect();
+                                            let stack_messages: std::collections::HashSet<String> =
+                                                stack
+                                                    .entries
+                                                    .iter()
+                                                    .filter_map(|e| {
+                                                        e.message
+                                                            .lines()
+                                                            .next()
+                                                            .map(|s| s.trim().to_string())
+                                                    })
+                                                    .collect();
 
                                             let new_commits: Vec<_> = commits
                                                 .iter()
                                                 .filter(|commit| {
                                                     let hash = commit.id().to_string();
-                                                    !stack_hashes.contains(&hash)
+                                                    if stack_hashes.contains(&hash) {
+                                                        return false;
+                                                    }
+                                                    if let Some(msg) = commit.summary() {
+                                                        if stack_messages.contains(msg.trim()) {
+                                                            return false;
+                                                        }
+                                                    }
+                                                    true
                                                 })
                                                 .collect();
 
                                             if new_commits.is_empty() {
                                                 debug!(
-                                                    "Working branch has old pre-rebase commits (hash-matched to stack entries) - safe to update"
+                                                    "Working branch only has old stack entry copies - safe to update"
                                                 );
                                                 if let Err(e) =
                                                     self.git_repo.update_branch_to_commit(
