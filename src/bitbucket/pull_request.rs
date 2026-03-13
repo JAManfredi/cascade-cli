@@ -47,9 +47,19 @@ impl PullRequestManager {
         title: Option<String>,
         description: Option<String>,
     ) -> Result<PullRequest> {
-        // Fetch current PR for its version (required by Bitbucket optimistic locking).
-        // Omit `reviewers` from the PUT body so Bitbucket preserves the existing list.
         let current_pr = self.get_pull_request(pr_id).await?;
+
+        // Bitbucket Server PUT replaces the entire resource.
+        // Carry existing reviewers through so they aren't wiped.
+        let reviewers: Vec<ReviewerRef> = current_pr
+            .reviewers
+            .iter()
+            .map(|p| ReviewerRef {
+                user: UserRef {
+                    name: p.user.name.clone(),
+                },
+            })
+            .collect();
 
         #[derive(Debug, Serialize)]
         struct UpdatePullRequestRequest {
@@ -57,12 +67,14 @@ impl PullRequestManager {
             title: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             description: Option<String>,
+            reviewers: Vec<ReviewerRef>,
             version: u64,
         }
 
         let request = UpdatePullRequestRequest {
             title,
             description,
+            reviewers,
             version: current_pr.version,
         };
 
@@ -77,9 +89,18 @@ impl PullRequestManager {
         pr_id: u64,
         new_target_branch: &str,
     ) -> Result<PullRequest> {
-        // Fetch current PR for its version (required by Bitbucket optimistic locking).
-        // Omit `reviewers` from the PUT body so Bitbucket preserves the existing list.
         let current_pr = self.get_pull_request(pr_id).await?;
+
+        // Carry existing reviewers through so they aren't wiped.
+        let reviewers: Vec<ReviewerRef> = current_pr
+            .reviewers
+            .iter()
+            .map(|p| ReviewerRef {
+                user: UserRef {
+                    name: p.user.name.clone(),
+                },
+            })
+            .collect();
 
         #[derive(Debug, Serialize)]
         struct BranchRef {
@@ -90,6 +111,7 @@ impl PullRequestManager {
         struct RetargetRequest {
             #[serde(rename = "toRef")]
             to_ref: BranchRef,
+            reviewers: Vec<ReviewerRef>,
             version: u64,
         }
 
@@ -97,6 +119,7 @@ impl PullRequestManager {
             to_ref: BranchRef {
                 id: format!("refs/heads/{new_target_branch}"),
             },
+            reviewers,
             version: current_pr.version,
         };
 
@@ -671,6 +694,18 @@ pub struct User {
     pub email_address: Option<String>, // Make nullable - can be null for some users
     pub active: bool,
     pub slug: Option<String>, // Make nullable - can be null in some cases
+}
+
+/// Lightweight reviewer reference for PUT request payloads
+#[derive(Debug, Serialize)]
+struct ReviewerRef {
+    user: UserRef,
+}
+
+/// Lightweight user reference for PUT request payloads
+#[derive(Debug, Serialize)]
+struct UserRef {
+    name: String,
 }
 
 /// Pull request state

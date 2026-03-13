@@ -2629,13 +2629,15 @@ pub async fn continue_sync() -> Result<()> {
 
     manager.save_to_disk()?;
 
-    // Get the top of the stack to update the working branch
+    // Get the top of the stack to update the working branch.
+    // Use stack_id directly — we may still be on a temp branch where
+    // branch-based active stack resolution would fail.
     let top_commit = {
-        let active_stack = manager
-            .get_active_stack()
-            .ok_or_else(|| CascadeError::config("No active stack found"))?;
+        let stack_ref = manager
+            .get_stack(&stack_id)
+            .ok_or_else(|| CascadeError::config("Stack not found after saving"))?;
 
-        if let Some(last_entry) = active_stack.entries.last() {
+        if let Some(last_entry) = stack_ref.entries.last() {
             git_repo.get_branch_head(&last_entry.branch)?
         } else {
             new_commit_hash.clone()
