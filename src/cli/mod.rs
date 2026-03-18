@@ -333,6 +333,9 @@ pub enum Commands {
         /// Auto-fix mode: incorporate, split, or reset
         #[arg(long)]
         fix: Option<String>,
+        /// Only validate the active stack (exits 0 if no active stack)
+        #[arg(long)]
+        current: bool,
     },
 
     /// Internal command for shell completion (hidden)
@@ -729,9 +732,9 @@ impl Cli {
                 commands::stack::run(submit_action).await
             }
 
-            Commands::Validate { name, fix } => {
+            Commands::Validate { name, fix, current } => {
                 // Delegate to the stacks validate functionality
-                let validate_action = StackAction::Validate { name, fix };
+                let validate_action = StackAction::Validate { name, fix, current };
                 commands::stack::run(validate_action).await
             }
 

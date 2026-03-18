@@ -913,6 +913,46 @@ impl GitRepository {
         self.repo.commondir()
     }
 
+    /// Check if a branch is checked out in any worktree (including the main one).
+    /// Returns true if the branch is currently HEAD in any worktree other than this one.
+    fn is_branch_checked_out_elsewhere(&self, branch: &str) -> bool {
+        let target_ref = format!("refs/heads/{branch}");
+        let my_git_dir = self.repo.path();
+
+        // Check the main worktree HEAD (stored in commondir/HEAD)
+        let common = self.repo.commondir();
+        let main_head_path = common.join("HEAD");
+        if let Ok(content) = std::fs::read_to_string(&main_head_path) {
+            let trimmed = content.trim();
+            if trimmed == format!("ref: {target_ref}") {
+                // Main worktree has this branch checked out.
+                // Only counts as "elsewhere" if we're NOT the main worktree.
+                if my_git_dir != common {
+                    return true;
+                }
+            }
+        }
+
+        // Check linked worktrees (commondir/worktrees/*/HEAD)
+        let worktrees_dir = common.join("worktrees");
+        if let Ok(entries) = std::fs::read_dir(&worktrees_dir) {
+            for entry in entries.flatten() {
+                let wt_head = entry.path().join("HEAD");
+                // Skip our own worktree
+                if entry.path() == my_git_dir.with_file_name(entry.file_name()) {
+                    continue;
+                }
+                if let Ok(content) = std::fs::read_to_string(&wt_head) {
+                    if content.trim() == format!("ref: {target_ref}") {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     /// Check if a commit exists
     pub fn commit_exists(&self, commit_hash: &str) -> Result<bool> {
         match Oid::from_str(commit_hash) {
@@ -1771,6 +1811,20 @@ impl GitRepository {
             }
         }
 
+        // If the branch is checked out in another worktree, moving the ref
+        // desynchronises that worktree's index/working tree from HEAD.
+        // Skip the local ref update; the fetch already updated origin/<branch>
+        // which the rebase will use as its target.
+        if self.is_branch_checked_out_elsewhere(branch) {
+            tracing::debug!(
+                "Skipping local ref update for '{}' — checked out in another worktree. \
+                 Rebase will use origin/{} instead.",
+                branch,
+                branch
+            );
+            return Ok(());
+        }
+
         self.repo
             .reference(
                 &local_ref,
@@ -1845,6 +1899,16 @@ impl GitRepository {
         if merge_base_oid == head_commit.id() {
             // Fast-forward: local is direct ancestor of remote, just move pointer
             tracing::debug!("Fast-forwarding {} to {}", branch, remote_commit.id());
+
+            // If the branch is checked out in another worktree, moving the ref
+            // desynchronises that worktree's index/working tree. Skip the update.
+            if self.is_branch_checked_out_elsewhere(branch) {
+                tracing::debug!(
+                    "Skipping pull for '{}' — checked out in another worktree",
+                    branch
+                );
+                return Ok(());
+            }
 
             // Update the branch reference to point to remote commit
             self.repo

@@ -899,8 +899,8 @@ impl HooksManager {
                  if not exist \"%REPO_ROOT%\\.cascade\" (\n\
                      exit /b 0\n\
                  )\n\n\
-                 rem Validate stack state (silent unless error)\n\
-                 \"{cascade_cli}\" validate >nul 2>&1\n\
+                 rem Validate active stack only (don't block pushes for unrelated stacks)\n\
+                 \"{cascade_cli}\" validate --current >nul 2>&1\n\
                  if %ERRORLEVEL% neq 0 (\n\
                      echo Stack validation failed - run 'ca validate' for details\n\
                      exit /b 1\n\
@@ -942,8 +942,8 @@ impl HooksManager {
                  if [ ! -d \"$REPO_ROOT/.cascade\" ]; then\n\
                      exit 0\n\
                  fi\n\n\
-                 # Validate stack state (silent unless error)\n\
-                 if ! \"{cascade_cli}\" validate > /dev/null 2>&1; then\n\
+                 # Validate active stack only (don't block pushes for unrelated stacks)\n\
+                 if ! \"{cascade_cli}\" validate --current > /dev/null 2>&1; then\n\
                      echo \"Stack validation failed - run 'ca validate' for details\"\n\
                      exit 1\n\
                      fi\n"

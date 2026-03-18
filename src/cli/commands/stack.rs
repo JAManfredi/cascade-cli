@@ -238,6 +238,9 @@ pub enum StackAction {
         /// Auto-fix mode: incorporate, split, or reset
         #[arg(long)]
         fix: Option<String>,
+        /// Only validate the active stack (exits 0 if no active stack)
+        #[arg(long)]
+        current: bool,
     },
 
     /// Land (merge) approved stack entries
@@ -418,7 +421,7 @@ pub async fn run(action: StackAction) -> Result<()> {
         StackAction::AbortRebase => abort_rebase().await,
         StackAction::RebaseStatus => rebase_status().await,
         StackAction::Delete { name, force } => delete_stack(name, force).await,
-        StackAction::Validate { name, fix } => validate_stack(name, fix).await,
+        StackAction::Validate { name, fix, current } => validate_stack(name, fix, current).await,
         StackAction::Land {
             entry,
             force,
@@ -2816,6 +2819,9 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
     // Sync starts silently - user will see the rebase output
 
     // Step 1: Update base branch ref from remote (worktree-safe, no checkout needed)
+    // If the base branch is checked out in another worktree, the local ref won't be
+    // moved (to avoid desynchronising that worktree). In that case, use origin/<base>
+    // as the rebase target instead.
     match git_repo.update_local_branch_from_remote(&base_branch) {
         Ok(_) => {}
         Err(e) => {
@@ -2844,6 +2850,28 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
             }
         }
     }
+
+    // Determine the effective rebase target. If the local base branch is behind
+    // origin (e.g. because it's checked out in another worktree and we couldn't
+    // move its ref), use origin/<base> so the rebase picks up the latest commits.
+    let rebase_target = {
+        let local_head = git_repo.get_branch_head(&base_branch).ok();
+        let remote_ref = format!("origin/{base_branch}");
+        let remote_head = git_repo.get_branch_head(&remote_ref).ok();
+        match (local_head, remote_head) {
+            (Some(local), Some(remote)) if local != remote => {
+                debug!(
+                    "Local '{}' ({}) behind 'origin/{}' ({}), using remote as rebase target",
+                    base_branch,
+                    &local[..8],
+                    base_branch,
+                    &remote[..8]
+                );
+                remote_ref
+            }
+            _ => base_branch.clone(),
+        }
+    };
 
     // Step 2: Reconcile metadata with current Git state before checking integrity
     // This fixes stale metadata from previous bugs or interrupted operations
@@ -2939,7 +2967,7 @@ async fn sync_stack(force: bool, cleanup: bool, interactive: bool) -> Result<()>
                         let options = crate::stack::RebaseOptions {
                             strategy: crate::stack::RebaseStrategy::ForcePush,
                             interactive,
-                            target_base: Some(base_branch.clone()),
+                            target_base: Some(rebase_target.clone()),
                             preserve_merges: true,
                             auto_resolve: !interactive, // Re-enabled with safety checks
                             max_retries: 3,
@@ -3450,7 +3478,11 @@ async fn delete_stack(name: String, force: bool) -> Result<()> {
     Ok(())
 }
 
-async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Result<()> {
+async fn validate_stack(
+    name: Option<String>,
+    fix_mode: Option<String>,
+    current_only: bool,
+) -> Result<()> {
     let current_dir = env::current_dir()
         .map_err(|e| CascadeError::config(format!("Could not get current directory: {e}")))?;
 
@@ -3458,6 +3490,26 @@ async fn validate_stack(name: Option<String>, fix_mode: Option<String>) -> Resul
         .map_err(|e| CascadeError::config(format!("Could not find git repository: {e}")))?;
 
     let mut manager = StackManager::new(&repo_root)?;
+
+    // --current: only validate the active stack, exit 0 if none exists.
+    // Used by the pre-push hook so unrelated stacks don't block pushes.
+    if current_only {
+        let active = match manager.get_active_stack() {
+            Some(s) => s.clone(),
+            None => return Ok(()), // no active stack → nothing to validate
+        };
+
+        let stack_id = active.id;
+        match active.validate() {
+            Ok(_) => {}
+            Err(e) => {
+                Output::error(format!("Stack '{}' validation failed: {}", active.name, e));
+                return Err(CascadeError::config(e));
+            }
+        }
+        manager.handle_branch_modifications(&stack_id, fix_mode)?;
+        return Ok(());
+    }
 
     if let Some(name) = name {
         // Validate specific stack
@@ -4010,6 +4062,17 @@ async fn land_stack(
                         }
                     }
 
+                    // Use origin/<base> if local ref is behind (worktree-safe)
+                    let land_rebase_target = {
+                        let local_h = git_repo.get_branch_head(&base_branch).ok();
+                        let remote_r = format!("origin/{base_branch}");
+                        let remote_h = git_repo.get_branch_head(&remote_r).ok();
+                        match (local_h, remote_h) {
+                            (Some(l), Some(r)) if l != r => remote_r,
+                            _ => base_branch.clone(),
+                        }
+                    };
+
                     // 2️⃣ Use rebase system to retarget remaining PRs
                     let temp_manager = StackManager::new(&repo_root)?;
                     let stack_for_count = temp_manager
@@ -4029,7 +4092,7 @@ async fn land_stack(
                         git_repo,
                         crate::stack::RebaseOptions {
                             strategy: crate::stack::RebaseStrategy::ForcePush,
-                            target_base: Some(base_branch.clone()),
+                            target_base: Some(land_rebase_target),
                             ..Default::default()
                         },
                     );
@@ -4179,6 +4242,17 @@ async fn land_stack(
                     }
                 }
 
+                // Use origin/<base> if local ref is behind (worktree-safe)
+                let post_land_target = {
+                    let local_h = git_repo.get_branch_head(&base_branch).ok();
+                    let remote_r = format!("origin/{base_branch}");
+                    let remote_h = git_repo.get_branch_head(&remote_r).ok();
+                    match (local_h, remote_h) {
+                        (Some(l), Some(r)) if l != r => remote_r,
+                        _ => base_branch.clone(),
+                    }
+                };
+
                 let remaining_count = final_stack.entries.iter().filter(|e| !e.is_merged).count();
                 let plural = if remaining_count == 1 {
                     "entry"
@@ -4196,7 +4270,7 @@ async fn land_stack(
                     git_repo,
                     crate::stack::RebaseOptions {
                         strategy: crate::stack::RebaseStrategy::ForcePush,
-                        target_base: Some(base_branch.clone()),
+                        target_base: Some(post_land_target),
                         ..Default::default()
                     },
                 );
