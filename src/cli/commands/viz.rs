@@ -415,8 +415,9 @@ impl StackVisualizer {
                     output.push_str("👉 ACTIVE");
                 }
 
-                let padding = 50 - (stack.name.len() + stack.entries.len().to_string().len() + 15);
-                output.push_str(&" ".repeat(padding.max(0)));
+                let padding = 50usize
+                    .saturating_sub(stack.name.len() + stack.entries.len().to_string().len() + 15);
+                output.push_str(&" ".repeat(padding));
                 output.push_str("│\n");
 
                 // Show entries if not in compact mode
@@ -443,8 +444,8 @@ impl StackVisualizer {
                             entry.short_message(30)
                         ));
 
-                        let padding = 45 - entry.short_message(30).len();
-                        output.push_str(&" ".repeat(padding.max(0)));
+                        let padding = 45usize.saturating_sub(entry.short_message(30).len());
+                        output.push_str(&" ".repeat(padding));
                         output.push_str("│\n");
                     }
                 }
