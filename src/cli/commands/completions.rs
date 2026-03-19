@@ -51,24 +51,21 @@ pub fn install_completions(shell: Option<Shell>) -> Result<()> {
 
         // Provide shell-specific setup instructions
         for (shell, path) in &installed {
+            let path_str = path.to_string_lossy();
             match shell {
-                Shell::Zsh => {
-                    if path.to_string_lossy().contains(".zsh/completions") {
-                        println!();
-                        Output::warning("⚠️  Zsh requires additional setup:");
-                        Output::bullet("Add this to your ~/.zshrc:");
-                        println!("      fpath=(~/.zsh/completions $fpath)");
-                        println!("      autoload -Uz compinit && compinit");
-                        Output::bullet("Then reload: source ~/.zshrc");
-                    }
+                Shell::Zsh if path_str.contains(".zsh/completions") => {
+                    println!();
+                    Output::warning("⚠️  Zsh requires additional setup:");
+                    Output::bullet("Add this to your ~/.zshrc:");
+                    println!("      fpath=(~/.zsh/completions $fpath)");
+                    println!("      autoload -Uz compinit && compinit");
+                    Output::bullet("Then reload: source ~/.zshrc");
                 }
-                Shell::Bash => {
-                    if path.to_string_lossy().contains(".bash_completion.d") {
-                        println!();
-                        Output::info("For bash completions to work:");
-                        Output::bullet("Ensure bash-completion is installed");
-                        Output::bullet("Then reload: source ~/.bashrc");
-                    }
+                Shell::Bash if path_str.contains(".bash_completion.d") => {
+                    println!();
+                    Output::info("For bash completions to work:");
+                    Output::bullet("Ensure bash-completion is installed");
+                    Output::bullet("Then reload: source ~/.bashrc");
                 }
                 _ => {}
             }
