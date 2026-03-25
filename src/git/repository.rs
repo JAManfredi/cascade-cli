@@ -1553,11 +1553,18 @@ impl GitRepository {
                 .output()
                 .map_err(CascadeError::Io)?;
 
-            if !cherry_pick_output.status.success() {
-                debug!("Git CLI cherry-pick failed as expected (has conflicts)");
-                // This is expected - the cherry-pick failed due to conflicts
-                // The conflicts are now in the working directory and index
+            if cherry_pick_output.status.success() {
+                // Git CLI resolved the conflicts automatically (e.g. via merge strategy).
+                // libgit2's merge_trees() is stricter than git's default merge driver,
+                // so git can succeed where libgit2 reports conflicts.
+                debug!(
+                    "Git CLI cherry-pick succeeded (auto-resolved conflicts that libgit2 detected)"
+                );
+                let head = self.get_head_commit()?;
+                return Ok(head.id().to_string());
             }
+
+            debug!("Git CLI cherry-pick failed as expected (has conflicts)");
 
             // CRITICAL: Reload the index from disk so libgit2 sees the conflicts
             // Git CLI wrote the conflicts to disk, but our in-memory index doesn't know yet
@@ -1622,7 +1629,9 @@ impl GitRepository {
 
     /// Get list of conflicted files
     pub fn get_conflicted_files(&self) -> Result<Vec<String>> {
-        let index = self.repo.index().map_err(CascadeError::Git)?;
+        // Force reload from disk so we see conflicts written by git CLI
+        let mut index = self.repo.index().map_err(CascadeError::Git)?;
+        index.read(true).map_err(CascadeError::Git)?;
 
         let mut conflicts = Vec::new();
 

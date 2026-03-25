@@ -504,8 +504,17 @@ impl RebaseManager {
                     let _ = SyncState::delete(&repo_root);
                 }
                 Err(e) => {
-                    // Detect no-op cherry-picks (commit already applied)
-                    if self.git_repo.get_conflicted_files()?.is_empty() {
+                    // Check if this is a genuine no-op cherry-pick (commit already
+                    // applied) vs real conflicts. Only treat as no-op if there are
+                    // truly no conflicted files AND the error message indicates emptiness.
+                    let conflicted_files = self.git_repo.get_conflicted_files()?;
+                    let error_msg = e.to_string().to_lowercase();
+                    let is_empty_cherry_pick = conflicted_files.is_empty()
+                        && (error_msg.contains("empty")
+                            || error_msg.contains("no changes")
+                            || error_msg.contains("already applied"));
+
+                    if is_empty_cherry_pick {
                         debug!(
                             "Cherry-pick produced no changes for {} ({}), skipping entry",
                             original_branch,
@@ -513,11 +522,10 @@ impl RebaseManager {
                         );
 
                         Output::warning(format!(
-                            "Skipping entry '{}' - cherry-pick resulted in no changes",
+                            "Entry '{}' already in base - updating branch to match",
                             original_branch
                         ));
-                        Output::sub_item("This usually means the base branch has moved forward");
-                        Output::sub_item("and this entry's changes are already present");
+                        Output::sub_item("Changes are already present in the base branch");
 
                         // Abort the empty cherry-pick to clean state
                         let _ = std::process::Command::new("git")
@@ -525,13 +533,38 @@ impl RebaseManager {
                             .current_dir(self.git_repo.path())
                             .output();
 
+                        // Update the entry branch to point to the current base HEAD.
+                        // The entry's changes are already in the base, so the branch
+                        // should match the base so the PR diff reflects this.
+                        let base_head = self.git_repo.get_branch_head(&current_base)?;
+                        self.git_repo
+                            .update_branch_to_commit(original_branch, &base_head)?;
+
+                        // Update metadata so the entry hash matches
+                        self.update_stack_entry(stack.id, &entry.id, original_branch, &base_head)?;
+
+                        // Add to branch_mapping so the branch gets force-pushed
+                        result
+                            .branch_mapping
+                            .insert(original_branch.clone(), original_branch.clone());
+                        branches_with_new_commits.insert(original_branch.clone());
+
+                        if let Some(pr_num) = &entry.pull_request_id {
+                            branches_to_push.push((
+                                original_branch.clone(),
+                                pr_num.clone(),
+                                processed_entries - 1,
+                            ));
+                        }
+
                         // Clean up temp branch and return to base for next entry
                         let _ = self.git_repo.checkout_branch_unsafe(&target_base);
                         let _ = self.git_repo.delete_branch_unsafe(&temp_branch);
                         let _ = temp_branches.pop();
                         let _ = SyncState::delete(&repo_root);
 
-                        // Continue with next entry without marking failure
+                        // This entry's base is current_base (not the entry branch)
+                        // since its changes are already there
                         continue;
                     }
 
@@ -2093,6 +2126,229 @@ mod tests {
         // Second cleanup should be a no-op (shouldn't panic)
         guard.cleanup(&git_repo);
         assert!(guard.cleaned);
+    }
+
+    #[test]
+    fn test_cherry_pick_with_conflicts_surfaces_error() {
+        // Verify that cherry-pick of a commit with real conflicts returns Err
+        // and that get_conflicted_files() actually reports them.
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Create initial commit with a file
+        std::fs::write(repo_path.join("shared.txt"), "line1\nline2\nline3\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Create a feature branch with a conflicting change
+        Command::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        std::fs::write(
+            repo_path.join("shared.txt"),
+            "line1\nFEATURE CHANGE\nline3\n",
+        )
+        .unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "feature change"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Get the feature commit hash
+        let output = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        let feature_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        // Go back to main and make a conflicting change on the same line
+        Command::new("git")
+            .args(["checkout", "main"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // If default branch is master, try that
+        let branch_check = Command::new("git")
+            .args(["branch", "--show-current"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        let current = String::from_utf8_lossy(&branch_check.stdout)
+            .trim()
+            .to_string();
+        if current.is_empty() {
+            // We might be on detached HEAD; checkout the initial branch
+            let _ = Command::new("git")
+                .args(["checkout", "master"])
+                .current_dir(repo_path)
+                .output();
+        }
+
+        std::fs::write(repo_path.join("shared.txt"), "line1\nMAIN CHANGE\nline3\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "main change"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Now cherry-pick the feature commit — should conflict
+        let git_repo = GitRepository::open(repo_path).unwrap();
+        let result = git_repo.cherry_pick(&feature_hash);
+
+        assert!(result.is_err(), "Cherry-pick should fail with conflicts");
+
+        // Conflicted files should be reported
+        let conflicts = git_repo.get_conflicted_files().unwrap();
+        assert!(
+            !conflicts.is_empty(),
+            "get_conflicted_files() should report conflicts, got empty list"
+        );
+        assert!(
+            conflicts.contains(&"shared.txt".to_string()),
+            "shared.txt should be in conflicted files, got: {:?}",
+            conflicts
+        );
+    }
+
+    #[test]
+    fn test_cherry_pick_no_op_detection() {
+        // Verify that cherry-picking a commit whose changes are already in the base
+        // returns an error with no conflicted files (genuine no-op).
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path();
+
+        Command::new("git")
+            .args(["init"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Create initial commit
+        std::fs::write(repo_path.join("file.txt"), "original\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Create a feature branch with a change
+        Command::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        std::fs::write(repo_path.join("file.txt"), "changed\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "feature change"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        let output = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        let feature_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        // Merge feature into main so the changes are already there
+        let _ = Command::new("git")
+            .args(["checkout", "main"])
+            .current_dir(repo_path)
+            .output();
+        let branch_check = Command::new("git")
+            .args(["branch", "--show-current"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+        let current = String::from_utf8_lossy(&branch_check.stdout)
+            .trim()
+            .to_string();
+        if current.is_empty() {
+            let _ = Command::new("git")
+                .args(["checkout", "master"])
+                .current_dir(repo_path)
+                .output();
+        }
+
+        Command::new("git")
+            .args(["merge", "feature"])
+            .current_dir(repo_path)
+            .output()
+            .unwrap();
+
+        // Cherry-pick the same commit again — should be a no-op
+        let git_repo = GitRepository::open(repo_path).unwrap();
+        let result = git_repo.cherry_pick(&feature_hash);
+
+        // This could either succeed (git applies empty patch) or fail
+        // In either case, there should be no conflicted files
+        if result.is_err() {
+            let conflicts = git_repo.get_conflicted_files().unwrap();
+            assert!(
+                conflicts.is_empty(),
+                "No-op cherry-pick should have no conflicted files, got: {:?}",
+                conflicts
+            );
+        }
     }
 
     #[test]
